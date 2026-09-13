@@ -8,10 +8,11 @@
     if(!window.tpSync) return;
     let prefsNow = {};
     try{ prefsNow = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); }catch(e){}
-    const { theme: _theme, todayExpanded: _todayExpanded, ...syncPrefs } = prefsNow;
+    const { theme: _theme, todayExpanded: _todayExpanded, tab: _tab, ...syncPrefs } = prefsNow;
     window.tpSync.push({
       items,
       courseColors,
+      courses,
       dayCompleteLog,
       deletedLog,
       prefs: syncPrefs
@@ -19,6 +20,8 @@
   }
   const PREFS_KEY='tp-prefs';
   const COURSE_COLORS_KEY='tp-course-colors';
+  const COURSES_KEY='tp-courses';
+  const LAST_ACTIVE_DATE_KEY='tp-last-active-date';
   const DAY_COMPLETE_LOG_KEY='tp-day-complete-log';
   const DELETED_LOG_KEY='tp-deleted-log';
   const TOMBSTONE_MAX_AGE_MS = 120*24*60*60*1000; // keep in sync with firebase-sync.js
@@ -46,9 +49,34 @@
   });
   if(idsMigrated) localStorage.setItem(KEY, JSON.stringify(items));
 
+  // Day rollover: the `today` pacing counter (js/today-logic.js) only means
+  // anything for the calendar day it was logged on, so reset it the first
+  // time the app runs on a new day.
+  {
+    const storedActiveDate = localStorage.getItem(LAST_ACTIVE_DATE_KEY);
+    const nowDate = window.TP.today();
+    if(window.TPTodayLogic.resetTodayCounters(items, storedActiveDate, nowDate)){
+      localStorage.setItem(KEY, JSON.stringify(items));
+    }
+    localStorage.setItem(LAST_ACTIVE_DATE_KEY, nowDate);
+  }
+
+  /* ---- Courses ---- */
+  let courses = [];
+  try{ courses = JSON.parse(localStorage.getItem(COURSES_KEY)) || []; }catch(e){ courses = []; }
+  if(!localStorage.getItem(COURSES_KEY)){
+    courses = window.TPCourses.migrateFromItems(items, courseColorsForMigration());
+    localStorage.setItem(COURSES_KEY, JSON.stringify(courses));
+  }
+  function courseColorsForMigration(){
+    try{ return JSON.parse(localStorage.getItem(COURSE_COLORS_KEY)) || {}; }catch(e){ return {}; }
+  }
+  function saveCourses(){ localStorage.setItem(COURSES_KEY, JSON.stringify(courses)); syncPush(); }
+
   document.addEventListener('tp-remote-data', function(){
     items = JSON.parse(localStorage.getItem(KEY) || '[]');
     try{ courseColors = JSON.parse(localStorage.getItem(COURSE_COLORS_KEY)) || {}; }catch(e){ courseColors = {}; }
+    try{ courses = JSON.parse(localStorage.getItem(COURSES_KEY)) || []; }catch(e){ courses = []; }
     try{ dayCompleteLog = JSON.parse(localStorage.getItem(DAY_COMPLETE_LOG_KEY)) || []; }catch(e){ dayCompleteLog = []; }
     try{ deletedLog = JSON.parse(localStorage.getItem(DELETED_LOG_KEY)) || []; }catch(e){ deletedLog = []; }
     let p = {};
@@ -85,6 +113,15 @@
   let searchTerm = prefs.searchTerm || '';
   let theme = ['dark','light','blue','auto'].includes(prefs.theme) ? prefs.theme : 'blue';
   let todayExpanded = !!prefs.todayExpanded;
+  const TABS = ['today','all','week','settings','courses'];
+  let tab = TABS.includes(prefs.tab) ? prefs.tab : 'today';
+  let addOpen = false;
+  let pickerOpen = false;
+  let menuFor = null; // index into `items`, for the long-press quick-action menu
+  let allSortMode = prefs.allSortMode || 'urgency';
+  let allFilterCourse = '';
+  let weekSelDay = 0;
+  let draft = null; // in-progress Add-sheet form state, see js/views/add-sheet-html.js
   // Which hour (0-23, local time) the server-side digest fires at. Mirrors
   // functions/index.js's own default of 8 for a brand new user who hasn't
   // touched the picker yet.
@@ -136,7 +173,7 @@
   pruneDeletedLog();
 
   function savePrefs(){
-    localStorage.setItem(PREFS_KEY, JSON.stringify({sortMode,hideDone,showArchived,searchTerm,theme,todayExpanded,notifyHour,notifyDigest}));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({sortMode,hideDone,showArchived,searchTerm,theme,todayExpanded,notifyHour,notifyDigest,tab,allSortMode}));
     syncPush();
   }
 

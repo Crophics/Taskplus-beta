@@ -323,13 +323,13 @@ root.querySelectorAll('.tp-subtask-toggle').forEach(cb=>cb.onchange=()=>{
 
 root.querySelectorAll('.tp-log').forEach(b=>b.onclick=()=>{
   const it = api.items[b.dataset.i];
-  const workBefore = api.hasTodayWorkRemaining();
-  const dt = it.dailyTarget;
-  const progressBeforeToday = dt ? Math.max(it.done - dt.startDone, 0) : 0;
+  const workBefore = api.hasTodayWorkRemaining(); // also refreshes it.dailyTarget as a side effect
+  const metBefore = window.TPTodayLogic.met(it);
+  const prevDone = it.done;
   it.done = Math.min(it.done+1, it.total);
+  it.today = (it.today||0) + (it.done - prevDone);
     if(api.touchItem) api.touchItem(it); else it.updatedAt = Date.now();
-  const progressAfterToday = dt ? Math.max(it.done - dt.startDone, 0) : 0;
-  const reachedDailyTarget = !!dt && dt.amt>0 && progressBeforeToday < dt.amt && progressAfterToday >= dt.amt;
+  const reachedDailyTarget = !metBefore && window.TPTodayLogic.met(it);
   const fullyCompleted = it.done>=it.total && !it.completed;
   if(fullyCompleted){
     it.completed = true;
@@ -405,9 +405,11 @@ root.querySelectorAll('.tp-complete').forEach(b=>b.onclick=()=>{
   const it = api.items[b.dataset.i];
   const completing = !it.completed;
   const workBefore = api.hasTodayWorkRemaining();
+  const prevDone = it.done;
   it.completed = !it.completed;
   if(it.completed){
     it.done = it.total;
+    it.today = (it.today||0) + Math.max(it.done - prevDone, 0);
     it.completedAt = api.today();
     if(it.recurring) api.items.push(api.makeRecurringClone(it));
   } else {

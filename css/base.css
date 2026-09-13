@@ -1,5 +1,5 @@
 /* base.css — Page shell, form controls, buttons, progress */
-body{max-width:680px;margin:40px auto;padding:0 20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--tp-fg);background:var(--tp-bg);}
+body{max-width:680px;margin:40px auto;padding:0 20px;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--tp-fg);background:var(--tp-bg);}
 #tp-app{max-width:640px;font-family:inherit;padding-bottom:calc(90px + env(safe-area-inset-bottom));}
 #tp-app input,#tp-app select,#tp-app textarea{width:100%;box-sizing:border-box;padding:6px;margin-bottom:8px;border-radius:6px;border:1px solid var(--tp-border);background:var(--tp-input-bg);color:var(--tp-fg);font-family:inherit;font-size:16px;}
 #tp-app .tp-date-placeholder{

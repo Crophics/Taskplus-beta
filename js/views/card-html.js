@@ -9,7 +9,7 @@ function cardHtml(ctx) {
   const overdue = !it.completed && !locked && daysLeft<0;
   const effDays = Math.max(daysLeft,1);
   const dt = it.dailyTarget;
-  const progressToday = dt ? Math.max(it.done - dt.startDone, 0) : 0;
+  const progressToday = it.today || 0;
   const remainingToday = dt ? Math.max(dt.amt - progressToday, 0) : 0;
   const metToday = !!(dt && dt.amt>0 && remainingToday<=0);
   const tomorrowDaysLeft = Math.max(daysBetween(addDays(today(),1), it.due), 1);

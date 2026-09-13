@@ -1,0 +1,39 @@
+/* tokens.css — Mobile design system tokens (parallel to themes.css's --tp-*
+   tokens; new mobile views/components read these instead). Dark values are
+   the design handoff's exact "Nocturne" palette. Light/Blue are this
+   codebase's own derivations (not specified by the design, which is a
+   dark-only mockup) so the Settings theme switcher keeps working everywhere.
+*/
+:root[data-theme="dark"]{
+  --bg:#161826; --surface:#232532; --surface-alt:#292b31;
+  --text:#e9e9ed; --text-muted:#9397ab; --text-dim:#75798c; --text-faint:#595d6c;
+  --border:rgba(233,233,237,.16); --border-soft:rgba(233,233,237,.07); --line:#3f424d;
+  --accent:#9184d9; --accent-bright:#b5abfc; --accent-dim:#423a6a;
+  --accent-wash:rgba(145,132,217,.12); --accent-wash-strong:rgba(145,132,217,.24);
+  --danger:#e2604e; --warn:#d9a441; --ok:#4f8b74;
+  --sheet-shadow:0 0 0 1px #595d6c, 0 -16px 40px rgba(0,0,0,.65);
+  --card-ring:#3f424d; --card-ring-hover:#595d6c;
+  --backdrop:rgba(41,43,49,.6); --backdrop-menu:rgba(41,43,49,.55);
+}
+:root[data-theme="light"]{
+  --bg:#f4f2ec; --surface:#ffffff; --surface-alt:#e9e7e0;
+  --text:#20232b; --text-muted:#5c5f6b; --text-dim:#82858f; --text-faint:#a8abb3;
+  --border:rgba(32,35,43,.14); --border-soft:rgba(32,35,43,.07); --line:#d8d6cf;
+  --accent:#6f5fc7; --accent-bright:#5a48b8; --accent-dim:#e2ddf7;
+  --accent-wash:rgba(111,95,199,.1); --accent-wash-strong:rgba(111,95,199,.2);
+  --danger:#c8503d; --warn:#b3822f; --ok:#3f7360;
+  --sheet-shadow:0 0 0 1px #cfd2dc, 0 -16px 40px rgba(0,0,0,.18);
+  --card-ring:#d8d6cf; --card-ring-hover:#b9b6ac;
+  --backdrop:rgba(32,35,43,.35); --backdrop-menu:rgba(32,35,43,.3);
+}
+:root[data-theme="blue"]{
+  --bg:#14161f; --surface:#1e2130; --surface-alt:#252938;
+  --text:#e8e6df; --text-muted:#9a9fb5; --text-dim:#767b91; --text-faint:#585c70;
+  --border:rgba(232,230,223,.16); --border-soft:rgba(232,230,223,.07); --line:#3a3f52;
+  --accent:#5b8fe0; --accent-bright:#7fabf0; --accent-dim:#28395e;
+  --accent-wash:rgba(91,143,224,.12); --accent-wash-strong:rgba(91,143,224,.24);
+  --danger:#e2604e; --warn:#d9a441; --ok:#4f8b74;
+  --sheet-shadow:0 0 0 1px #3a3f52, 0 -16px 40px rgba(0,0,0,.65);
+  --card-ring:#3a3f52; --card-ring-hover:#4a5068;
+  --backdrop:rgba(20,22,31,.6); --backdrop-menu:rgba(20,22,31,.55);
+}
