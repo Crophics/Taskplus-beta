@@ -1,111 +1,119 @@
-/* views/today-html.js — Today's Targets panel HTML */
+/* views/today-html.js — Today screen: header, target rows/pips, Get ahead, footer */
 (function (global) {
-  /**
-   * Builds the Today's Targets panel.
-   * @param {object} ctx
-   * @returns {{ html: string, requiredItemSet: Set }}
-   */
-  function todayPanelHtml(ctx) {
+  function urgencyDotClass(t) {
+    if (t.overdue) return 'tp-t-dot-danger tp-t-pulse';
+    if (t.dueToday || t.tight) return 'tp-t-dot-warn';
+    return 'tp-t-dot-ok';
+  }
+
+  function pipRowHtml(target, todayCount) {
+    let pips = '';
+    for (let i = 0; i < target; i++) {
+      pips += `<span class="tp-t-pip${i < todayCount ? ' tp-t-pip-filled' : ''}"></span>`;
+    }
+    return `<div class="tp-t-pips">${pips}</div>`;
+  }
+
+  function targetRowHtml(entry, ctx) {
+    const { escapeHtml, courseColorFor, relativeDueLabel, unitLabel, capUnit, TPTodayLogic, itemIndexMap } = ctx;
+    const it = entry.it;
+    const idx = itemIndexMap.get(it);
+    const target = TPTodayLogic.dayTarget(it);
+    const todayCount = it.today || 0;
+    const remaining = Math.max(target - todayCount, 0);
+    const isMulti = it.total > 1;
+    const color = it.course ? courseColorFor(it.course) : 'var(--text-faint)';
+    const metaBits = [it.course, relativeDueLabel(it.due)];
+    if (isMulti) metaBits.push(`${todayCount} of ${target} today`);
+    return `<div class="tp-t-row" data-item-i="${idx}">
+      <div class="tp-t-bar" style="background:${color}"></div>
+      <div class="tp-t-body">
+        <div class="tp-t-title-line">
+          <span class="tp-t-dot ${urgencyDotClass(entry)}"></span>
+          <span class="tp-t-title">${escapeHtml(it.title)}</span>
+        </div>
+        <div class="tp-t-meta">${metaBits.filter(Boolean).map(escapeHtml).join(' · ')}</div>
+        ${isMulti ? pipRowHtml(target, todayCount) : ''}
+      </div>
+      <div class="tp-t-action">
+        <button type="button" class="tp-t-btn ${isMulti ? 'tp-log' : 'tp-complete'}" data-i="${idx}" aria-label="${isMulti ? 'Log 1' : 'Mark complete'}">${isMulti ? '+1' : '<i class="nf nf-md-check" aria-hidden="true"></i>'}</button>
+        ${isMulti ? `<div class="tp-t-remainder">${remaining} left</div>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function getAheadDoneRowHtml(entry, ctx) {
+    const { escapeHtml, unitLabel, itemIndexMap } = ctx;
+    const it = entry.it;
+    const idx = itemIndexMap.get(it);
+    const left = Math.max((it.total || 0) - (it.done || 0), 0);
+    const today = it.today || 0;
+    const unit = it.unit || 'units';
+    return `<div class="tp-t-ahead-row tp-t-ahead-done" data-item-i="${idx}">
+      <i class="nf nf-md-check_circle_outline tp-t-ahead-check" aria-hidden="true"></i>
+      <div class="tp-t-ahead-body">
+        <div class="tp-t-title">${escapeHtml(it.title)}</div>
+        <div class="tp-t-meta">${today} ${escapeHtml(unitLabel(today, unit))} logged today · ${left} left before tomorrow</div>
+      </div>
+      <button type="button" class="tp-t-ahead-more tp-log" data-i="${idx}" aria-label="Log 1 more">+1</button>
+    </div>`;
+  }
+
+  function getAheadOpenRowHtml(entry, ctx) {
+    const { escapeHtml, capUnit, itemIndexMap } = ctx;
+    const it = entry.it;
+    const idx = itemIndexMap.get(it);
+    return `<div class="tp-t-ahead-row" data-item-i="${idx}">
+      <span class="tp-t-ahead-pill">${escapeHtml(capUnit(entry.unit || it.unit || 'units'))}</span>
+      <div class="tp-t-ahead-body"><div class="tp-t-title">${escapeHtml(entry.title || it.title)}</div></div>
+    </div>`;
+  }
+
+  function todayScreenHtml(ctx) {
     const {
-      itemIndexMap, todayExpanded, requiredTight, requiredPace, optionalBuckets,
-      pickBuckets, hasRequired, allDoneToday, onAllDone,
-      relativeDueLabel, fmt, unitLabel, capUnit,
+      streak, dateLabel, weekdayLabel, screen, escapeHtml, itemIndexMap,
+      totalLoggedToday,
     } = ctx;
-    const escapeHtml = window.TPHtml.escapeHtml;
-function requiredRowHtml(t, subheadClass){
-  const dotClass = t.overdue ? 'tp-today-dot-tight' : (t.dueToday ? 'tp-today-dot-due-today' : '');
-  const idx = itemIndexMap.get(t.it);
-  const idxAttr = idx!==undefined ? ` data-item-i="${idx}"` : '';
-  const dueHint = `<span class="tp-today-due-hint">Due ${relativeDueLabel(t.it.due)}</span>`;
-  // Single-part assignments are binary (do it or don't) - an amount
-  // badge like "1 reading" adds nothing, so only multi-part items get one.
-  const amtBadge = `<span class="tp-today-amt">${t.it.total>1 ? fmt(t.amt)+' '+unitLabel(t.amt,t.unit) : capUnit(t.unit)}</span>`;
-  return `<div class="tp-today-row tp-today-clickable"${idxAttr}>
-    <span class="tp-today-title"><span class="tp-today-dot ${dotClass}"></span><span class="tp-today-title-col"><span class="tp-today-title-main">${escapeHtml(t.title)}</span>${dueHint}</span></span>
-    ${amtBadge}
-  </div>`;
-}
+    const targets = screen.targets;
+    const getAhead = screen.getAhead;
+    const leftCount = targets.length;
 
-function optionalBucketHtml(bucket){
-  const headerText = bucket.pickCount
-    ? `Due ${relativeDueLabel(bucket.due)} - do ${bucket.pickCount} of these`
-    : `Due ${relativeDueLabel(bucket.due)}`;
-  // Pick buckets have no slack left, so they're required (green), not
-  // optional (dashed grey) - same meaning as the compact view.
-  const dotClass = bucket.pickCount ? '' : 'tp-today-dot-optional';
-  const rowClass = bucket.pickCount ? 'tp-today-clickable' : 'tp-today-clickable tp-today-optional';
-  const rows = bucket.entries.map(e=>{
-    const idx = itemIndexMap.get(e.it);
-    const idxAttr = idx!==undefined ? ` data-item-i="${idx}"` : '';
-    const amtBadge = `<span class="tp-today-amt">${e.kind==='multi' ? fmt(e.amt)+' '+unitLabel(e.amt,e.unit) : capUnit(e.unit)}</span>`;
-    return `<div class="tp-today-row ${rowClass}"${idxAttr}>
-      <span class="tp-today-title"><span class="tp-today-dot ${dotClass}"></span><span class="tp-today-title-main">${escapeHtml(e.title)}</span></span>
-      ${amtBadge}
+    const header = `<div class="tp-t-header">
+      <div class="tp-t-header-date">
+        <div class="tp-t-weekday">${escapeHtml(weekdayLabel)}</div>
+        <div class="tp-t-date">${escapeHtml(dateLabel)}</div>
+      </div>
+      ${streak > 0 ? `<div class="tp-t-streak">${streak}-day streak</div>` : ''}
     </div>`;
-  }).join('');
-  return `<div class="tp-today-group-header">${headerText}</div>` + rows;
-}
 
-// A pick-count bucket ("do 1 of these 2") still represents real work needed
-// today to keep pace, even though which item satisfies it is a free choice —
-// so the condensed view surfaces it as one summary line, without spelling out
-// every option (that detail lives in the expanded view).
-function compactPickBucketHtml(bucket){
-  const headerText = `Due ${relativeDueLabel(bucket.due)} - do ${bucket.pickCount} of these`;
-  const rows = bucket.entries.map(e=>{
-    const idx = itemIndexMap.get(e.it);
-    const idxAttr = idx!==undefined ? ` data-item-i="${idx}"` : '';
-    return `<div class="tp-today-row tp-today-clickable"${idxAttr}>
-      <span class="tp-today-title"><span class="tp-today-dot"></span><span class="tp-today-title-main">${escapeHtml(e.title)}</span></span>
-      <span class="tp-today-amt">${capUnit(e.unit)}</span>
+    const targetsHeading = `<div class="tp-section-heading">
+      <span>Today's targets</span>
+      <span class="tp-section-rule"></span>
+      <span class="tp-section-count">${leftCount > 0 ? leftCount + ' left' : 'all met'}</span>
     </div>`;
-  }).join('');
-  return `<div class="tp-today-group-header">${headerText}</div>` + rows;
-}
-function compactOptionalBucketHtml(bucket){
-  const headerText = `Due ${relativeDueLabel(bucket.due)}`;
-  const rows = bucket.entries.slice(0, 2).map(e=>{
-    const idx = itemIndexMap.get(e.it);
-    const idxAttr = idx!==undefined ? ` data-item-i="${idx}"` : '';
-    return `<div class="tp-today-row tp-today-clickable tp-today-optional"${idxAttr}>
-      <span class="tp-today-title"><span class="tp-today-dot tp-today-dot-optional"></span><span class="tp-today-title-main">${escapeHtml(e.title)}</span></span>
-      <span class="tp-today-amt">${capUnit(e.unit)}</span>
-    </div>`;
-  }).join('');
-  const more = bucket.entries.length > 2 ? `<div class="tp-today-row tp-today-optional"><span class="tp-today-title"><span class="tp-today-dot tp-today-dot-optional"></span><span class="tp-today-title-main">+${bucket.entries.length - 2} more</span></span></div>` : '';
-  return `<div class="tp-today-group-header">${headerText}</div>` + rows + more;
-}
 
-const laterBuckets = optionalBuckets.filter(b=>!b.pickCount);
-const requiredItemSet = new Set([
-  ...requiredTight.map(t => t.it),
-  ...requiredPace.map(t => t.it),
-  ...pickBuckets.flatMap(bucket => bucket.entries.map(e => e.it))
-]);
-if(allDoneToday && onAllDone) onAllDone();
-const requiredRowsHtml = requiredTight.map(t=>requiredRowHtml(t,false)).join('') + requiredPace.map(t=>requiredRowHtml(t,true)).join('');
+    const targetsBody = leftCount > 0
+      ? targets.map(t => targetRowHtml(t, ctx)).join('')
+      : `<div class="tp-t-all-met">
+          <div class="tp-t-all-met-title">Today's targets are met.</div>
+          <div class="tp-t-all-met-sub">Every assignment has had its daily share. Anything below is you getting ahead of the pace.</div>
+        </div>`;
 
-const noRequiredMessage = optionalBuckets.length
-  ? '<div class="tp-today-row"><span>You\'re all set for today - but here\'s what you can do to get ahead:</span></div>'
-  : '<div class="tp-today-row"><span>Nothing due today - you\'re caught up.</span></div>';
-const compactHasAnything = hasRequired || pickBuckets.length;
-const compactBody = compactHasAnything
-  ? requiredRowsHtml + pickBuckets.map(b=>compactPickBucketHtml(b)).join('')
-  : noRequiredMessage + (laterBuckets.length ? compactOptionalBucketHtml(laterBuckets[0]) : '');
-const expandedBody = (hasRequired ? requiredRowsHtml : noRequiredMessage) +
-  optionalBuckets.map(b=>optionalBucketHtml(b)).join('');
+    const getAheadSection = getAhead.length ? `<div class="tp-section-heading">
+        <span>Get ahead</span>
+        <span class="tp-section-rule"></span>
+      </div>
+      <div class="tp-t-ahead-list">
+        ${getAhead.map(e => (e.met ? getAheadDoneRowHtml(e, ctx) : getAheadOpenRowHtml(e, ctx))).join('')}
+      </div>` : '';
 
-const panelHtml = `<div class="tp-today" id="tp-today-card">
-  <div class="tp-today-header-row">
-    <b>Today's Targets</b>
-    <button type="button" id="tp-today-toggle" class="tp-today-toggle-btn" aria-expanded="${todayExpanded}" aria-label="${todayExpanded? 'Show less' : 'Show all'}"><span class="tp-today-arrow${todayExpanded?' tp-today-arrow-open':''}">\u203a</span></button>
-  </div>
-  <div class="tp-today-body-anim">` +
-  (todayExpanded? expandedBody : compactBody) +
-  `</div></div>`;
-    return { html: panelHtml, requiredItemSet };
+    const footer = `<div class="tp-t-footer">${totalLoggedToday > 0
+      ? `Logged ${totalLoggedToday} unit${totalLoggedToday === 1 ? '' : 's'} today · anything below the targets is you getting ahead`
+      : 'Nothing logged yet today'}</div>`;
+
+    return `<div class="tp-screen tp-screen-today">${header}${targetsHeading}${targetsBody}${getAheadSection}${footer}</div>`;
   }
 
   global.TPViews = global.TPViews || {};
-  global.TPViews.todayPanelHtml = todayPanelHtml;
+  global.TPViews.todayScreenHtml = todayScreenHtml;
 })(typeof window !== 'undefined' ? window : globalThis);

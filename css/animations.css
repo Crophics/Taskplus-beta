@@ -25,6 +25,8 @@
 @keyframes tp-fade-in{ from{ opacity:0; } to{ opacity:1; } }
 @keyframes tp-modal-pop{ from{ opacity:0; transform:scale(0.94) translateY(10px); } to{ opacity:1; transform:scale(1) translateY(0); } }
 @keyframes tp-toast-in{ from{ opacity:0; transform:translate(-50%, 12px); } to{ opacity:1; transform:translate(-50%, 0); } }
+@keyframes tp-pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.45; } }
+@keyframes tp-pop{ from{ opacity:0; transform:translateY(8px) scale(.97); } to{ opacity:1; transform:translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce){
   #tp-app .tp-today-dot-tight{ animation:none; }
   #tp-modal-box{ animation:none; }
@@ -35,4 +37,5 @@
   #tp-app .tp-card{ transition:none; }
   #tp-app input.tp-field-error{ animation:none; }
   body, #tp-app .tp-today, #tp-app .tp-week-block, #tp-modal-box, #tp-app input, #tp-app select, #tp-app textarea, #tp-app .tp-bar, #tp-app .tp-tag{ transition:none; }
+  #tp-app .tp-t-pulse, #tp-app .tp-sheet, #tp-app .tp-qmenu{ animation:none; }
 }
