@@ -215,6 +215,8 @@
     if (qmDelete) qmDelete.onclick = () => {
       const idx = parseInt(qmDelete.dataset.i);
       api.menuFor = null;
+      api.render(); // close the menu immediately - deleteItemAt's own
+      // card-removal animation (or its timeout fallback) shouldn't gate that
       api.deleteItemAt(idx);
     };
 
