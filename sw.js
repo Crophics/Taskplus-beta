@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v19'; // bumped: iOS fixes, self-hosted icon font
+const CACHE_NAME = 'taskplus-cache-v20'; // bumped: icons moved to inline SVG, no more icon font
 const urlsToCache = [
   './',
   './index.html',
@@ -92,10 +92,10 @@ const urlsToCache = [
   './firebase-sync.js',
   './js/fcm-config.js',
   './manifest.json',
+  './js/icons.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/favicon.ico',
-  './icons/nerd-fonts-subset.woff2'
+  './icons/favicon.ico'
 ];
 
 self.addEventListener('install', (event) => {

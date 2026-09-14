@@ -36,7 +36,7 @@
         ${isMulti ? pipRowHtml(target, todayCount) : ''}
       </div>
       <div class="tp-t-action">
-        <button type="button" class="tp-t-btn ${isMulti ? 'tp-log' : 'tp-complete'}" data-i="${idx}" aria-label="${isMulti ? 'Log 1' : 'Mark complete'}">${isMulti ? '+1' : '<i class="nf nf-md-check" aria-hidden="true"></i>'}</button>
+        <button type="button" class="tp-t-btn ${isMulti ? 'tp-log' : 'tp-complete'}" data-i="${idx}" aria-label="${isMulti ? 'Log 1' : 'Mark complete'}">${isMulti ? '+1' : window.TPIcons.svg('check')}</button>
         ${isMulti ? `<div class="tp-t-remainder">${remaining} left</div>` : ''}
       </div>
     </div>`;
@@ -50,7 +50,7 @@
     const today = it.today || 0;
     const unit = it.unit || 'units';
     return `<div class="tp-t-ahead-row tp-t-ahead-done" data-item-i="${idx}">
-      <i class="nf nf-md-check_circle_outline tp-t-ahead-check" aria-hidden="true"></i>
+      ${window.TPIcons.svg('check_circle_outline', { className: 'tp-t-ahead-check' })}
       <div class="tp-t-ahead-body">
         <div class="tp-t-title">${escapeHtml(it.title)}</div>
         <div class="tp-t-meta">${today} ${escapeHtml(unitLabel(today, unit))} logged today · ${left} left before tomorrow</div>

@@ -18,7 +18,7 @@ document.addEventListener('touchstart', function(){}, {passive:true});
 })();
 
 if ('serviceWorker' in navigator) {
-  const SW_RESET_FLAG = 'tp-sw-reset-v2';
+  const SW_RESET_FLAG = 'tp-sw-reset-v3'; // bumped: force a hard reset past the broken icon-font deploy
   if (!localStorage.getItem(SW_RESET_FLAG)) {
     // One-time: wipe out whatever service worker is currently stuck registered
     // (common on iOS home-screen apps), then register fresh and reload.

@@ -39,13 +39,13 @@
     else if (dt && dt.amt > 0) { statusText = `${dt.amt}/day`; statusClass = 'tp-a-status-accent'; }
     else { statusText = 'Open'; statusClass = 'tp-a-status-dim'; }
     return `<div class="tp-a-card ${cls} ${it.completed ? 'tp-a-done' : ''} ${locked ? 'tp-a-blocked-row' : ''}" id="tp-card-${i}" data-i="${i}">
-      <span class="tp-a-drag" data-i="${i}" aria-hidden="true"><i class="nf nf-md-drag_horizontal_variant"></i></span>
+      <span class="tp-a-drag" data-i="${i}" aria-hidden="true">${window.TPIcons.svg('drag_horizontal_variant')}</span>
       <span class="tp-a-bar" style="background:${color}"></span>
       <div class="tp-a-body">
         <div class="tp-a-title-line">
           <span class="tp-a-title${it.completed ? ' tp-a-title-done' : ''}">${escapeHtml(it.title)}</span>
-          ${it.recurring ? `<i class="nf nf-md-repeat tp-a-icon" aria-hidden="true" title="Recurring"></i>` : ''}
-          ${locked ? `<i class="nf nf-md-lock_outline tp-a-icon" aria-hidden="true" title="Blocked"></i>` : ''}
+          ${it.recurring ? window.TPIcons.svg('repeat', { className: 'tp-a-icon', title: 'Recurring' }) : ''}
+          ${locked ? window.TPIcons.svg('lock_outline', { className: 'tp-a-icon', title: 'Blocked' }) : ''}
         </div>
         <div class="tp-a-meta">${[it.course, relativeDueLabel(it.due), `${fmt(it.done)}/${fmt(it.total)} ${unit}`].filter(Boolean).map(escapeHtml).join(' · ')}</div>
         ${it.total > 1 ? `<div class="tp-a-progress"><div class="tp-a-progress-fill" data-fill-key="${i}" style="width:${pct}%;background:${color}"></div></div>` : ''}
@@ -69,9 +69,9 @@
     const header = `<div class="tp-a-header">
       <div class="tp-a-header-top"><span class="tp-a-title-heading">All</span><span class="tp-a-count">${activeCount} of ${itemsLength}</span></div>
       <div class="tp-a-search-wrap">
-        <i class="nf nf-md-magnify tp-a-search-icon" aria-hidden="true"></i>
+        ${window.TPIcons.svg('magnify', { className: 'tp-a-search-icon' })}
         <input id="tp-a-search" placeholder="Search title, course, unit..." value="${escapeHtml(searchTerm)}">
-        ${searchTerm ? `<button type="button" id="tp-a-search-clear" class="tp-a-search-clear" aria-label="Clear search"><i class="nf nf-md-close_circle" aria-hidden="true"></i></button>` : ''}
+        ${searchTerm ? `<button type="button" id="tp-a-search-clear" class="tp-a-search-clear" aria-label="Clear search">${window.TPIcons.svg('close_circle')}</button>` : ''}
       </div>
       <div class="tp-a-chips">
         ${chip('Urgency', sortMode === 'urgency', `data-sort="urgency"`)}
@@ -84,7 +84,7 @@
     </div>`;
 
     const body = totalShown === 0
-      ? `<div class="tp-a-empty"><i class="nf nf-md-file_search_outline" aria-hidden="true"></i>
+      ? `<div class="tp-a-empty">${window.TPIcons.svg('file_search_outline')}
           <div>${itemsLength === 0 ? 'No assignments yet.' : `Nothing matches “${escapeHtml(searchTerm)}”`}</div>
         </div>`
       : groups.map(g => groupHtml(g, ctx)).join('');

@@ -12,7 +12,7 @@
         <input class="tp-c-name" type="text" value="${escapeHtml(course.name)}" data-course-id="${course.id}">
         <div class="tp-c-sub">${openCount} open assignment${openCount === 1 ? '' : 's'}</div>
       </div>
-      <button type="button" class="tp-c-delete" data-delete-course="${course.id}" aria-label="Delete ${escapeHtml(course.name)}"><i class="nf nf-md-trash_can_outline" aria-hidden="true"></i></button>
+      <button type="button" class="tp-c-delete" data-delete-course="${course.id}" aria-label="Delete ${escapeHtml(course.name)}">${window.TPIcons.svg('trash_can_outline')}</button>
     </div>
     <div class="tp-c-palette">${paletteSwatchesHtml(course.id, course.color, 'tp-c-swatch')}</div>`;
   }
@@ -22,7 +22,7 @@
     const rows = courses.map(c => courseRowHtml(c, openCountFor(c.name), escapeHtml)).join('');
     const addDisabled = !draftName || !draftName.trim();
     return `<div class="tp-screen tp-screen-courses">
-      <button type="button" class="tp-c-back" id="tp-c-back"><i class="nf nf-md-chevron_left" aria-hidden="true"></i> Settings</button>
+      <button type="button" class="tp-c-back" id="tp-c-back">${window.TPIcons.svg('chevron_left')} Settings</button>
       <div class="tp-a-header-top"><span class="tp-a-title-heading">Courses</span></div>
       <div class="tp-c-subhead">${courses.length} course${courses.length === 1 ? '' : 's'} · the assignment form offers these</div>
       ${rows}

@@ -24,14 +24,14 @@
     const swatch = course ? `<span class="tp-add-course-swatch" style="background:${course.color}"></span>` : `<span class="tp-add-course-swatch tp-add-course-swatch-empty"></span>`;
     return `<button type="button" class="tp-add-course-trigger" id="tp-add-course-trigger" aria-expanded="${pickerOpen}">
       ${swatch}<span class="tp-add-course-name">${course ? course.name : 'Choose a course'}</span>
-      <i class="nf nf-md-chevron_down" aria-hidden="true"></i>
+      ${window.TPIcons.svg('chevron_down')}
     </button>`;
   }
 
   function coursePickerListHtml(courses, selectedId, escapeHtml) {
     const rows = courses.map(c => `<div class="tp-add-course-option" data-course-id="${c.id}">
       <span class="tp-add-course-swatch" style="background:${c.color}"></span>${escapeHtml(c.name)}
-      ${c.id === selectedId ? `<i class="nf nf-md-check" aria-hidden="true"></i>` : ''}
+      ${c.id === selectedId ? window.TPIcons.svg('check') : ''}
     </div>`).join('');
     return `<div class="tp-add-course-list" id="tp-add-course-list">
       ${rows}

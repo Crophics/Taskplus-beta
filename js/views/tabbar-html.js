@@ -7,14 +7,14 @@
     function item(id, icon, label) {
       const active = effectiveTab === id;
       return `<button type="button" class="tp-tab${active ? ' tp-tab-active' : ''}" data-tab="${id}" aria-current="${active ? 'page' : 'false'}">
-        <i class="nf nf-md-${icon}" aria-hidden="true"></i>
+        ${window.TPIcons.svg(icon)}
         <span class="tp-tab-label">${label}</span>
       </button>`;
     }
     return `<nav class="tp-tabbar" id="tp-tabbar">
       ${item('today', 'calendar_today', 'Today')}
       ${item('all', 'format_list_bulleted', 'All')}
-      <button type="button" class="tp-tab-add" id="tp-add-toggle" aria-label="Add assignment"><i class="nf nf-md-plus" aria-hidden="true"></i></button>
+      <button type="button" class="tp-tab-add" id="tp-add-toggle" aria-label="Add assignment">${window.TPIcons.svg('plus')}</button>
       ${item('week', 'chart_bar', 'Week')}
       ${item('settings', 'cog_outline', 'Settings')}
     </nav>`;

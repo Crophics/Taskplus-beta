@@ -70,7 +70,7 @@
   }
 
   function adviceHtml(text) {
-    return `<div class="tp-w-advice"><i class="nf nf-md-lightbulb_on_outline tp-w-advice-icon" aria-hidden="true"></i><div>${text}</div></div>`;
+    return `<div class="tp-w-advice">${window.TPIcons.svg('lightbulb_on_outline', { className: 'tp-w-advice-icon' })}<div>${text}</div></div>`;
   }
 
   function weekScreenHtml(ctx) {
