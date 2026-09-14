@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v36'; // bumped: fix tab bar rendering at the top - DOM order matters now that it's not position:fixed
+const CACHE_NAME = 'taskplus-cache-v37'; // bumped: drive page height off a JS-observed --app-height instead of the dvh unit directly
 const urlsToCache = [
   './',
   './index.html',
