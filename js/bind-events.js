@@ -195,10 +195,13 @@
     if (qmenuBackdrop) qmenuBackdrop.addEventListener('click', (e) => {
       if (e.target === qmenuBackdrop) { api.menuFor = null; api.render(); }
     });
+    // Close the menu (state only, no render yet) before the action - logOne/
+    // toggleComplete already end in api.save(), which renders. Closing
+    // first means that one render shows the menu gone; no second render.
     const qmLog = document.getElementById('tp-qm-log');
-    if (qmLog) qmLog.onclick = () => { logOne(parseInt(qmLog.dataset.i), qmLog); api.menuFor = null; api.render(); };
+    if (qmLog) qmLog.onclick = () => { api.menuFor = null; logOne(parseInt(qmLog.dataset.i), qmLog); };
     const qmComplete = document.getElementById('tp-qm-complete');
-    if (qmComplete) qmComplete.onclick = () => { toggleComplete(parseInt(qmComplete.dataset.i)); api.menuFor = null; api.render(); };
+    if (qmComplete) qmComplete.onclick = () => { api.menuFor = null; toggleComplete(parseInt(qmComplete.dataset.i)); };
     const qmPush = document.getElementById('tp-qm-push');
     if (qmPush) qmPush.onclick = () => {
       const it = api.items[parseInt(qmPush.dataset.i)];
