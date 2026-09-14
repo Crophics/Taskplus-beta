@@ -85,22 +85,28 @@
       };
     });
 
-    /* ---- All screen ---- */
-    {
-      const search = document.getElementById('tp-a-search');
-      if (search) search.oninput = (e) => {
-        api.pendingFocus = { id: 'tp-a-search', selStart: e.target.selectionStart, selEnd: e.target.selectionEnd };
-        api.searchTerm = e.target.value;
-        api.savePrefs();
-        api.render();
-      };
-    }
+    /* ---- All screen ----
+       The header (search input, sort/course chips) lives outside
+       #tp-a-results and is never rebuilt while typing, so the clear
+       button's visibility - the one piece of the header that depends on
+       searchTerm - is toggled directly via [hidden] instead of relying on
+       a re-render to add/remove it. */
+    const search = document.getElementById('tp-a-search');
+    if (search) search.oninput = (e) => {
+      api.searchTerm = e.target.value;
+      api.savePrefs();
+      const clearBtn = document.getElementById('tp-a-search-clear');
+      if (clearBtn) clearBtn.hidden = !e.target.value;
+      api.patch('tp-a-results', window.TPViews.allResultsHtml(api.allCtx()));
+    };
     const searchClear = document.getElementById('tp-a-search-clear');
     if (searchClear) searchClear.onclick = () => {
       api.searchTerm = '';
       api.savePrefs();
-      api.pendingFocus = { id: 'tp-a-search', selStart: 0, selEnd: 0 };
-      api.render();
+      const inp = document.getElementById('tp-a-search');
+      if (inp) { inp.value = ''; inp.focus(); }
+      searchClear.hidden = true;
+      api.patch('tp-a-results', window.TPViews.allResultsHtml(api.allCtx()));
     };
     root.querySelectorAll('.tp-a-chip[data-sort]').forEach(b => b.onclick = () => {
       api.allSortMode = b.dataset.sort;
@@ -335,8 +341,8 @@
     const newCourseNameInput = document.getElementById('tp-c-new-name');
     if (newCourseNameInput) newCourseNameInput.oninput = (e) => {
       api.newCourseName = e.target.value;
-      api.pendingFocus = { id: 'tp-c-new-name', selStart: e.target.selectionStart, selEnd: e.target.selectionEnd };
-      api.render();
+      const btn = document.getElementById('tp-c-add');
+      if (btn) btn.disabled = !e.target.value.trim();
     };
     root.querySelectorAll('.tp-c-new-swatch').forEach(sw => sw.onclick = () => { api.newCourseColor = sw.dataset.color; api.render(); });
     const addCourseBtn = document.getElementById('tp-c-add');
@@ -375,26 +381,44 @@
     }
     const sheetCancel = document.getElementById('tp-sheet-cancel');
     if (sheetCancel) sheetCancel.onclick = () => { api.closeAddSheet(); api.render(); };
+    // Model-only fields: nothing else on screen depends on what's typed, so
+    // just update the draft - no render(), no patch(), no pendingFocus. The
+    // input is never touched, so it can't lose focus or its caret position.
     const addTitle = document.getElementById('tp-add-title');
-    if (addTitle) addTitle.oninput = (e) => {
-      api.draft.title = e.target.value;
-      api.pendingFocus = { id: 'tp-add-title', selStart: e.target.selectionStart, selEnd: e.target.selectionEnd };
-      api.render();
-    };
+    if (addTitle) addTitle.oninput = (e) => { api.draft.title = e.target.value; };
+    const addNotes = document.getElementById('tp-add-notes');
+    if (addNotes) addNotes.oninput = (e) => { api.draft.notes = e.target.value; };
+
+    function refreshHint() {
+      const el = document.getElementById('tp-add-hint');
+      if (el) el.innerHTML = window.TPViews.pacingHintHtml(api.draft, api.today, api.daysBetween);
+    }
+
     const addUnit = document.getElementById('tp-add-unit');
-    if (addUnit) addUnit.oninput = (e) => {
-      api.draft.unit = e.target.value;
-      api.pendingFocus = { id: 'tp-add-unit', selStart: e.target.selectionStart, selEnd: e.target.selectionEnd };
-      api.render();
-    };
+    if (addUnit) addUnit.oninput = (e) => { api.draft.unit = e.target.value; refreshHint(); };
     const addDue = document.getElementById('tp-add-due');
-    if (addDue) addDue.oninput = (e) => { api.draft.due = e.target.value; api.pendingFocus = { id: 'tp-add-due' }; api.render(); };
+    if (addDue) addDue.oninput = (e) => { api.draft.due = e.target.value; refreshHint(); };
     const addAmount = document.getElementById('tp-add-amount');
-    if (addAmount) addAmount.oninput = (e) => { api.draft.amount = Math.max(1, parseInt(e.target.value) || 1); api.pendingFocus = { id: 'tp-add-amount' }; api.render(); };
+    if (addAmount) addAmount.oninput = (e) => {
+      api.draft.amount = Math.max(1, parseInt(e.target.value) || 1);
+      refreshHint();
+    };
+    // Steppers are clicks, not typing, but they shouldn't steal focus from
+    // the amount field either - patch instead of a full render().
     const addMinus = document.getElementById('tp-add-minus');
-    if (addMinus) addMinus.onclick = () => { api.draft.amount = Math.max(1, (Number(api.draft.amount) || 1) - 1); api.render(); };
+    if (addMinus) addMinus.onclick = () => {
+      api.draft.amount = Math.max(1, (Number(api.draft.amount) || 1) - 1);
+      const inp = document.getElementById('tp-add-amount');
+      if (inp) inp.value = api.draft.amount;
+      refreshHint();
+    };
     const addPlus = document.getElementById('tp-add-plus');
-    if (addPlus) addPlus.onclick = () => { api.draft.amount = (Number(api.draft.amount) || 1) + 1; api.render(); };
+    if (addPlus) addPlus.onclick = () => {
+      api.draft.amount = (Number(api.draft.amount) || 1) + 1;
+      const inp = document.getElementById('tp-add-amount');
+      if (inp) inp.value = api.draft.amount;
+      refreshHint();
+    };
     const courseTrigger = document.getElementById('tp-add-course-trigger');
     if (courseTrigger) courseTrigger.onclick = () => { api.pickerOpen = !api.pickerOpen; api.render(); };
     root.querySelectorAll('.tp-add-course-option[data-course-id]').forEach(opt => opt.onclick = () => {
@@ -413,18 +437,12 @@
     const addMore = document.getElementById('tp-add-more');
     if (addMore) addMore.onclick = () => { api.moreOpen = !api.moreOpen; api.render(); };
 
-    const addNotes = document.getElementById('tp-add-notes');
-    if (addNotes) addNotes.oninput = (e) => {
-      api.draft.notes = e.target.value;
-      api.pendingFocus = { id: 'tp-add-notes', selStart: e.target.selectionStart, selEnd: e.target.selectionEnd };
-      api.render();
-    };
-
     const addSubtasks = document.getElementById('tp-add-subtasks');
     if (addSubtasks) addSubtasks.oninput = (e) => {
       api.draft.subtasksText = e.target.value;
-      api.pendingFocus = { id: 'tp-add-subtasks', selStart: e.target.selectionStart, selEnd: e.target.selectionEnd };
-      api.render();
+      const n = e.target.value.split('\n').map(s => s.trim()).filter(Boolean).length;
+      const el = document.getElementById('tp-add-subcount');
+      if (el) el.textContent = n ? n + (n === 1 ? ' subtask' : ' subtasks') : 'Each line becomes its own checkbox.';
     };
 
     root.querySelectorAll('.tp-add-seg-opt[data-repeat]').forEach(b => b.onclick = () => {
@@ -511,6 +529,11 @@
       }
     }
     api.pendingFocus = null;
+
+    // The enter-animation classes only need to paint once; clear both so the
+    // next render doesn't replay them.
+    api.sheetJustOpened = false;
+    api.menuJustOpened = false;
   }
 
   global.TPBind = { bindEvents };

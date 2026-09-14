@@ -61,17 +61,36 @@
     return heading + group.rows.map(r => rowHtml(r, ctx)).join('');
   }
 
+  // Everything that depends on the search text: the grouped rows (or the
+  // empty state) and the footer hint below them. Rebuilt on every keystroke
+  // in the search box, patched into #tp-a-results - the header above it
+  // (title, search input, sort/course chips) is untouched, so the input
+  // never loses focus.
+  function resultsHtml(ctx) {
+    const { escapeHtml, searchTerm, groups, itemsLength } = ctx;
+    const totalShown = groups.reduce((s, g) => s + g.rows.length, 0);
+
+    const body = totalShown === 0
+      ? `<div class="tp-a-empty">${window.TPIcons.svg('file_search_outline')}
+          <div>${itemsLength === 0 ? 'No assignments yet.' : `Nothing matches “${escapeHtml(searchTerm)}”`}</div>
+        </div>`
+      : groups.map(g => groupHtml(g, ctx)).join('');
+
+    const footer = `<div class="tp-t-footer">Long-press a card for quick actions · drag the handle to reorder</div>`;
+
+    return body + footer;
+  }
+
   function allScreenHtml(ctx) {
     const { escapeHtml, searchTerm, sortMode, filterCourse, courses, groups, itemsLength } = ctx;
     const activeCount = groups.reduce((s, g) => s + g.rows.filter(r => !r.it.completed).length, 0);
-    const totalShown = groups.reduce((s, g) => s + g.rows.length, 0);
 
     const header = `<div class="tp-a-header">
       <div class="tp-a-header-top"><span class="tp-a-title-heading">All</span><span class="tp-a-count">${activeCount} of ${itemsLength}</span></div>
       <div class="tp-a-search-wrap">
         ${window.TPIcons.svg('magnify', { className: 'tp-a-search-icon' })}
         <input id="tp-a-search" placeholder="Search title, course, unit..." value="${escapeHtml(searchTerm)}">
-        ${searchTerm ? `<button type="button" id="tp-a-search-clear" class="tp-a-search-clear" aria-label="Clear search">${window.TPIcons.svg('close_circle')}</button>` : ''}
+        <button type="button" id="tp-a-search-clear" class="tp-a-search-clear" aria-label="Clear search" ${searchTerm ? '' : 'hidden'}>${window.TPIcons.svg('close_circle')}</button>
       </div>
       <div class="tp-a-chips">
         ${chip('Urgency', sortMode === 'urgency', `data-sort="urgency"`)}
@@ -83,17 +102,10 @@
       </div>
     </div>`;
 
-    const body = totalShown === 0
-      ? `<div class="tp-a-empty">${window.TPIcons.svg('file_search_outline')}
-          <div>${itemsLength === 0 ? 'No assignments yet.' : `Nothing matches “${escapeHtml(searchTerm)}”`}</div>
-        </div>`
-      : groups.map(g => groupHtml(g, ctx)).join('');
-
-    const footer = `<div class="tp-t-footer">Long-press a card for quick actions · drag the handle to reorder</div>`;
-
-    return `<div class="tp-screen tp-screen-all">${header}${body}${footer}</div>`;
+    return `<div class="tp-screen tp-screen-all">${header}<div id="tp-a-results">${resultsHtml(ctx)}</div></div>`;
   }
 
   global.TPViews = global.TPViews || {};
   global.TPViews.allScreenHtml = allScreenHtml;
+  global.TPViews.allResultsHtml = resultsHtml;
 })(typeof window !== 'undefined' ? window : globalThis);

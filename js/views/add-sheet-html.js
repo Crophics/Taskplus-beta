@@ -1,18 +1,21 @@
 /* views/add-sheet-html.js — Bottom sheet for adding/editing an assignment. */
 (function (global) {
+  // Returns just the hint text - js/bind-events.js patches #tp-add-hint's
+  // innerHTML directly on every amount/unit/due keystroke, and the wrapper
+  // div lives in the template below so patching can't nest a div in itself.
   function pacingHintHtml(draft, todayFn, daysBetween) {
     if (!draft.due) return '';
     const amount = Number(draft.amount) || 1;
     const daysOut = daysBetween(todayFn(), draft.due);
-    if (daysOut < 0) return `<div class="tp-add-hint">That date has passed — it lands overdue.</div>`;
+    if (daysOut < 0) return `That date has passed — it lands overdue.`;
     if (amount <= 1) {
       return daysOut <= 1
-        ? `<div class="tp-add-hint">Due ${daysOut === 0 ? 'today' : 'tomorrow'}. One sitting, so it surfaces the day before.</div>`
-        : `<div class="tp-add-hint">Due in ${daysOut} days. One sitting, so it surfaces the day before.</div>`;
+        ? `Due ${daysOut === 0 ? 'today' : 'tomorrow'}. One sitting, so it surfaces the day before.`
+        : `Due in ${daysOut} days. One sitting, so it surfaces the day before.`;
     }
     const target = Math.ceil(amount / Math.max(daysOut, 1));
     const unit = draft.unit || 'units';
-    return `<div class="tp-add-hint">Due in ${daysOut} day${daysOut === 1 ? '' : 's'}. Paces to ${target} ${unit} a day to finish on time.</div>`;
+    return `Due in ${daysOut} day${daysOut === 1 ? '' : 's'}. Paces to ${target} ${unit} a day to finish on time.`;
   }
 
   function coursePickerTriggerHtml(course, pickerOpen) {
@@ -58,7 +61,7 @@
       <textarea class="tp-add-textarea" id="tp-add-subtasks" rows="3"
         aria-labelledby="tp-lbl-subtasks"
         placeholder="One per line">${escapeHtml(draft.subtasksText || '')}</textarea>
-      <div class="tp-add-sublabel">${subCount ? subCount + (subCount === 1 ? ' subtask' : ' subtasks') : 'Each line becomes its own checkbox.'}</div>
+      <div class="tp-add-sublabel" id="tp-add-subcount">${subCount ? subCount + (subCount === 1 ? ' subtask' : ' subtasks') : 'Each line becomes its own checkbox.'}</div>
 
       <div class="tp-sheet-label">Repeat</div>
       <div class="tp-add-seg" role="group" aria-label="Repeat">
@@ -95,7 +98,7 @@
     const { draft, courses, pickerOpen, escapeHtml, today, daysBetween, isEdit } = ctx;
     const selectedCourse = window.TPCourses.byId(courses, draft.courseId);
     return `<div class="tp-backdrop" id="tp-sheet-backdrop">
-      <div class="tp-sheet" id="tp-sheet" role="dialog" aria-modal="true" aria-label="${isEdit ? 'Edit assignment' : 'New assignment'}">
+      <div class="tp-sheet${ctx.sheetJustOpened ? ' tp-sheet-enter' : ''}" id="tp-sheet" role="dialog" aria-modal="true" aria-label="${isEdit ? 'Edit assignment' : 'New assignment'}">
         <div class="tp-sheet-handle"></div>
         <div class="tp-sheet-header">
           <span class="tp-sheet-title">${isEdit ? 'Edit assignment' : 'New assignment'}</span>
@@ -119,7 +122,7 @@
           <button type="button" class="tp-add-stepper" id="tp-add-plus" aria-label="Increase amount">+</button>
           <input class="tp-add-unit" id="tp-add-unit" placeholder="unit (pages, problems...)" value="${escapeHtml(draft.unit || '')}">
         </div>
-        ${pacingHintHtml(draft, today, daysBetween)}
+        <div class="tp-add-hint" id="tp-add-hint">${pacingHintHtml(draft, today, daysBetween)}</div>
         ${moreSectionHtml(ctx, draft, selectedCourse, escapeHtml)}
         <button type="button" class="tp-add-submit" id="tp-add-submit">${isEdit ? 'Save changes' : 'Add assignment'}</button>
       </div>
@@ -128,4 +131,5 @@
 
   global.TPViews = global.TPViews || {};
   global.TPViews.addSheetHtml = addSheetHtml;
+  global.TPViews.pacingHintHtml = pacingHintHtml;
 })(typeof window !== 'undefined' ? window : globalThis);

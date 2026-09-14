@@ -108,6 +108,11 @@
   let moreOpen = false; // add-sheet "Notes, subtasks, repeat, dependency" disclosure
   let prereqOpen = false; // add-sheet "Do this after" picker
   let menuFor = null; // index into `items`, for the quick-action menu
+  // One-shot "just opened" flags so the sheet/menu animate in on open only,
+  // not on every re-render (see js/bind-events.js, which clears both at the
+  // end of every bindEvents pass so the class only paints once).
+  let sheetJustOpened = false;
+  let menuJustOpened = false;
   let allSortMode = prefs.allSortMode || 'urgency';
   let allFilterCourse = '';
   let weekSelDay = 0;
@@ -215,6 +220,7 @@
     moreOpen = false;
     prereqOpen = false;
     addOpen = true;
+    sheetJustOpened = true;
   }
   function closeAddSheet(){
     addOpen = false;
@@ -223,6 +229,7 @@
     prereqOpen = false;
     editIndex = null;
     draft = null;
+    sheetJustOpened = false;
   }
 
   const burstConfetti = window.TP.burstConfetti;
@@ -520,13 +527,7 @@
         TPTodayLogic: window.TPTodayLogic,
       });
     } else if(tab==='all'){
-      const groups = allGroups();
-      screenHtml = V.allScreenHtml({
-        escapeHtml, searchTerm, sortMode: allSortMode, filterCourse: allFilterCourse,
-        courses, groups, itemsLength: items.filter(i=>!i.archived).length,
-        isLocked, daysBetween, today, urgencyClass, relativeDueLabel, fmt, unitLabel, capUnit,
-        courseColorFor, contrastTextColor,
-      });
+      screenHtml = V.allScreenHtml(allCtx());
     } else if(tab==='week'){
       const weekCtx = { items, today, daysBetween };
       const days = window.TPWeekLogic.computePacedLoad(weekCtx);
@@ -559,11 +560,11 @@
     let html = V.tabBarHtml({ tab }) + screenHtml;
 
     if(addOpen && draft){
-      html += V.addSheetHtml({ draft, courses, items, pickerOpen, moreOpen, prereqOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null });
+      html += V.addSheetHtml({ draft, courses, items, pickerOpen, moreOpen, prereqOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null, sheetJustOpened });
     }
     if(menuFor!=null && items[menuFor]){
       const it = items[menuFor];
-      html += V.quickMenuHtml({ it, i: menuFor, escapeHtml, relativeDueLabel, unit: it.unit || 'units' });
+      html += V.quickMenuHtml({ it, i: menuFor, escapeHtml, relativeDueLabel, unit: it.unit || 'units', menuJustOpened });
     }
 
     const prevFills = {};
@@ -587,9 +588,36 @@
       }
     });
 
-    window.TPBind.bindEvents(root, {
-      items, allList: allGroups().flatMap(g=>g.rows), render, save, savePrefs, exportData, exportIcs, importData,
-      clearCompleted, deleteItemAt, reorderByDrag, makeRecurringClone, triggerCelebration, today, addDays,
+    window.TPBind.bindEvents(root, buildApi());
+  }
+
+  // Context handed to js/views/all-html.js, factored out so both a full
+  // render() and a search-only patch() can build the exact same shape.
+  function allCtx(){
+    return {
+      escapeHtml: window.TPHtml.escapeHtml, searchTerm, sortMode: allSortMode, filterCourse: allFilterCourse,
+      courses, groups: allGroups(), itemsLength: items.filter(i=>!i.archived).length,
+      isLocked, daysBetween, today, urgencyClass, relativeDueLabel, fmt, unitLabel, capUnit,
+      courseColorFor, contrastTextColor,
+    };
+  }
+
+  // Replaces one container's contents and re-binds, without touching the
+  // rest of the DOM - so a focused input is never destroyed mid-typing.
+  // Re-binding globally is fine (attaching handlers is cheap); the
+  // expensive, bug-producing part is rebuilding the element tree, and
+  // that's what this avoids.
+  function patch(id, html){
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.innerHTML = html;
+    window.TPBind.bindEvents(document.getElementById('tp-app'), buildApi());
+  }
+
+  function buildApi(){
+    return {
+      items, allList: allGroups().flatMap(g=>g.rows), render, patch, allCtx, save, savePrefs, exportData, exportIcs, importData,
+      clearCompleted, deleteItemAt, reorderByDrag, makeRecurringClone, triggerCelebration, today, addDays, daysBetween,
       hasTodayWorkRemaining, logDayComplete, checkAndNotify, applyTheme,
       isDevModeTrigger, activateDevMode, deactivateDevMode, saveDevPanelOpen, showToast,
       saveCourses, openAddSheet, closeAddSheet, setNotifyHour,
@@ -600,7 +628,9 @@
       get pickerOpen(){ return pickerOpen; }, set pickerOpen(v){ pickerOpen = v; },
       get moreOpen(){ return moreOpen; }, set moreOpen(v){ moreOpen = v; },
       get prereqOpen(){ return prereqOpen; }, set prereqOpen(v){ prereqOpen = v; },
-      get menuFor(){ return menuFor; }, set menuFor(v){ menuFor = v; },
+      get menuFor(){ return menuFor; }, set menuFor(v){ menuFor = v; menuJustOpened = (v !== null); },
+      get sheetJustOpened(){ return sheetJustOpened; }, set sheetJustOpened(v){ sheetJustOpened = v; },
+      get menuJustOpened(){ return menuJustOpened; }, set menuJustOpened(v){ menuJustOpened = v; },
       get searchTerm(){ return searchTerm; }, set searchTerm(v){ searchTerm = v; },
       get allSortMode(){ return allSortMode; }, set allSortMode(v){ allSortMode = v; },
       get allFilterCourse(){ return allFilterCourse; }, set allFilterCourse(v){ allFilterCourse = v; },
@@ -616,7 +646,7 @@
       get newCourseColor(){ return newCourseColor; }, set newCourseColor(v){ newCourseColor = v; },
       get lastAddedCourseId(){ return lastAddedCourseId; }, set lastAddedCourseId(v){ lastAddedCourseId = v; },
       touchItem, newItemId,
-    });
+    };
   }
   render();
 })();
