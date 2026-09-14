@@ -246,6 +246,13 @@
     sheetJustOpened = true;
   }
   function closeAddSheet(){
+    const restoreY = scrollYBeforeSheet;
+    // Blur whatever's focused (the title field, most likely) before the
+    // caller's next render() call rebuilds #tp-app's innerHTML out from
+    // under it - starting the keyboard-dismiss transition here, as early
+    // as possible, rather than letting the DOM removal trigger it as a
+    // side effect a moment later.
+    if(document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
     addOpen = false;
     pickerOpen = false;
     moreOpen = false;
@@ -253,7 +260,17 @@
     editIndex = null;
     draft = null;
     sheetJustOpened = false;
-    if(typeof window.scrollTo === 'function') window.scrollTo(0, scrollYBeforeSheet);
+    // A single synchronous scrollTo here doesn't hold: iOS's own
+    // keyboard-dismiss reflow runs asynchronously and can land AFTER this,
+    // re-introducing the exact offset this is trying to correct - which is
+    // exactly why that fix didn't work. Repeating the correction across
+    // the window that reflow tends to land in means whichever call runs
+    // last wins, regardless of the exact timing on a given device.
+    if(typeof window.scrollTo === 'function'){
+      [0, 50, 150, 300, 500, 800].forEach(delay=>{
+        setTimeout(()=> window.scrollTo(0, restoreY), delay);
+      });
+    }
   }
 
   const burstConfetti = window.TP.burstConfetti;

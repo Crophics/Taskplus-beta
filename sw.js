@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v32'; // bumped: explicitly restore scroll position when closing the Add sheet
+const CACHE_NAME = 'taskplus-cache-v33'; // bumped: blur + repeated delayed scroll-restore to outrace iOS's own async keyboard reflow
 const urlsToCache = [
   './',
   './index.html',
