@@ -240,6 +240,29 @@ The workflow has `paths-ignore: '**/*.md'` — a commit that only touches
 behavior, not a bug, if you're wondering why a doc-only push shows no
 Actions run.
 
+**"Reaching Cloudflare" is not the same as "reaching the user's browser."**
+`sw.js` is a cache-first service worker: `CACHE_NAME` is the only thing
+that makes it fetch fresh copies of the precached files (`urlsToCache`) —
+bumping it is what evicts the old cache in the `activate` handler.
+**Every commit that changes a precached file needs to bump `CACHE_NAME`
+again, not just the first time that file was touched.** This actually
+happened: `js/icons.js` got the viewBox fix in the same commit that bumped
+`CACHE_NAME` to `v21`, then three more commits fixed the icon further
+(replaced its shape, fixed its size, fixed a rendering bug) *without*
+bumping `CACHE_NAME` again — so returning visitors kept getting served the
+`v21`-cached `icons.js` through all three follow-up fixes, and no amount
+of manually reloading the page fixed it (a plain reload asks the service
+worker first, which returns its cache before ever touching the network).
+`curl`ing the live URL to verify a fix is real, but it proves nothing
+about what a *cached* visitor's browser is actually running — check
+`CACHE_NAME` got bumped in the same commit as the fix, every time.
+`js/boot.js`'s `SW_RESET_FLAG` is the nuclear option (unregisters and
+re-registers unconditionally, once per flag value) for when a normal
+`CACHE_NAME` bump isn't cutting it fast enough — bump *that* string too if
+several `CACHE_NAME` bumps in a row haven't visibly reached a specific
+device, since iOS Safari's own service-worker update check is documented
+to be slow/unreliable on top of this.
+
 ## Firebase — what's actually shared with production
 
 This app's `firebaseConfig` (in `firebase-sync.js`) and VAPID key (in

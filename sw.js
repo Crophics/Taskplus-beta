@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v21'; // bumped: fix icon viewBox (was clipped/offset)
+const CACHE_NAME = 'taskplus-cache-v22'; // bumped: drag-handle icon fixes (v21 was stale-cached through all of them)
 const urlsToCache = [
   './',
   './index.html',
