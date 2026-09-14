@@ -120,6 +120,12 @@
   // the `tab` setter below flips this true; js/bind-events.js clears it
   // after every render pass, same as sheetJustOpened/menuJustOpened.
   let screenJustSwitched = false;
+  // The week chart's bar-grow-in should only ever play once per page load -
+  // not every time the Week tab is rendered (switching days, adding an
+  // assignment, anything). Starts true, flips false the first time the
+  // Week screen actually renders, and then never flips back for the rest
+  // of this session (a real page reload is the only way to see it again).
+  let weekChartFirstRender = true;
   let allSortMode = prefs.allSortMode || 'urgency';
   let allFilterCourse = '';
   let weekSelDay = 0;
@@ -554,9 +560,11 @@
       const advice = overdueCount>0
         ? `${overdueCount} item${overdueCount===1?'':'s'} overdue — clear those first, they're weighing every day's pace down.`
         : (heaviestLabel==='none' ? 'Nothing paced this week yet. Add a due date to see the load.' : `${heaviestLabel} carries the most load this week — consider pulling some of it forward.`);
+      const animateChart = weekChartFirstRender;
+      weekChartFirstRender = false;
       screenHtml = V.weekScreenHtml({
         escapeHtml, days, dayLabels, selDay: weekSelDay, stats, heaviestLabel,
-        courseColorFor, courseStats, advice, relativeDueLabel,
+        courseColorFor, courseStats, advice, relativeDueLabel, animateChart,
         items, today, daysBetween, TPWeekLogic: window.TPWeekLogic,
       });
     } else if(tab==='settings'){

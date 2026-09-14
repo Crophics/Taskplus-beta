@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v27'; // bumped: tab-switch screen transition + stronger press-feedback bounce on buttons/chips/cards
+const CACHE_NAME = 'taskplus-cache-v28'; // bumped: week chart bar-grow now plays only once per session, not on every render
 const urlsToCache = [
   './',
   './index.html',
