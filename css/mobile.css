@@ -131,6 +131,8 @@ body::-webkit-scrollbar{display:none;}
    still in the DOM (i.e. deleting from the All tab). */
 .tp-a-card.tp-removing{animation:tp-card-remove .3s ease forwards;}
 .tp-a-drag{color:var(--text-faint);cursor:grab;flex:0 0 auto;padding-top:2px;touch-action:none;}
+.tp-a-card.tp-dragging{opacity:.4;}
+.tp-a-card.tp-drop-target{box-shadow:0 0 0 2px var(--accent);}
 .tp-a-bar{width:2px;align-self:stretch;border-radius:2px;flex:0 0 auto;}
 .tp-a-body{flex:1;min-width:0;}
 .tp-a-title-line{display:flex;align-items:center;gap:6px;}
@@ -308,6 +310,29 @@ body::-webkit-scrollbar{display:none;}
 .tp-qm-action:last-child{border-bottom:none;}
 .tp-qm-accent{color:var(--accent);}
 .tp-qm-danger{color:var(--danger);}
+
+/* ---- Toast (js/toast.js) — appended straight to <body>, so this has to
+   place it itself; the entrance keyframe (tp-toast-in) already assumed a
+   fixed, horizontally-centered box. ---- */
+#tp-toast{
+  display:none;
+  position:fixed;
+  left:50%;
+  bottom:calc(100px + env(safe-area-inset-bottom));
+  transform:translate(-50%, 0);
+  z-index:1000;
+  max-width:calc(100% - 40px);
+  align-items:center;
+  gap:14px;
+  background:var(--surface);
+  color:var(--text);
+  box-shadow:0 0 0 1px var(--card-ring), 0 8px 24px rgba(0,0,0,.35);
+  border-radius:8px;
+  padding:12px 16px;
+  font-size:13px;
+}
+#tp-toast.tp-toast-anim{animation:tp-toast-in .25s ease-out;}
+#tp-toast-undo{background:none;border:none;color:var(--accent-bright);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;padding:0;flex:0 0 auto;white-space:nowrap;}
 
 @media (prefers-reduced-motion: reduce){
   .tp-t-pulse{animation:none;}
