@@ -125,6 +125,11 @@ body::-webkit-scrollbar{display:none;}
 .tp-a-card:hover{box-shadow:0 0 0 1px var(--card-ring-hover);}
 .tp-a-card.tp-a-done{opacity:.5;}
 .tp-a-card.tp-a-blocked-row{opacity:.6;}
+/* Deleting waits on this animation's `animationend` (js/app.js's
+   deleteItemAt) before actually removing the item - without this rule the
+   event never fires and the delete silently hangs whenever the card is
+   still in the DOM (i.e. deleting from the All tab). */
+.tp-a-card.tp-removing{animation:tp-card-remove .3s ease forwards;}
 .tp-a-drag{color:var(--text-faint);cursor:grab;flex:0 0 auto;padding-top:2px;touch-action:none;}
 .tp-a-bar{width:2px;align-self:stretch;border-radius:2px;flex:0 0 auto;}
 .tp-a-body{flex:1;min-width:0;}
@@ -216,7 +221,8 @@ body::-webkit-scrollbar{display:none;}
 
 /* ---- Add sheet ---- */
 .tp-backdrop{position:fixed;inset:0;background:var(--backdrop);z-index:900;display:flex;align-items:flex-end;justify-content:center;overscroll-behavior:contain;touch-action:none;}
-.tp-sheet{width:100%;max-width:520px;max-height:86%;max-height:86dvh;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;background:var(--bg);border-radius:14px 14px 0 0;box-shadow:var(--sheet-shadow);box-sizing:border-box;padding:14px 20px calc(30px + env(safe-area-inset-bottom));}
+.tp-sheet{width:100%;max-width:520px;max-height:86%;max-height:86dvh;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;background:var(--bg);border-radius:14px 14px 0 0;box-shadow:var(--sheet-shadow);box-sizing:border-box;padding:14px 20px calc(30px + env(safe-area-inset-bottom));scrollbar-width:none;-ms-overflow-style:none;}
+.tp-sheet::-webkit-scrollbar{display:none;}
 .tp-sheet-enter{animation:tp-pop .22s ease-out;}
 .tp-sheet-handle{width:36px;height:4px;border-radius:2px;background:var(--text-faint);margin:0 auto 14px;}
 .tp-sheet-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
@@ -306,4 +312,5 @@ body::-webkit-scrollbar{display:none;}
 @media (prefers-reduced-motion: reduce){
   .tp-t-pulse{animation:none;}
   .tp-sheet-enter,.tp-qmenu-enter{animation:none;}
+  .tp-a-card.tp-removing{animation:none;opacity:0;}
 }

@@ -424,7 +424,10 @@
 
 
   function deleteItemAt(idx){
+    let finished = false;
     const finish = ()=>{
+      if(finished) return; // guards against the animationend listener AND the timeout fallback below both firing
+      finished = true;
       const removed = items[idx];
       items.splice(idx,1);
       tombstoneItem(removed.id);
@@ -443,6 +446,11 @@
     if(el && !reduced){
       el.classList.add('tp-removing');
       el.addEventListener('animationend', finish, {once:true});
+      // Safety net: if the animation never fires animationend (a CSS/class
+      // mismatch, an interrupted animation, etc.) the delete must not hang
+      // forever with no feedback - which is exactly what happened when
+      // css/components.css was removed without updating this function.
+      setTimeout(finish, 400);
     } else {
       finish();
     }
