@@ -534,10 +534,11 @@
     }
     api.pendingFocus = null;
 
-    // The enter-animation classes only need to paint once; clear both so the
-    // next render doesn't replay them.
+    // The enter-animation classes only need to paint once; clear all three so
+    // the next render doesn't replay them.
     api.sheetJustOpened = false;
     api.menuJustOpened = false;
+    api.screenJustSwitched = false;
   }
 
   global.TPBind = { bindEvents };

@@ -113,6 +113,13 @@
   // end of every bindEvents pass so the class only paints once).
   let sheetJustOpened = false;
   let menuJustOpened = false;
+  // Same one-shot pattern for the screen-switch transition: render() is
+  // called on almost every mutation (logging, completing, saving...), not
+  // just on a tab change, so this can't just be "screen changes -> fade" -
+  // that would replay on every single tap while sitting on one tab. Only
+  // the `tab` setter below flips this true; js/bind-events.js clears it
+  // after every render pass, same as sheetJustOpened/menuJustOpened.
+  let screenJustSwitched = false;
   let allSortMode = prefs.allSortMode || 'urgency';
   let allFilterCourse = '';
   let weekSelDay = 0;
@@ -565,6 +572,7 @@
       });
     }
 
+    if(screenJustSwitched) screenHtml = `<div class="tp-screen-enter">${screenHtml}</div>`;
     let html = V.tabBarHtml({ tab }) + screenHtml;
 
     if(addOpen && draft){
@@ -632,7 +640,8 @@
       DAY_OFFSET_KEY,
       // Every screen switch should land at the top, not wherever the
       // previous (possibly taller) screen happened to be scrolled to.
-      get tab(){ return tab; }, set tab(v){ tab = v; if(typeof window.scrollTo === 'function') window.scrollTo(0, 0); },
+      get tab(){ return tab; }, set tab(v){ if(v !== tab) screenJustSwitched = true; tab = v; if(typeof window.scrollTo === 'function') window.scrollTo(0, 0); },
+      get screenJustSwitched(){ return screenJustSwitched; }, set screenJustSwitched(v){ screenJustSwitched = v; },
       get editIndex(){ return editIndex; }, set editIndex(v){ editIndex = v; },
       get draft(){ return draft; },
       get pickerOpen(){ return pickerOpen; }, set pickerOpen(v){ pickerOpen = v; },

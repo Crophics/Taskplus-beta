@@ -21,10 +21,11 @@
 @keyframes tp-toast-in{ from{ opacity:0; transform:translate(-50%, 12px); } to{ opacity:1; transform:translate(-50%, 0); } }
 @keyframes tp-pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.45; } }
 @keyframes tp-pop{ from{ opacity:0; transform:translateY(8px) scale(.97); } to{ opacity:1; transform:translateY(0) scale(1); } }
+@keyframes tp-screen-in{ from{ opacity:0; transform:translateY(10px) scale(.985); } to{ opacity:1; transform:translateY(0) scale(1); } }
 
 @media (prefers-reduced-motion: reduce){
   #tp-app .tp-t-pulse{ animation:none; }
-  #tp-app .tp-sheet-enter,#tp-app .tp-qmenu-enter{ animation:none; }
+  #tp-app .tp-sheet-enter,#tp-app .tp-qmenu-enter,#tp-app .tp-screen-enter{ animation:none; }
   #tp-app .tp-a-card.tp-removing{ animation:none; opacity:0; }
   #tp-app .tp-w-bar,#tp-app .tp-w-bar-stub,#tp-app .tp-w-course-bar-fill{ animation:none; }
   #tp-app .tp-add-course-list{ animation:none; }

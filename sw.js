@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v26'; // bumped: dark theme reverted to original palette, field-error shake fixed, animation pass
+const CACHE_NAME = 'taskplus-cache-v27'; // bumped: tab-switch screen transition + stronger press-feedback bounce on buttons/chips/cards
 const urlsToCache = [
   './',
   './index.html',
