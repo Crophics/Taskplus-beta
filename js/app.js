@@ -260,17 +260,16 @@
     editIndex = null;
     draft = null;
     sheetJustOpened = false;
-    // A single synchronous scrollTo here doesn't hold: iOS's own
-    // keyboard-dismiss reflow runs asynchronously and can land AFTER this,
-    // re-introducing the exact offset this is trying to correct - which is
-    // exactly why that fix didn't work. Repeating the correction across
-    // the window that reflow tends to land in means whichever call runs
-    // last wins, regardless of the exact timing on a given device.
-    if(typeof window.scrollTo === 'function'){
-      [0, 50, 150, 300, 500, 800].forEach(delay=>{
-        setTimeout(()=> window.scrollTo(0, restoreY), delay);
-      });
-    }
+    // window.scrollTo(0, restoreY) alone doesn't hold when scrollY is
+    // already restoreY (a common case, e.g. 0 on a page that was never
+    // really scrolled) - that's a genuine no-op, no scroll event fires,
+    // and nothing resyncs the stuck fixed tab bar. window.TP.forceFixedResync
+    // manufactures a real displaced scroll instead. Repeating it across a
+    // delay window outraces iOS's own async keyboard-dismiss reflow, which
+    // can otherwise land after a single attempt and re-introduce the offset.
+    [0, 150, 400, 700].forEach(delay=>{
+      setTimeout(()=> window.TP.forceFixedResync(restoreY), delay);
+    });
   }
 
   const burstConfetti = window.TP.burstConfetti;

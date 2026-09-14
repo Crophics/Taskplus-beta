@@ -156,6 +156,33 @@
     return true;
   }
 
+  // Works around a WebKit bug where position:fixed elements (the tab bar)
+  // stop tracking the real viewport after the on-screen keyboard closes,
+  // and stay stuck at the pre-close offset until something forces WebKit
+  // to resync fixed layers to the current viewport. A *real* user scroll
+  // fixes it instantly, even a tiny one - but window.scrollTo(x, y) where
+  // y is already the current scroll position is a genuine no-op (no
+  // scroll event, nothing to resync), and on a screen shorter than the
+  // viewport there's no scrollable range to move into anyway, so even a
+  // "nudge" gets silently clamped back to 0. This manufactures real,
+  // non-clamped scrollable overflow first (temporary bottom padding), so
+  // a real displaced scroll can happen into it and back, across an actual
+  // rendered frame (not collapsed into the same tick) - then removes the
+  // padding. restoreY is where the page should end up (normally 0).
+  function forceFixedResync(restoreY) {
+    if (typeof window.scrollTo !== 'function') return;
+    const body = document.body;
+    const prevPadding = body.style.paddingBottom;
+    body.style.paddingBottom = `calc(${prevPadding || '0px'} + 150px)`;
+    window.scrollTo(0, (restoreY || 0) + 40);
+    const restore = () => {
+      window.scrollTo(0, restoreY || 0);
+      body.style.paddingBottom = prevPadding;
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(restore);
+    else setTimeout(restore, 16);
+  }
+
   global.TP = {
     DAY_OFFSET_KEY,
     asDate,
@@ -173,5 +200,6 @@
     contrastTextColor,
     burstConfetti,
     scrollToAndHighlight,
+    forceFixedResync,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

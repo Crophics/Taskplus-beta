@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v33'; // bumped: blur + repeated delayed scroll-restore to outrace iOS's own async keyboard reflow
+const CACHE_NAME = 'taskplus-cache-v34'; // bumped: manufacture a real displaced scroll instead of a same-position no-op scrollTo
 const urlsToCache = [
   './',
   './index.html',
