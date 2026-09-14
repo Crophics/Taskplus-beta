@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v38'; // bumped: revert --app-height - made keyboard-open shift worse and broke the scroll workaround
+const CACHE_NAME = 'taskplus-cache-v39'; // bumped: full revert to the original position:fixed tab bar - nothing tonight fixed it
 const urlsToCache = [
   './',
   './index.html',

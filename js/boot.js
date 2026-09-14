@@ -14,12 +14,6 @@ document.addEventListener('touchstart', function(){}, {passive:true});
 // #tp-sheet is looked up fresh on every call instead of captured once, so
 // this stays correct across sheet close/reopen without needing its own
 // cleanup.
-//
-// This used to also carry a tab-bar "resync" workaround for a stuck
-// position:fixed tab bar after the keyboard closed - several attempts,
-// none reliable (see git history). Removed now that css/mobile.css no
-// longer makes the tab bar position:fixed at all, which removes that
-// bug's precondition instead of patching around it.
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', function () {
     const sheet = document.getElementById('tp-sheet');

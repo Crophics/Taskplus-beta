@@ -585,11 +585,7 @@
     }
 
     if(screenJustSwitched) screenHtml = `<div class="tp-screen-enter">${screenHtml}</div>`;
-    // Screen first, tab bar last: #tp-app is a column flex layout now (see
-    // css/mobile.css) where DOM order determines visual order - unlike the
-    // old position:fixed tab bar, which rendered at the bottom regardless
-    // of where it sat in the HTML.
-    let html = screenHtml + V.tabBarHtml({ tab });
+    let html = V.tabBarHtml({ tab }) + screenHtml;
 
     if(addOpen && draft){
       html += V.addSheetHtml({ draft, courses, items, pickerOpen, moreOpen, prereqOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null, sheetJustOpened });
@@ -602,22 +598,7 @@
     const prevFills = {};
     root.querySelectorAll('[data-fill-key]').forEach(el=>{ prevFills[el.dataset.fillKey] = el.style.width; });
 
-    // .tp-screen is *the* scrollable element now (see css/mobile.css's
-    // page-shell comment) and gets destroyed and recreated by the
-    // innerHTML rebuild below on every render - not just a tab switch,
-    // but every log/complete/save too. Without this, any of those would
-    // silently reset your scroll position to the top of a long list.
-    // On an actual tab switch (screenJustSwitched) the fresh element's
-    // default scrollTop of 0 is exactly what's wanted, so nothing to
-    // restore there.
-    const prevScreenScrollTop = screenJustSwitched ? 0 : (root.querySelector('.tp-screen')?.scrollTop || 0);
-
     root.innerHTML = html;
-
-    if(prevScreenScrollTop){
-      const newScreen = root.querySelector('.tp-screen');
-      if(newScreen) newScreen.scrollTop = prevScreenScrollTop;
-    }
 
     if(celebrationPending){
       const c = celebrationPending;
@@ -671,11 +652,7 @@
       DAY_OFFSET_KEY,
       // Every screen switch should land at the top, not wherever the
       // previous (possibly taller) screen happened to be scrolled to.
-      // Scrolling to the top on a switch is handled by render() itself now
-      // (screenJustSwitched skips restoring the old scroll position onto
-      // the fresh .tp-screen it creates) - body doesn't scroll at all
-      // anymore, so a window.scrollTo call here wouldn't do anything.
-      get tab(){ return tab; }, set tab(v){ if(v !== tab) screenJustSwitched = true; tab = v; },
+      get tab(){ return tab; }, set tab(v){ if(v !== tab) screenJustSwitched = true; tab = v; if(typeof window.scrollTo === 'function') window.scrollTo(0, 0); },
       get screenJustSwitched(){ return screenJustSwitched; }, set screenJustSwitched(v){ screenJustSwitched = v; },
       get editIndex(){ return editIndex; }, set editIndex(v){ editIndex = v; },
       get draft(){ return draft; },
