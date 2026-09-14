@@ -4,6 +4,12 @@
     return h === 0 ? '12:00 AM' : h < 12 ? `${h}:00 AM` : h === 12 ? '12:00 PM' : `${h - 12}:00 PM`;
   }
 
+  function hourSelectHtml(selected) {
+    let options = '';
+    for (let h = 0; h < 24; h++) options += `<option value="${h}" ${h === selected ? 'selected' : ''}>${hourLabel(h)}</option>`;
+    return `<select class="tp-s-hour-select" id="tp-notify-hour">${options}</select>`;
+  }
+
   function segmentedThemeHtml(theme) {
     const options = [['dark', 'Dark'], ['light', 'Light'], ['blue', 'Blue'], ['auto', 'Auto']];
     return `<div class="tp-s-segmented" role="group" aria-label="Theme">
@@ -37,7 +43,7 @@
       : '';
     const reminders = groupHtml('Reminders',
       rowHtml('Daily digest', pillToggleHtml('tp-notify-digest', notifyDigest !== false)) +
-      rowHtml('Digest arrives at', `<button type="button" class="tp-s-link" id="tp-cycle-hour" data-hour="${notifyHour}">${hourLabel(notifyHour)}</button>`) +
+      rowHtml('Digest arrives at', hourSelectHtml(notifyHour)) +
       rowHtml('Notification permission', notifPermRow)
     );
 

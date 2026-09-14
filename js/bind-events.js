@@ -242,9 +242,9 @@
       api.savePrefs();
       api.render();
     };
-    const cycleHourBtn = document.getElementById('tp-cycle-hour');
-    if (cycleHourBtn) cycleHourBtn.onclick = () => {
-      api.setNotifyHour((Number(cycleHourBtn.dataset.hour) + 1) % 24);
+    const hourSelect = document.getElementById('tp-notify-hour');
+    if (hourSelect) hourSelect.onchange = (e) => {
+      api.setNotifyHour(Number(e.target.value));
     };
     const notifyBtn = document.getElementById('tp-enable-notify');
     if (notifyBtn) notifyBtn.onclick = async () => {
