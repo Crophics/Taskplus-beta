@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v20'; // bumped: icons moved to inline SVG, no more icon font
+const CACHE_NAME = 'taskplus-cache-v21'; // bumped: fix icon viewBox (was clipped/offset)
 const urlsToCache = [
   './',
   './index.html',

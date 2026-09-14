@@ -41,7 +41,11 @@
     const o = opts || {};
     const cls = o.className ? `tp-icon ${o.className}` : 'tp-icon';
     const titleAttr = o.title ? ` title="${o.title}"` : '';
-    return `<svg class="${cls}" viewBox="0 0 2048 2048" aria-hidden="true"${titleAttr} fill="currentColor"><path d="${path}"/></svg>`;
+    // viewBox y starts at 410, not 0: the font's baseline isn't centered in
+    // its em box (hhea ascent 1638 / descent -410, summing to the full 2048
+    // upm but offset), so after the Y-flip the glyphs actually live in
+    // y:[410, 2458], not y:[0, 2048].
+    return `<svg class="${cls}" viewBox="0 410 2048 2048" aria-hidden="true"${titleAttr} fill="currentColor"><path d="${path}"/></svg>`;
   }
 
   global.TPIcons = { svg };
