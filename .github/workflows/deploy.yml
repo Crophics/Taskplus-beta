@@ -8,28 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    name: Detect changed paths
-    outputs:
-      site: ${{ steps.filter.outputs.site }}
-      functions: ${{ steps.filter.outputs.functions }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            site:
-              - '**'
-              - '!functions/**'
-              - '!.github/**'
-            functions:
-              - 'functions/**'
-
   test:
-    needs: changes
-    if: needs.changes.outputs.site == 'true'
     runs-on: ubuntu-latest
     name: Run tests
     steps:
@@ -40,13 +19,12 @@ jobs:
       - run: npm test
 
   deploy-site:
-    needs: [changes, test]
-    if: needs.changes.outputs.site == 'true'
+    needs: test
     runs-on: ubuntu-latest
     name: Deploy static site to Cloudflare
     environment:
-      name: production
-      url: https://taskplus.cc
+      name: beta
+      url: https://beta.taskplus.cc
     steps:
       - uses: actions/checkout@v4
       - name: Publish to Cloudflare
@@ -55,26 +33,3 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
-
-  deploy-functions:
-    needs: changes
-    if: needs.changes.outputs.functions == 'true'
-    runs-on: ubuntu-latest
-    name: Deploy functions to Firebase
-    environment:
-      name: firebase-functions
-      url: https://console.firebase.google.com/project/planner-88ab8/functions
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install functions dependencies
-        working-directory: functions
-        run: npm ci
-      - name: Deploy to Firebase
-        uses: w9jds/firebase-action@master
-        with:
-          args: deploy --only functions
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
