@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v22'; // bumped: drag-handle icon fixes (v21 was stale-cached through all of them)
+const CACHE_NAME = 'taskplus-cache-v23'; // bumped: drag-handle dots were merging into pills at real 20px size (fixed radius/spacing)
 const urlsToCache = [
   './',
   './index.html',

@@ -45,8 +45,16 @@
   // <circle> has no such ambiguity. Centers/radius fill 33%x76% of the
   // 2048 box (was 27%x42% in an earlier pass, which rendered correctly
   // shaped but tiny regardless of font-size).
+  //
+  // The 33%x76% pass above still looked wrong at the actual 20px render
+  // size: same-row dot centers were only 380 units apart with r=150, an
+  // 80-unit (3.9%) gap — under 1px at 20px — so each row's two dots
+  // merged into a single oval "pill" instead of staying two dots.
+  // Smaller radius + wider gap (240-unit/11.7% gap, confirmed distinct
+  // at 20px via rsvg-convert) fixes that without shrinking the overall
+  // icon footprint.
   const MARKUP = {
-    drag_indicator: '<circle cx="834" cy="806" r="150"/><circle cx="1214" cy="806" r="150"/><circle cx="834" cy="1434" r="150"/><circle cx="1214" cy="1434" r="150"/><circle cx="834" cy="2062" r="150"/><circle cx="1214" cy="2062" r="150"/>',
+    drag_indicator: '<circle cx="760" cy="806" r="120"/><circle cx="1288" cy="806" r="120"/><circle cx="760" cy="1434" r="120"/><circle cx="1288" cy="1434" r="120"/><circle cx="760" cy="2062" r="120"/><circle cx="1288" cy="2062" r="120"/>',
   };
 
   /**
