@@ -585,7 +585,11 @@
     }
 
     if(screenJustSwitched) screenHtml = `<div class="tp-screen-enter">${screenHtml}</div>`;
-    let html = V.tabBarHtml({ tab }) + screenHtml;
+    // Screen first, tab bar last: #tp-app is a column flex layout now (see
+    // css/mobile.css) where DOM order determines visual order - unlike the
+    // old position:fixed tab bar, which rendered at the bottom regardless
+    // of where it sat in the HTML.
+    let html = screenHtml + V.tabBarHtml({ tab });
 
     if(addOpen && draft){
       html += V.addSheetHtml({ draft, courses, items, pickerOpen, moreOpen, prereqOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null, sheetJustOpened });

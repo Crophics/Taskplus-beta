@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v35'; // bumped: removed position:fixed tab bar entirely (flex layout) - root fix, not another patch
+const CACHE_NAME = 'taskplus-cache-v36'; // bumped: fix tab bar rendering at the top - DOM order matters now that it's not position:fixed
 const urlsToCache = [
   './',
   './index.html',
