@@ -17,15 +17,6 @@
     chevron_left: "M1526 2108 852 1434 1526 761 1320 555 440 1434 1320 2314Z",
     chevron_right: "M522 2108 1196 1434 522 761 728 555 1608 1434 728 2314Z",
     close_circle: "M1024 410Q1301 410 1538 547Q1774 684 1910 920Q2048 1156 2048 1434Q2048 1712 1910 1948Q1774 2184 1538 2321Q1301 2458 1023.5 2458Q746 2458 510 2321Q275 2185 138 1948Q0 1712 0 1434Q0 1156 138 920Q275 683 510 547Q746 410 1024 410ZM1394 920 1024 1290 654 920 510 1064 880 1434 510 1804 654 1948 1024 1578 1394 1948 1538 1804 1168 1434 1538 1064Z",
-    // Hand-drawn (not font-extracted): the real MDI "drag_horizontal_variant"
-    // glyph is two horizontal bars, meant for left-right dragging - wrong
-    // shape entirely for this app's vertical reorder handle. Six dots in a
-    // 2x3 grid is the standard drag-indicator look.
-    // Bounding box now fills 33%x76% of the 2048 box (was 27%x42%) - the
-    // first version was correctly shaped but rendered tiny regardless of
-    // font-size because the dots themselves only occupied a small patch
-    // in the middle of their own icon box.
-    drag_indicator: "M684 806A150 150 0 1 0 984 806A150 150 0 1 0 684 806ZM1064 806A150 150 0 1 0 1364 806A150 150 0 1 0 1064 806ZM684 1434A150 150 0 1 0 984 1434A150 150 0 1 0 684 1434ZM1064 1434A150 150 0 1 0 1364 1434A150 150 0 1 0 1064 1434ZM684 2062A150 150 0 1 0 984 2062A150 150 0 1 0 684 2062ZM1064 2062A150 150 0 1 0 1364 2062A150 150 0 1 0 1064 2062Z",
     file_search_outline: "M1055 410H288Q207 410 151 466Q95 522 95 599V2135Q95 2211 151 2267Q207 2323 288 2323H956Q899 2288 851 2240Q803 2192 768 2135H288V599H956V1079H1437V1192Q1546 1215 1630 1272V985ZM1657 2027Q1719 1929 1724 1814Q1729 1699 1675 1596Q1621 1492 1522 1432Q1422 1371 1309 1367Q1194 1362 1091 1416Q988 1470 927 1567Q866 1664 862 1780Q858 1897 912 1998Q967 2101 1066 2164Q1167 2229 1291 2229Q1415 2229 1522 2162L1818 2458L1953 2323ZM1293 2036Q1195 2036 1125 1966Q1055 1896 1055 1798Q1055 1699 1125 1629Q1194 1560 1293 1560Q1392 1560 1461 1629Q1531 1699 1531 1798Q1531 1896 1461 1966Q1391 2036 1293 2036Z",
     lightbulb_on_outline: "M1770 1343H2048V1526H1770ZM0 1343H280V1526H0ZM1116 410V689H934V410ZM366 646 562 842 432 972 236 776ZM1486 842 1682 646 1812 776 1616 972ZM1024 877Q1176 877 1306 951Q1434 1024 1508 1153Q1582 1283 1582 1434Q1582 1587 1506 1715Q1428 1845 1304 1918V2084Q1304 2122 1278 2151Q1252 2179 1212 2179H838Q797 2179 772 2151Q746 2122 746 2084V1918Q621 1845 544 1715Q466 1585 466 1434Q466 1285 542 1153Q615 1024 744 951Q873 877 1024 877ZM1212 2271V2363Q1212 2402 1184 2430Q1156 2458 1116 2458H934Q894 2458 866 2430Q838 2402 838 2363V2271ZM934 1992H1116V1796Q1238 1761 1316 1663Q1394 1566 1394 1434Q1394 1282 1285 1173Q1176 1064 1024 1064Q872 1064 763 1173Q654 1282 654 1434Q654 1566 732 1663Q811 1761 934 1796Z",
     lock_outline: "M1024 1973Q942 1973 885 1916Q828 1859 828 1777Q828 1694 885 1637Q942 1580 1024 1580Q1106 1580 1163 1637Q1220 1694 1220 1777Q1220 1859 1163 1916Q1106 1973 1024 1973ZM1610 2266V1288H440V2266ZM1610 1096Q1692 1096 1749 1153Q1806 1210 1806 1288V2266Q1806 2344 1749 2401Q1692 2458 1610 2458H440Q356 2458 299 2401Q242 2344 242 2266V1288Q242 1210 299 1153Q356 1096 440 1096H536V899Q536 768 602 655Q668 541 780 476Q892 410 1024 410Q1156 410 1268 476Q1380 541 1446 655Q1514 769 1514 899V1096ZM1024 607Q900 607 816 691Q732 776 732 899V1096H1316V899Q1316 775 1232 691Q1148 607 1024 607Z",
@@ -39,21 +30,41 @@
     cog_outline: "M1024 1025Q1191 1025 1312 1146Q1433 1267 1433 1434Q1433 1601 1312 1722Q1191 1843 1024 1843Q857 1843 736 1722Q616 1602 616 1434Q616 1266 736 1146Q857 1025 1024 1025ZM1024 1227Q938 1227 878 1287Q818 1347 818 1434Q818 1521 878 1581Q938 1641 1024 1641Q1111 1641 1171 1581Q1231 1521 1231 1434Q1231 1347 1171 1287Q1111 1227 1024 1227ZM818 2458Q799 2458 784 2446Q769 2434 769 2415L731 2145Q645 2112 558 2045L303 2145Q282 2155 265 2148Q245 2140 241 2126L34 1770Q24 1749 27 1734Q30 1717 44 1703L260 1535L255 1434L260 1333L44 1165Q30 1151 27 1133Q24 1118 34 1097L241 742Q245 728 265 720Q283 713 303 722L558 823Q647 754 731 722L769 453Q769 434 784 422Q799 410 818 410H1231Q1249 410 1264 422Q1279 434 1279 453L1317 722Q1401 754 1490 823L1745 722Q1765 713 1783 720Q1803 728 1807 742L2014 1097Q2024 1118 2021 1133Q2018 1151 2004 1165L1788 1333L1793 1434L1788 1535L2004 1703Q2018 1717 2021 1734Q2024 1749 2014 1770L1807 2126Q1803 2140 1783 2148Q1766 2155 1745 2145L1490 2045Q1403 2112 1317 2145L1279 2415Q1279 2434 1264 2446Q1249 2458 1231 2458ZM947 612 909 881Q720 920 596 1064L351 958L275 1093L491 1251Q428 1434 491 1617L275 1780L351 1910L601 1804Q725 1948 909 1987L947 2256H1101L1139 1987Q1323 1948 1447 1804L1697 1910L1774 1780L1557 1621Q1620 1434 1557 1251L1774 1093L1697 958L1452 1064Q1328 920 1139 881L1101 612Z",
   };
 
+  // Hand-drawn icons whose body isn't a single <path> — kept out of PATHS
+  // so svg() doesn't wrap them in <path d="...">.
+  //
+  // drag_indicator: the real MDI "drag_horizontal_variant" glyph is two
+  // horizontal bars, meant for left-right dragging - wrong shape entirely
+  // for this app's vertical reorder handle. Six dots in a 2x3 grid is the
+  // standard drag-indicator look; drawn as native <circle> elements, not
+  // as two-semicircle <path> arcs — an arc whose start/end points are
+  // exactly diametrically opposite (as two-semicircle circles always are)
+  // is a known cross-renderer landmine: some engines (Safari/WebKit in
+  // particular) hit a precision edge case computing the arc center at
+  // exactly 180° and render a pinched/lens shape instead of a circle.
+  // <circle> has no such ambiguity. Centers/radius fill 33%x76% of the
+  // 2048 box (was 27%x42% in an earlier pass, which rendered correctly
+  // shaped but tiny regardless of font-size).
+  const MARKUP = {
+    drag_indicator: '<circle cx="834" cy="806" r="150"/><circle cx="1214" cy="806" r="150"/><circle cx="834" cy="1434" r="150"/><circle cx="1214" cy="1434" r="150"/><circle cx="834" cy="2062" r="150"/><circle cx="1214" cy="2062" r="150"/>',
+  };
+
   /**
-   * @param {string} name icon key in PATHS
+   * @param {string} name icon key in PATHS or MARKUP
    * @param {{className?: string, title?: string}} [opts]
    */
   function svg(name, opts) {
-    const path = PATHS[name];
-    if (!path) return '';
+    const body = MARKUP[name] || (PATHS[name] ? `<path d="${PATHS[name]}"/>` : null);
+    if (!body) return '';
     const o = opts || {};
     const cls = o.className ? `tp-icon ${o.className}` : 'tp-icon';
     const titleAttr = o.title ? ` title="${o.title}"` : '';
     // viewBox y starts at 410, not 0: the font's baseline isn't centered in
     // its em box (hhea ascent 1638 / descent -410, summing to the full 2048
     // upm but offset), so after the Y-flip the glyphs actually live in
-    // y:[410, 2458], not y:[0, 2048].
-    return `<svg class="${cls}" viewBox="0 410 2048 2048" aria-hidden="true"${titleAttr} fill="currentColor"><path d="${path}"/></svg>`;
+    // y:[410, 2458], not y:[0, 2048]. MARKUP entries were designed against
+    // the same box for consistency, even though they don't come from the font.
+    return `<svg class="${cls}" viewBox="0 410 2048 2048" aria-hidden="true"${titleAttr} fill="currentColor">${body}</svg>`;
   }
 
   global.TPIcons = { svg };
