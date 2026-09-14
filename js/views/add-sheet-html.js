@@ -1,9 +1,4 @@
-/* views/add-sheet-html.js — Bottom sheet for adding/editing an assignment.
-   Deliberately matches the design's fields only (title/course/due/amount+unit) -
-   the mobile rebuild drops notes/subtasks/recurring/"do this after" from the
-   create flow; existing items with that data keep working elsewhere (locking,
-   etc), they're just not editable from this sheet.
-*/
+/* views/add-sheet-html.js — Bottom sheet for adding/editing an assignment. */
 (function (global) {
   function pacingHintHtml(draft, todayFn, daysBetween) {
     if (!draft.due) return '';
@@ -39,6 +34,63 @@
     </div>`;
   }
 
+  function moreSectionHtml(ctx, draft, selectedCourse, escapeHtml) {
+    const hasExtras = !!(draft.notes || (draft.subtasksText || '').trim() || draft.recurring || draft.dependsOn);
+    const moreOpen = ctx.moreOpen || (ctx.isEdit && hasExtras);
+    const subCount = (draft.subtasksText || '').split('\n').map(s => s.trim()).filter(Boolean).length;
+
+    // Dependencies match on title and are same-course only, per js/item-logic.js.
+    const prereqs = ctx.items.filter(it =>
+      it.course === (selectedCourse ? selectedCourse.name : '') &&
+      !it.completed &&
+      it.title !== draft.title);
+
+    const repeatOpt = (label, val) =>
+      `<button type="button" class="tp-add-seg-opt" data-repeat="${val}" aria-pressed="${(draft.recurring || '') === val}">${label}</button>`;
+
+    const moreBody = moreOpen ? `
+      <div class="tp-sheet-label" id="tp-lbl-notes">Notes</div>
+      <textarea class="tp-add-textarea" id="tp-add-notes" rows="2"
+        aria-labelledby="tp-lbl-notes"
+        placeholder="Anything to remember">${escapeHtml(draft.notes || '')}</textarea>
+
+      <div class="tp-sheet-label" id="tp-lbl-subtasks">Subtasks</div>
+      <textarea class="tp-add-textarea" id="tp-add-subtasks" rows="3"
+        aria-labelledby="tp-lbl-subtasks"
+        placeholder="One per line">${escapeHtml(draft.subtasksText || '')}</textarea>
+      <div class="tp-add-sublabel">${subCount ? subCount + (subCount === 1 ? ' subtask' : ' subtasks') : 'Each line becomes its own checkbox.'}</div>
+
+      <div class="tp-sheet-label">Repeat</div>
+      <div class="tp-add-seg" role="group" aria-label="Repeat">
+        ${repeatOpt('Never', '')}${repeatOpt('Weekly', 'weekly')}${repeatOpt('Monthly', 'monthly')}
+      </div>
+      <div class="tp-add-sublabel">${draft.recurring
+        ? `Completing it creates the next one automatically, due a ${draft.recurring === 'weekly' ? 'week' : 'month'} later.`
+        : 'Completing it closes it out for good.'}</div>
+
+      <div class="tp-sheet-label">Do this after</div>
+      ${prereqs.length ? `
+        <div class="tp-add-course-field">
+          <button type="button" class="tp-add-course-trigger" id="tp-add-prereq-trigger" aria-expanded="${ctx.prereqOpen}">
+            <span class="tp-add-course-name">${draft.dependsOn ? escapeHtml(draft.dependsOn) : 'No prerequisite'}</span>
+            ${window.TPIcons.svg('chevron_down')}
+          </button>
+          ${ctx.prereqOpen ? `<div class="tp-add-course-list" id="tp-add-prereq-list">
+            <div class="tp-add-course-option" data-prereq="">No prerequisite${!draft.dependsOn ? ` ${window.TPIcons.svg('check')}` : ''}</div>
+            ${prereqs.map(p => `<div class="tp-add-course-option" data-prereq="${escapeHtml(p.title)}">${escapeHtml(p.title)}${draft.dependsOn === p.title ? ` ${window.TPIcons.svg('check')}` : ''}</div>`).join('')}
+          </div>` : ''}
+        </div>
+        <div class="tp-add-sublabel">Stays locked until that one is done. Same course only.</div>
+      ` : `<div class="tp-add-sublabel">Nothing else open in ${selectedCourse ? escapeHtml(selectedCourse.name) : 'this course'} yet — add a second assignment to that course and you can chain them.</div>`}
+    ` : '';
+
+    return `<button type="button" class="tp-sheet-more" id="tp-add-more" aria-expanded="${moreOpen}">
+      ${window.TPIcons.svg('chevron_down')}
+      ${moreOpen ? 'Fewer options' : 'Notes, subtasks, repeat, dependency'}
+    </button>
+    ${moreBody}`;
+  }
+
   function addSheetHtml(ctx) {
     const { draft, courses, pickerOpen, escapeHtml, today, daysBetween, isEdit } = ctx;
     const selectedCourse = window.TPCourses.byId(courses, draft.courseId);
@@ -50,11 +102,17 @@
           <button type="button" class="tp-sheet-cancel" id="tp-sheet-cancel">Cancel</button>
         </div>
         <input class="tp-add-input" id="tp-add-title" placeholder="Title" value="${escapeHtml(draft.title || '')}">
+
+        <div class="tp-sheet-label" id="tp-lbl-course">Course</div>
         <div class="tp-add-course-field">
           ${coursePickerTriggerHtml(selectedCourse, pickerOpen)}
           ${pickerOpen ? coursePickerListHtml(courses, draft.courseId, escapeHtml) : ''}
         </div>
-        <input class="tp-add-input" id="tp-add-due" type="date" value="${draft.due || ''}" aria-label="Due date">
+
+        <div class="tp-sheet-label" id="tp-lbl-due">Due</div>
+        <input class="tp-add-input" id="tp-add-due" type="date" value="${draft.due || ''}" aria-labelledby="tp-lbl-due">
+
+        <div class="tp-sheet-label">How much</div>
         <div class="tp-add-amount-row">
           <button type="button" class="tp-add-stepper" id="tp-add-minus" aria-label="Decrease amount">−</button>
           <input class="tp-add-amount" id="tp-add-amount" type="number" inputmode="numeric" pattern="[0-9]*" min="1" value="${draft.amount || 1}">
@@ -62,6 +120,7 @@
           <input class="tp-add-unit" id="tp-add-unit" placeholder="unit (pages, problems...)" value="${escapeHtml(draft.unit || '')}">
         </div>
         ${pacingHintHtml(draft, today, daysBetween)}
+        ${moreSectionHtml(ctx, draft, selectedCourse, escapeHtml)}
         <button type="button" class="tp-add-submit" id="tp-add-submit">${isEdit ? 'Save changes' : 'Add assignment'}</button>
       </div>
     </div>`;

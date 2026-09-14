@@ -105,6 +105,8 @@
   let tab = TABS.includes(prefs.tab) ? prefs.tab : 'today';
   let addOpen = false;
   let pickerOpen = false;
+  let moreOpen = false; // add-sheet "Notes, subtasks, repeat, dependency" disclosure
+  let prereqOpen = false; // add-sheet "Do this after" picker
   let menuFor = null; // index into `items`, for the quick-action menu
   let allSortMode = prefs.allSortMode || 'urgency';
   let allFilterCourse = '';
@@ -199,18 +201,26 @@
       const it = items[idx];
       const course = window.TPCourses.byName(courses, it.course);
       editIndex = idx;
-      draft = { title: it.title, courseId: course ? course.id : null, due: it.due, amount: it.total, unit: it.unit || '' };
+      draft = {
+        title: it.title, courseId: course ? course.id : null, due: it.due, amount: it.total, unit: it.unit || '',
+        notes: it.notes || '', subtasksText: (it.subtasks || []).map(s => s.text).join('\n'),
+        recurring: it.recurring || '', dependsOn: it.dependsOn || '',
+      };
     } else {
       editIndex = null;
       const preselected = lastAddedCourseId && window.TPCourses.byId(courses, lastAddedCourseId) ? lastAddedCourseId : null;
-      draft = { title: '', courseId: preselected, due: '', amount: 1, unit: '' };
+      draft = { title: '', courseId: preselected, due: '', amount: 1, unit: '', notes: '', subtasksText: '', recurring: '', dependsOn: '' };
     }
     pickerOpen = false;
+    moreOpen = false;
+    prereqOpen = false;
     addOpen = true;
   }
   function closeAddSheet(){
     addOpen = false;
     pickerOpen = false;
+    moreOpen = false;
+    prereqOpen = false;
     editIndex = null;
     draft = null;
   }
@@ -549,7 +559,7 @@
     let html = V.tabBarHtml({ tab }) + screenHtml;
 
     if(addOpen && draft){
-      html += V.addSheetHtml({ draft, courses, pickerOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null });
+      html += V.addSheetHtml({ draft, courses, items, pickerOpen, moreOpen, prereqOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null });
     }
     if(menuFor!=null && items[menuFor]){
       const it = items[menuFor];
@@ -588,6 +598,8 @@
       get editIndex(){ return editIndex; }, set editIndex(v){ editIndex = v; },
       get draft(){ return draft; },
       get pickerOpen(){ return pickerOpen; }, set pickerOpen(v){ pickerOpen = v; },
+      get moreOpen(){ return moreOpen; }, set moreOpen(v){ moreOpen = v; },
+      get prereqOpen(){ return prereqOpen; }, set prereqOpen(v){ prereqOpen = v; },
       get menuFor(){ return menuFor; }, set menuFor(v){ menuFor = v; },
       get searchTerm(){ return searchTerm; }, set searchTerm(v){ searchTerm = v; },
       get allSortMode(){ return allSortMode; }, set allSortMode(v){ allSortMode = v; },

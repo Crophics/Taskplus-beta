@@ -409,6 +409,38 @@
       api.savePrefs();
       api.render();
     };
+
+    const addMore = document.getElementById('tp-add-more');
+    if (addMore) addMore.onclick = () => { api.moreOpen = !api.moreOpen; api.render(); };
+
+    const addNotes = document.getElementById('tp-add-notes');
+    if (addNotes) addNotes.oninput = (e) => {
+      api.draft.notes = e.target.value;
+      api.pendingFocus = { id: 'tp-add-notes', selStart: e.target.selectionStart, selEnd: e.target.selectionEnd };
+      api.render();
+    };
+
+    const addSubtasks = document.getElementById('tp-add-subtasks');
+    if (addSubtasks) addSubtasks.oninput = (e) => {
+      api.draft.subtasksText = e.target.value;
+      api.pendingFocus = { id: 'tp-add-subtasks', selStart: e.target.selectionStart, selEnd: e.target.selectionEnd };
+      api.render();
+    };
+
+    root.querySelectorAll('.tp-add-seg-opt[data-repeat]').forEach(b => b.onclick = () => {
+      api.draft.recurring = b.dataset.repeat;
+      api.render();
+    });
+
+    const prereqTrigger = document.getElementById('tp-add-prereq-trigger');
+    if (prereqTrigger) prereqTrigger.onclick = () => { api.prereqOpen = !api.prereqOpen; api.render(); };
+
+    root.querySelectorAll('.tp-add-course-option[data-prereq]').forEach(opt => opt.onclick = () => {
+      api.draft.dependsOn = opt.dataset.prereq;
+      api.prereqOpen = false;
+      api.render();
+    });
+
     const addSubmit = document.getElementById('tp-add-submit');
     if (addSubmit) addSubmit.onclick = () => {
       const titleEl = document.getElementById('tp-add-title');
@@ -425,18 +457,39 @@
       const course = window.TPCourses.byId(api.courses, api.draft.courseId);
       const courseName = course ? course.name : '';
       const unit = api.draft.unit.trim();
+      const notes = (api.draft.notes || '').trim();
+      // {text, done} matches the shape makeRecurringClone (js/app.js) and the
+      // rest of the codebase already use - not {title, done}.
+      const subtasks = (api.draft.subtasksText || '')
+        .split('\n').map(s => s.trim()).filter(Boolean)
+        .map(t => ({ text: t, done: false }));
+      const recurring = api.draft.recurring || '';
+      const dependsOn = api.draft.dependsOn || '';
       if (api.editIndex !== null) {
         const it = api.items[api.editIndex];
+        const oldTitle = it.title;
         it.title = title; it.course = courseName; it.due = due; it.total = amount; it.unit = unit;
         it.done = Math.min(it.done, amount);
+        it.notes = notes;
+        it.recurring = recurring;
+        it.dependsOn = dependsOn;
+        it.subtasks = subtasks.map(st => {
+          const prev = (it.subtasks || []).find(p => p.text === st.text);
+          return prev ? { ...st, done: prev.done } : st;
+        });
+        // dependsOn matches by title (see js/item-logic.js), so a rename has
+        // to carry forward into anything that was depending on the old one.
+        if (oldTitle !== title) {
+          api.items.forEach(x => { if (x.dependsOn === oldTitle) x.dependsOn = title; });
+        }
         api.touchItem(it);
         if (api.isDevModeTrigger(it.title, it.total)) api.activateDevMode();
       } else {
         const maxOrder = api.items.reduce((m, x) => Math.max(m, x.order ?? -1), -1);
         api.items.push({
           id: api.newItemId(), title, course: courseName, due, total: amount, unit,
-          notes: '', done: 0, today: 0, completed: false, dependsOn: '', recurring: '',
-          subtasks: [], completedAt: null, createdAt: api.today(), archived: false,
+          notes, done: 0, today: 0, completed: false, dependsOn, recurring,
+          subtasks, completedAt: null, createdAt: api.today(), archived: false,
           order: maxOrder + 1, updatedAt: Date.now(),
         });
         if (api.isDevModeTrigger(title, amount)) api.activateDevMode();
