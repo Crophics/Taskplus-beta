@@ -1,21 +1,27 @@
 /* tokens.css — Mobile design system tokens (parallel to themes.css's --tp-*
-   tokens; new mobile views/components read these instead). Dark values are
-   the design handoff's exact "Nocturne" palette. Light/Blue are this
-   codebase's own derivations (not specified by the design, which is a
-   dark-only mockup) so the Settings theme switcher keeps working everywhere.
+   tokens; new mobile views/components read these instead). Light/Blue are
+   this codebase's own derivations (not specified by the design handoff,
+   which is a dark-only mockup) so the Settings theme switcher keeps
+   working everywhere.
+
+   Dark was originally the design handoff's "Nocturne" palette (purple
+   accent on indigo). Reverted back to the production app's original dark
+   theme (css/themes.css's :root[data-theme="dark"] in the main repo) at
+   the user's request - near-black background, warm off-white text, the
+   signature muted-green accent.
 */
 
 :root[data-theme="dark"]{
-  --bg:#161826; --surface:#232532; --surface-alt:#292b31;
-  --text:#e9e9ed; --text-muted:#9397ab; --text-dim:#75798c; --text-faint:#595d6c;
-  --border:rgba(233,233,237,.16); --border-soft:rgba(233,233,237,.07); --line:#3f424d;
-  --accent:#9184d9; --accent-bright:#b5abfc; --accent-dim:#423a6a;
-  --accent-wash:rgba(145,132,217,.12); --accent-wash-strong:rgba(145,132,217,.24);
-  --danger:#e2604e; --warn:#d9a441; --ok:#4f8b74;
-  --sheet-shadow:0 0 0 1px #595d6c, 0 -16px 40px rgba(0,0,0,.65);
-  --card-ring:#3f424d; --card-ring-hover:#595d6c;
-  --backdrop:rgba(41,43,49,.6); --backdrop-menu:rgba(41,43,49,.55);
-  --tabbar-bg:rgba(22,24,38,.92);
+  --bg:#111111; --surface:#1c1c1c; --surface-alt:#242424;
+  --text:#e8e6df; --text-muted:#9c9a92; --text-dim:#7a786f; --text-faint:#595650;
+  --border:#42423d; --border-soft:rgba(233,233,222,.07); --line:#3a3a35;
+  --accent:#4f8b74; --accent-bright:#6ba98d; --accent-dim:#2e4f42;
+  --accent-wash:rgba(79,139,116,.14); --accent-wash-strong:rgba(79,139,116,.28);
+  --danger:#d94535; --warn:#d9a441; --ok:#4f8b74;
+  --sheet-shadow:0 0 0 1px #42423d, 0 -16px 40px rgba(0,0,0,.5);
+  --card-ring:#3a3a35; --card-ring-hover:#4f8b74;
+  --backdrop:rgba(0,0,0,.65); --backdrop-menu:rgba(0,0,0,.55);
+  --tabbar-bg:rgba(17,17,17,.92);
 }
 :root[data-theme="light"]{
   --bg:#f4f2ec; --surface:#ffffff; --surface-alt:#e9e7e0;

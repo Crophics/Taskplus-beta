@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v25'; // bumped: removed dead .tp-del selector from bind-events.js
+const CACHE_NAME = 'taskplus-cache-v26'; // bumped: dark theme reverted to original palette, field-error shake fixed, animation pass
 const urlsToCache = [
   './',
   './index.html',
