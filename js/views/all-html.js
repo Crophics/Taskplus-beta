@@ -39,7 +39,7 @@
     else if (dt && dt.amt > 0) { statusText = `${dt.amt}/day`; statusClass = 'tp-a-status-accent'; }
     else { statusText = 'Open'; statusClass = 'tp-a-status-dim'; }
     return `<div class="tp-a-card ${cls} ${it.completed ? 'tp-a-done' : ''} ${locked ? 'tp-a-blocked-row' : ''}" id="tp-card-${i}" data-i="${i}">
-      <span class="tp-a-drag" data-i="${i}" aria-hidden="true">${window.TPIcons.svg('drag_horizontal_variant')}</span>
+      <span class="tp-a-drag" data-i="${i}" aria-hidden="true">${window.TPIcons.svg('drag_indicator')}</span>
       <span class="tp-a-bar" style="background:${color}"></span>
       <div class="tp-a-body">
         <div class="tp-a-title-line">
