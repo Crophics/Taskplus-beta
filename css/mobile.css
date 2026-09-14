@@ -130,7 +130,7 @@ body::-webkit-scrollbar{display:none;}
    event never fires and the delete silently hangs whenever the card is
    still in the DOM (i.e. deleting from the All tab). */
 .tp-a-card.tp-removing{animation:tp-card-remove .3s ease forwards;}
-.tp-a-drag{color:var(--text-faint);cursor:grab;flex:0 0 auto;padding-top:2px;touch-action:none;}
+.tp-a-drag{color:var(--text-faint);cursor:grab;flex:0 0 auto;padding-top:2px;touch-action:none;font-size:20px;}
 .tp-a-card.tp-dragging{opacity:.4;}
 .tp-a-card.tp-drop-target{box-shadow:0 0 0 2px var(--accent);}
 .tp-a-bar{width:2px;align-self:stretch;border-radius:2px;flex:0 0 auto;}
