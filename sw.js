@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v31'; // bumped: viewport interactive-widget=resizes-content, root-cause fix for the stuck tab bar
+const CACHE_NAME = 'taskplus-cache-v32'; // bumped: explicitly restore scroll position when closing the Add sheet
 const urlsToCache = [
   './',
   './index.html',

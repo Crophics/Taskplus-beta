@@ -214,7 +214,17 @@
   function courseColorFor(name){ return window.TPCourses.colorFor(courses, name); }
   const contrastTextColor = window.TP.contrastTextColor;
 
+  // iOS's native "scroll the focused input above the keyboard" behavior
+  // shifts document.scrollY while a sheet input is focused (e.g. the title
+  // field) - and nothing ever un-shifts it back on its own once the field
+  // blurs and the sheet closes, which is what left the page (and the
+  // fixed-position tab bar with it) sitting lower than it should. Recording
+  // the scroll position right before opening and explicitly restoring it
+  // on close fixes that directly, rather than guessing at the right value
+  // after the fact.
+  let scrollYBeforeSheet = 0;
   function openAddSheet(idx){
+    scrollYBeforeSheet = window.scrollY || 0;
     if(idx!=null && items[idx]){
       const it = items[idx];
       const course = window.TPCourses.byName(courses, it.course);
@@ -243,6 +253,7 @@
     editIndex = null;
     draft = null;
     sheetJustOpened = false;
+    if(typeof window.scrollTo === 'function') window.scrollTo(0, scrollYBeforeSheet);
   }
 
   const burstConfetti = window.TP.burstConfetti;
