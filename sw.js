@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v30'; // bumped: tab bar reflow-fix now works on every tab, not just tall ones like Week
+const CACHE_NAME = 'taskplus-cache-v31'; // bumped: viewport interactive-widget=resizes-content, root-cause fix for the stuck tab bar
 const urlsToCache = [
   './',
   './index.html',

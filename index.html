@@ -2,7 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<!-- interactive-widget=resizes-content (Safari 16.4+/iOS 16.4+, Chrome 108+):
+     makes the keyboard actually resize the layout viewport instead of just
+     overlaying it on top of a separately-tracked "visual viewport". Without
+     it, position:fixed elements (the tab bar) reference stale geometry
+     across a keyboard open/close and only resync on a real native scroll -
+     which is why nothing done from JS after the fact (nudging scroll,
+     forcing a reflow) reliably fixed the tab bar staying elevated: those
+     are downstream patches for a state mismatch this flag prevents outright. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Taskplus</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
