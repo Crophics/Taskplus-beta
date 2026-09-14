@@ -12,11 +12,13 @@
       </button>`;
     }
     return `<nav class="tp-tabbar" id="tp-tabbar">
-      ${item('today', 'calendar_today', 'Today')}
-      ${item('all', 'format_list_bulleted', 'All')}
-      <button type="button" class="tp-tab-add" id="tp-add-toggle" aria-label="Add assignment">${window.TPIcons.svg('plus')}</button>
-      ${item('week', 'chart_bar', 'Week')}
-      ${item('settings', 'cog_outline', 'Settings')}
+      <div class="tp-tabbar-inner">
+        ${item('today', 'calendar_today', 'Today')}
+        ${item('all', 'format_list_bulleted', 'All')}
+        <button type="button" class="tp-tab-add" id="tp-add-toggle" aria-label="Add assignment">${window.TPIcons.svg('plus')}</button>
+        ${item('week', 'chart_bar', 'Week')}
+        ${item('settings', 'cog_outline', 'Settings')}
+      </div>
     </nav>`;
   }
 
