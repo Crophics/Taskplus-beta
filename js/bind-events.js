@@ -368,21 +368,9 @@
     if (sheetBackdrop) sheetBackdrop.addEventListener('click', (e) => {
       if (e.target === sheetBackdrop) { api.closeAddSheet(); api.render(); }
     });
-    // Keep the sheet's own bottom (the pacing hint + submit button) above the
-    // iOS keyboard: fixed elements don't resize when the keyboard opens, so
-    // the visual viewport shrinking is the only signal available for this.
-    if (window.visualViewport) {
-      const sheet = document.getElementById('tp-sheet');
-      const onVV = () => {
-        if (!document.getElementById('tp-sheet')) {
-          window.visualViewport.removeEventListener('resize', onVV);
-          return;
-        }
-        sheet.style.paddingBottom =
-          Math.max(24, window.innerHeight - window.visualViewport.height + 24) + 'px';
-      };
-      window.visualViewport.addEventListener('resize', onVV);
-    }
+    // Keeping the sheet's bottom above the iOS keyboard (js/boot.js's single
+    // persistent visualViewport listener) doesn't need re-wiring here on
+    // every render - it looks up #tp-sheet fresh each time it fires.
     const sheetCancel = document.getElementById('tp-sheet-cancel');
     if (sheetCancel) sheetCancel.onclick = () => { api.closeAddSheet(); api.render(); };
     // Model-only fields: nothing else on screen depends on what's typed, so

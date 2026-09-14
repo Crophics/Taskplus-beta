@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v28'; // bumped: week chart bar-grow now plays only once per session, not on every render
+const CACHE_NAME = 'taskplus-cache-v29'; // bumped: fixed tab bar staying elevated after keyboard close + sheet close
 const urlsToCache = [
   './',
   './index.html',
