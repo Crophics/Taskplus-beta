@@ -4,6 +4,20 @@
    codebase's own derivations (not specified by the design, which is a
    dark-only mockup) so the Settings theme switcher keeps working everywhere.
 */
+
+/* Self-hosted subset of the Nerd Fonts symbols font (only the 14 glyphs this
+   app actually uses via .nf-md-* — see css/mobile.css's icon rules below).
+   Was the remote nerdfonts.com marketing-site CDN; that's not a hosting CDN
+   and a slow/blocked load there used to blank out every icon in the app,
+   the whole tab bar included. */
+@font-face{
+  font-family:'NerdFontsSymbols Nerd Font';
+  src:url("../icons/nerd-fonts-subset.woff2") format("woff2");
+  font-weight:normal;
+  font-style:normal;
+  font-display:swap;
+}
+
 :root[data-theme="dark"]{
   --bg:#161826; --surface:#232532; --surface-alt:#292b31;
   --text:#e9e9ed; --text-muted:#9397ab; --text-dim:#75798c; --text-faint:#595d6c;

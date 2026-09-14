@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v18'; // bumped: mobile rebuild, legacy CSS removed
+const CACHE_NAME = 'taskplus-cache-v19'; // bumped: iOS fixes, self-hosted icon font
 const urlsToCache = [
   './',
   './index.html',
@@ -94,7 +94,8 @@ const urlsToCache = [
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/favicon.ico'
+  './icons/favicon.ico',
+  './icons/nerd-fonts-subset.woff2'
 ];
 
 self.addEventListener('install', (event) => {

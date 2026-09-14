@@ -1,4 +1,7 @@
 /* boot.js — Auth UI listeners + service worker registration */
+// iOS Safari only applies :active styles when a touch listener exists.
+document.addEventListener('touchstart', function(){}, {passive:true});
+
 (function(){
   document.addEventListener('click', function(e){
     var btn = e.target.closest('#tp-sync-btn');

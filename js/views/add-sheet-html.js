@@ -57,7 +57,7 @@
         <input class="tp-add-input" id="tp-add-due" type="date" value="${draft.due || ''}" aria-label="Due date">
         <div class="tp-add-amount-row">
           <button type="button" class="tp-add-stepper" id="tp-add-minus" aria-label="Decrease amount">−</button>
-          <input class="tp-add-amount" id="tp-add-amount" type="number" min="1" value="${draft.amount || 1}">
+          <input class="tp-add-amount" id="tp-add-amount" type="number" inputmode="numeric" pattern="[0-9]*" min="1" value="${draft.amount || 1}">
           <button type="button" class="tp-add-stepper" id="tp-add-plus" aria-label="Increase amount">+</button>
           <input class="tp-add-unit" id="tp-add-unit" placeholder="unit (pages, problems...)" value="${escapeHtml(draft.unit || '')}">
         </div>

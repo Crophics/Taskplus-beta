@@ -2,11 +2,28 @@
    Uses the token layer in css/tokens.css (--bg/--surface/--accent/etc).
 */
 
+/* ---- Icons (self-hosted Nerd Fonts subset, @font-face in tokens.css) ---- */
+.nf{font-family:'NerdFontsSymbols Nerd Font';font-style:normal;font-weight:normal;font-variant:normal;text-transform:none;line-height:1;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+.nf-md-check:before{content:"\f012c"}
+.nf-md-check_circle_outline:before{content:"\f05e1"}
+.nf-md-chevron_down:before{content:"\f0140"}
+.nf-md-chevron_left:before{content:"\f0141"}
+.nf-md-chevron_right:before{content:"\f0142"}
+.nf-md-close_circle:before{content:"\f0159"}
+.nf-md-drag_horizontal_variant:before{content:"\f12f0"}
+.nf-md-file_search_outline:before{content:"\f0c7d"}
+.nf-md-lightbulb_on_outline:before{content:"\f06e9"}
+.nf-md-lock_outline:before{content:"\f0341"}
+.nf-md-magnify:before{content:"\f0349"}
+.nf-md-plus:before{content:"\f0415"}
+.nf-md-repeat:before{content:"\f0456"}
+.nf-md-trash_can_outline:before{content:"\f0a7a"}
+
 /* ---- Page shell (replaces the old css/base.css) ---- */
 *,*::before,*::after{box-sizing:border-box;}
 html{background:var(--bg);}
 body{
-  margin:0;padding:0;min-height:100vh;
+  margin:0;padding:0;min-height:100vh;min-height:100dvh;
   font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   color:var(--text);background:var(--bg);
   -webkit-text-size-adjust:100%;
@@ -16,7 +33,16 @@ body{
 #tp-app button{font-family:inherit;margin:0;-webkit-appearance:none;appearance:none;touch-action:manipulation;}
 #tp-app input,#tp-app select,#tp-app textarea{font-family:inherit;margin:0;}
 #tp-app :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
-.tp-screen{padding:58px 20px calc(100px + env(safe-area-inset-bottom));min-height:100vh;color:var(--text);background:var(--bg);}
+.tp-screen{padding:58px 20px calc(100px + env(safe-area-inset-bottom));min-height:100vh;min-height:100dvh;color:var(--text);background:var(--bg);}
+
+/* Suppress the iOS text-selection callout on long-pressable rows (it was
+   racing the quick-action menu's long-press timer). */
+.tp-a-card,.tp-t-row,.tp-t-ahead-row{
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;
+  user-select:none;
+}
+.tp-c-name{-webkit-user-select:text;user-select:text;}
 
 /* Row flash after an edit lands (js/utils.js adds this class) */
 .tp-card-highlight{animation:tp-card-flash 1.6s ease-out;}
@@ -28,7 +54,7 @@ body{
 .tp-section-count{text-transform:none;letter-spacing:0;color:var(--text-dim);}
 
 /* ---- Tab bar ---- */
-.tp-tabbar{position:fixed;left:0;right:0;bottom:0;height:calc(84px + env(safe-area-inset-bottom));display:flex;align-items:stretch;background:var(--tabbar-bg);border-top:1px solid rgba(233,233,237,.1);backdrop-filter:blur(8px);z-index:500;padding-bottom:env(safe-area-inset-bottom);}
+.tp-tabbar{position:fixed;left:0;right:0;bottom:0;height:calc(84px + env(safe-area-inset-bottom));display:flex;align-items:stretch;background:var(--tabbar-bg);border-top:1px solid rgba(233,233,237,.1);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);z-index:500;padding-bottom:env(safe-area-inset-bottom);}
 .tp-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding-top:6px;background:none;border:none;color:var(--text-dim);font-family:inherit;cursor:pointer;margin:0;}
 .tp-tab i{font-size:18px;}
 .tp-tab-label{font-size:10px;}
@@ -82,7 +108,7 @@ body{
 /* ---- All screen ---- */
 .tp-a-search-wrap{position:relative;margin-bottom:12px;}
 .tp-a-search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-dim);font-size:14px;}
-#tp-a-search{width:100%;box-sizing:border-box;min-height:40px;padding:0 34px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:14px;}
+#tp-a-search{width:100%;box-sizing:border-box;min-height:40px;padding:0 34px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:16px;}
 .tp-a-search-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;}
 .tp-a-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
 .tp-a-chip{border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit;font-size:12.5px;padding:6px 12px;cursor:pointer;}
@@ -97,7 +123,7 @@ body{
 .tp-a-card:hover{box-shadow:0 0 0 1px var(--card-ring-hover);}
 .tp-a-card.tp-a-done{opacity:.5;}
 .tp-a-card.tp-a-blocked-row{opacity:.6;}
-.tp-a-drag{color:var(--text-faint);cursor:grab;flex:0 0 auto;padding-top:2px;}
+.tp-a-drag{color:var(--text-faint);cursor:grab;flex:0 0 auto;padding-top:2px;touch-action:none;}
 .tp-a-bar{width:2px;align-self:stretch;border-radius:2px;flex:0 0 auto;}
 .tp-a-body{flex:1;min-width:0;}
 .tp-a-title-line{display:flex;align-items:center;gap:6px;}
@@ -181,19 +207,27 @@ body{
 .tp-c-palette{display:flex;gap:8px;padding-left:14px;margin-bottom:12px;flex-wrap:wrap;}
 .tp-c-swatch,.tp-c-new-swatch{width:22px;height:22px;border-radius:5px;border:none;cursor:pointer;padding:0;}
 .tp-c-swatch-active{box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--accent);}
-.tp-c-new-name{width:100%;box-sizing:border-box;min-height:46px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:14px;padding:0 12px;margin-bottom:10px;}
+.tp-c-new-name{width:100%;box-sizing:border-box;min-height:46px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:16px;padding:0 12px;margin-bottom:10px;}
 .tp-c-add-btn{width:100%;min-height:48px;border-radius:8px;border:1px solid var(--accent);background:transparent;color:var(--accent-bright);font-family:inherit;font-size:14px;cursor:pointer;margin-top:6px;}
 .tp-c-add-btn:disabled{opacity:.45;cursor:not-allowed;}
 .tp-c-footnote{font-size:11.5px;color:var(--text-dim);line-height:1.6;margin-top:16px;}
 
 /* ---- Add sheet ---- */
-.tp-backdrop{position:fixed;inset:0;background:var(--backdrop);z-index:900;display:flex;align-items:flex-end;justify-content:center;}
-.tp-sheet{width:100%;max-width:520px;max-height:86%;overflow-y:auto;background:var(--bg);border-radius:14px 14px 0 0;box-shadow:var(--sheet-shadow);box-sizing:border-box;padding:10px 20px calc(24px + env(safe-area-inset-bottom));animation:tp-pop .22s ease-out;}
+.tp-backdrop{position:fixed;inset:0;background:var(--backdrop);z-index:900;display:flex;align-items:flex-end;justify-content:center;overscroll-behavior:contain;touch-action:none;}
+.tp-sheet{width:100%;max-width:520px;max-height:86%;max-height:86dvh;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;background:var(--bg);border-radius:14px 14px 0 0;box-shadow:var(--sheet-shadow);box-sizing:border-box;padding:10px 20px calc(24px + env(safe-area-inset-bottom));animation:tp-pop .22s ease-out;}
 .tp-sheet-handle{width:36px;height:4px;border-radius:2px;background:var(--text-faint);margin:0 auto 14px;}
 .tp-sheet-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
 .tp-sheet-title{font-size:18px;font-weight:500;color:var(--text);}
 .tp-sheet-cancel{background:none;border:none;color:var(--accent-bright);font-family:inherit;font-size:13px;cursor:pointer;padding:0;}
 .tp-add-input{width:100%;box-sizing:border-box;min-height:44px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:16px;padding:0 12px;margin-bottom:10px;}
+.tp-add-input[type="date"]{
+  -webkit-appearance:none;
+  appearance:none;
+  display:block;
+  line-height:44px;
+  padding-top:0;
+  padding-bottom:0;
+}
 .tp-add-course-field{position:relative;margin-bottom:10px;}
 .tp-add-course-trigger{width:100%;box-sizing:border-box;min-height:44px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:14px;padding:0 12px;display:flex;align-items:center;gap:8px;cursor:pointer;}
 .tp-add-course-trigger i{margin-left:auto;color:var(--text-dim);}
@@ -207,7 +241,7 @@ body{
 .tp-add-amount-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
 .tp-add-stepper{width:46px;height:46px;flex:0 0 auto;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:18px;cursor:pointer;}
 .tp-add-amount{width:82px;flex:0 0 auto;text-align:center;min-height:46px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:19px;font-weight:500;}
-.tp-add-unit{flex:1;min-width:0;min-height:46px;box-sizing:border-box;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:14px;padding:0 10px;}
+.tp-add-unit{flex:1;min-width:0;min-height:46px;box-sizing:border-box;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:16px;padding:0 10px;}
 .tp-add-hint{font-size:12px;color:var(--text-dim);margin:6px 0 14px;}
 .tp-add-submit{width:100%;min-height:52px;border-radius:8px;border:1px solid var(--accent);background:transparent;color:var(--accent-bright);font-family:inherit;font-size:15px;cursor:pointer;margin-top:4px;}
 

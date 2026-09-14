@@ -114,38 +114,53 @@
       api.render();
     });
 
-    // Drag to reorder: dragging always switches the All tab into its
-    // manual/custom order (see js/all-logic.js) so the reorder is visible.
+    /* ---- Drag to reorder (pointer-based; iOS Safari has no HTML5 DnD from touch) ---- */
     root.querySelectorAll('.tp-a-drag').forEach(handle => {
-      handle.addEventListener('dragstart', (e) => {
-        api.dragSrcIndex = parseInt(handle.dataset.i);
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', String(api.dragSrcIndex));
-        const card = handle.closest('.tp-a-card');
-        if (card) card.classList.add('tp-dragging');
-      });
-      handle.addEventListener('dragend', () => {
-        root.querySelectorAll('.tp-a-card.tp-dragging').forEach(c => c.classList.remove('tp-dragging'));
-        root.querySelectorAll('.tp-a-card.tp-drop-target').forEach(c => c.classList.remove('tp-drop-target'));
-        api.dragSrcIndex = null;
-      });
-    });
-    root.querySelectorAll('.tp-a-card[data-i]').forEach(card => {
-      card.addEventListener('dragover', (e) => {
-        if (api.dragSrcIndex === null) return;
+      const card = handle.closest('.tp-a-card');
+      if (!card) return;
+
+      handle.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        card.classList.add('tp-drop-target');
-      });
-      card.addEventListener('dragleave', () => card.classList.remove('tp-drop-target'));
-      card.addEventListener('drop', (e) => {
-        e.preventDefault();
-        card.classList.remove('tp-drop-target');
-        const targetIdx = parseInt(card.dataset.i);
-        if (api.dragSrcIndex === null || targetIdx === api.dragSrcIndex) return;
-        if (api.allSortMode !== 'custom') { api.allSortMode = 'custom'; api.savePrefs(); }
-        api.reorderByDrag(api.dragSrcIndex, targetIdx, api.allList);
-        api.dragSrcIndex = null;
+        handle.setPointerCapture(e.pointerId);
+        const cards = [...root.querySelectorAll('.tp-a-card[data-i]')];
+        const srcIndex = parseInt(card.dataset.i);
+        let overCard = null;
+        card.classList.add('tp-dragging');
+
+        const onMove = (ev) => {
+          const y = ev.clientY;
+          const hit = cards.find(c => {
+            if (c === card) return false;
+            const r = c.getBoundingClientRect();
+            return y >= r.top && y <= r.bottom;
+          });
+          if (hit !== overCard) {
+            if (overCard) overCard.classList.remove('tp-drop-target');
+            overCard = hit || null;
+            if (overCard) overCard.classList.add('tp-drop-target');
+          }
+        };
+
+        const onUp = () => {
+          handle.removeEventListener('pointermove', onMove);
+          handle.removeEventListener('pointerup', onUp);
+          handle.removeEventListener('pointercancel', onUp);
+          card.classList.remove('tp-dragging');
+          if (overCard) {
+            overCard.classList.remove('tp-drop-target');
+            const targetIdx = parseInt(overCard.dataset.i);
+            if (targetIdx !== srcIndex) {
+              if (api.allSortMode !== 'custom') { api.allSortMode = 'custom'; api.savePrefs(); }
+              api.reorderByDrag(srcIndex, targetIdx, api.allList);
+              return;
+            }
+          }
+          api.render();
+        };
+
+        handle.addEventListener('pointermove', onMove);
+        handle.addEventListener('pointerup', onUp);
+        handle.addEventListener('pointercancel', onUp);
       });
     });
 
@@ -343,6 +358,21 @@
     if (sheetBackdrop) sheetBackdrop.addEventListener('click', (e) => {
       if (e.target === sheetBackdrop) { api.closeAddSheet(); api.render(); }
     });
+    // Keep the sheet's own bottom (the pacing hint + submit button) above the
+    // iOS keyboard: fixed elements don't resize when the keyboard opens, so
+    // the visual viewport shrinking is the only signal available for this.
+    if (window.visualViewport) {
+      const sheet = document.getElementById('tp-sheet');
+      const onVV = () => {
+        if (!document.getElementById('tp-sheet')) {
+          window.visualViewport.removeEventListener('resize', onVV);
+          return;
+        }
+        sheet.style.paddingBottom =
+          Math.max(24, window.innerHeight - window.visualViewport.height + 24) + 'px';
+      };
+      window.visualViewport.addEventListener('resize', onVV);
+    }
     const sheetCancel = document.getElementById('tp-sheet-cancel');
     if (sheetCancel) sheetCancel.onclick = () => { api.closeAddSheet(); api.render(); };
     const addTitle = document.getElementById('tp-add-title');

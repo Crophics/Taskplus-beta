@@ -95,7 +95,6 @@
   // Tracks which element should regain focus after the next render, as
   // {id, selStart, selEnd}.
   let pendingFocus = null;
-  let dragSrcIndex = null;
   let celebrationPending = null;
 
   let prefs = {};
@@ -595,7 +594,6 @@
       get allFilterCourse(){ return allFilterCourse; }, set allFilterCourse(v){ allFilterCourse = v; },
       get weekSelDay(){ return weekSelDay; }, set weekSelDay(v){ weekSelDay = v; },
       get pendingFocus(){ return pendingFocus; }, set pendingFocus(v){ pendingFocus = v; },
-      get dragSrcIndex(){ return dragSrcIndex; }, set dragSrcIndex(v){ dragSrcIndex = v; },
       get devMode(){ return devMode; }, set devMode(v){ devMode = v; },
       get devPanelOpen(){ return devPanelOpen; }, set devPanelOpen(v){ devPanelOpen = v; },
       get notifyHour(){ return notifyHour; },
