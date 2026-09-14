@@ -17,10 +17,13 @@ document.addEventListener('touchstart', function(){}, {passive:true});
 //    close/reopen without needing its own cleanup.
 // 2. Work around a WebKit quirk where position:fixed elements (the tab
 //    bar) don't always get repositioned the instant the keyboard closes -
-//    they stay rendered at the wrong offset until the next scroll forces
-//    a relayout. Nudging the scroll position by a pixel and back forces
-//    that relayout immediately instead of leaving it stuck until the user
-//    happens to scroll themselves.
+//    they stay rendered at the wrong offset until something forces a
+//    relayout. Toggling the tab bar out of and back into layout flow
+//    forces that relayout on the element itself, directly - not via a
+//    window.scrollTo(y+1)-then-back nudge (tried first, but that's a
+//    no-op whenever the current screen's content is shorter than the
+//    viewport and has nothing to actually scroll, e.g. Today with few
+//    items - it only ever worked on tall screens like Week).
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', function () {
     const sheet = document.getElementById('tp-sheet');
@@ -30,9 +33,12 @@ if (window.visualViewport) {
     }
     const keyboardClosed = Math.abs(window.visualViewport.height - window.innerHeight) < 2;
     if (keyboardClosed) {
-      const y = window.scrollY;
-      window.scrollTo(0, y + 1);
-      requestAnimationFrame(() => window.scrollTo(0, y));
+      const tabbar = document.getElementById('tp-tabbar');
+      if (tabbar) {
+        tabbar.style.display = 'none';
+        void tabbar.offsetHeight; // force the layout flush before restoring
+        tabbar.style.display = '';
+      }
     }
   });
 }

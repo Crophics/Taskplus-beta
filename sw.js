@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v29'; // bumped: fixed tab bar staying elevated after keyboard close + sheet close
+const CACHE_NAME = 'taskplus-cache-v30'; // bumped: tab bar reflow-fix now works on every tab, not just tall ones like Week
 const urlsToCache = [
   './',
   './index.html',
