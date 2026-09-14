@@ -65,7 +65,6 @@
 
     root.querySelectorAll('.tp-log').forEach(b => b.onclick = () => logOne(parseInt(b.dataset.i), b));
     root.querySelectorAll('.tp-complete').forEach(b => b.onclick = () => toggleComplete(parseInt(b.dataset.i)));
-    root.querySelectorAll('.tp-del').forEach(b => b.onclick = () => api.deleteItemAt(parseInt(b.dataset.i)));
 
     /* ---- Tab bar ---- */
     root.querySelectorAll('.tp-tab[data-tab]').forEach(b => b.onclick = () => {
