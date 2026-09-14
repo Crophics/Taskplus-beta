@@ -1,106 +1,9 @@
-/* views/chrome-html.js — Topbar, banners, controls, modal, FAB */
+/* views/chrome-html.js — Dev toolbar (the only piece of the old desktop
+   chrome the mobile rebuild keeps; everything else — topbar, banners,
+   IO controls, course manager, the add/edit modal, the FAB — is superseded
+   by the tab screens in js/views/*.
+*/
 (function (global) {
-  function topbarHtml({ searchTerm, sortMode }) {
-    const escapeHtml = window.TPHtml.escapeHtml;
-    return `<div class="tp-topbar">
-      <div class="tp-search-wrap">
-        <input id="tp-filter" placeholder="Search title, course, notes..." value="${escapeHtml(searchTerm)}">
-        ${searchTerm ? `<button id="tp-search-clear" type="button" class="tp-search-clear" aria-label="Clear search">&times;</button>` : ''}
-      </div>
-      <select id="tp-sort">
-        <option value="urgency" ${sortMode === 'urgency' ? 'selected' : ''}>Urgency</option>
-        <option value="due" ${sortMode === 'due' ? 'selected' : ''}>Due date</option>
-        <option value="custom" ${sortMode === 'custom' ? 'selected' : ''}>Custom (drag order)</option>
-      </select>
-    </div>`;
-  }
-
-  function overdueBannerHtml({ overdueCount, overdueFilterActive }) {
-    if (overdueCount <= 0) return '';
-    return `<div class="tp-overdue-banner ${overdueFilterActive ? 'tp-active' : ''}" id="tp-overdue-banner">
-        \u26a0 ${overdueCount} overdue ${overdueFilterActive ? '\u00b7 tap to clear' : '\u00b7 tap to view'}
-      </div>`;
-  }
-
-  function streakBannerHtml({ streakNotice }) {
-    if (!streakNotice) return '';
-    return `<div class="tp-streak-banner" id="tp-streak-banner">
-        <div class="tp-streak-banner-text">${streakNotice.message}</div>
-        <button type="button" class="tp-streak-dismiss" id="tp-streak-dismiss" aria-label="Dismiss daily streak notice">×</button>
-      </div>`;
-  }
-
-  function emptyStateHtml({ itemsLength, searchTerm, hideDone, overdueFilterActive }) {
-    const filtersActive = !!(searchTerm || hideDone || overdueFilterActive);
-    return `<div class="tp-empty">${itemsLength === 0
-      ? "No assignments yet. Click \u201c+ Add Assignment\u201d to get started."
-      : "Nothing matches your current filters."}
-        ${(itemsLength > 0 && filtersActive) ? `<div style="margin-top:10px;"><button id="tp-clear-filters" type="button" class="tp-secondary">Clear search &amp; filters</button></div>` : ''}
-      </div>`;
-  }
-
-  function notifyHourOptionsHtml(selected) {
-    const h = Number.isInteger(selected) ? selected : 8;
-    let opts = '';
-    for (let i = 0; i < 24; i++) {
-      const label = i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`;
-      opts += `<option value="${i}" ${i === h ? 'selected' : ''}>${label}</option>`;
-    }
-    return opts;
-  }
-
-  function ioControlsHtml({ hideDone, showArchived, theme, notifyHour, notifyDigest }) {
-    let html = `<div class="tp-io">
-      <details class="tp-export-dropdown">
-        <summary>Export \u25be</summary>
-        <div class="tp-dropdown-panel">
-          <button id="tp-export" class="tp-secondary">Backup (JSON)</button>
-          <button id="tp-export-ics" class="tp-secondary">Calendar (.ics)</button>
-        </div>
-      </details>
-      <label style="display:inline-block;">
-        <button id="tp-import-btn" class="tp-secondary">Import Backup</button>
-        <input type="file" id="tp-import" accept="application/json" style="display:none;">
-      </label>
-      <button id="tp-clear-completed" class="tp-danger">Clear Completed</button>
-    </div>`;
-
-    html += `<div class="tp-controls">
-      <label><input type="checkbox" id="tp-show-completed" style="width:auto;" ${!hideDone ? 'checked' : ''}> Show completed</label>
-      <label><input type="checkbox" id="tp-show-archived" style="width:auto;" ${showArchived ? 'checked' : ''}> Show archived</label>
-    </div>`;
-
-    html += `<div class="tp-bottom-row">
-      <label>Theme: <select id="tp-theme-select">
-        <option value="dark" ${theme === 'dark' ? 'selected' : ''}>Dark</option>
-        <option value="light" ${theme === 'light' ? 'selected' : ''}>Light</option>
-        <option value="blue" ${theme === 'blue' ? 'selected' : ''}>Blue (classic)</option>
-        <option value="auto" ${theme === 'auto' ? 'selected' : ''}>Auto (system)</option>
-      </select></label>
-      <button id="tp-manage-courses" type="button" class="tp-secondary">Manage Courses</button>
-      <button id="tp-sync-btn" type="button" class="tp-secondary">${window.tpSyncLabel || 'Sign in to sync'}</button>
-      ${('Notification' in window) ? (
-        Notification.permission === 'granted'
-          ? `<span style="font-size:12px;">Reminders: On${(window.tpSync && window.tpSync.hasVapidKey && window.tpSync.hasVapidKey()) ? ' (incl. background)' : ''}</span>`
-          : Notification.permission === 'denied'
-            ? `<span style="font-size:12px;">Reminders blocked in browser settings</span>`
-            : `<button id="tp-enable-notify" class="tp-secondary">Enable Reminders</button>`
-      ) : ''}
-    </div>`;
-
-    html += `<div class="tp-bottom-row tp-notify-prefs">
-      <label title="Hourly digest of what's due, sent even when the app is closed">Daily digest at
-        <select id="tp-notify-hour" style="width:auto;margin:0 4px;">${notifyHourOptionsHtml(notifyHour)}</select>
-      </label>
-      <label style="display:inline-flex;align-items:center;gap:6px;">
-        <input type="checkbox" id="tp-notify-digest" style="width:auto;margin:0;" ${notifyDigest !== false ? 'checked' : ''}>
-        Digest reminders
-      </label>
-    </div>`;
-
-    return html;
-  }
-
   function devToolbarHtml({ devMode, devPanelOpen }) {
     if (!devMode) return '';
     return `<button id="tp-dev-toolbar-btn" type="button">🛠️ Dev Menu</button>
@@ -119,49 +22,6 @@
       </div>`;
   }
 
-  function courseManagerHtml({ showCourseManager, items, courseColor }) {
-    if (!showCourseManager) return '';
-    const escapeHtml = window.TPHtml.escapeHtml;
-    const courseNames = [...new Set(items.map((i) => (i.course || '').trim()).filter(Boolean))];
-    let html = `<div class="tp-course-manager" id="tp-course-manager">`;
-    if (courseNames.length === 0) {
-      html += `<div style="font-size:12.5px;color:var(--tp-muted);">No courses yet.</div>`;
-    } else {
-      courseNames.forEach((c) => {
-        html += `<div class="tp-course-row">
-        <input type="text" class="tp-course-rename" data-course="${escapeHtml(c)}" value="${escapeHtml(c)}">
-        <input type="color" class="tp-course-color" data-course="${escapeHtml(c)}" value="${courseColor(c)}">
-      </div>`;
-      });
-    }
-    html += `</div>`;
-    return html;
-  }
-
-  function modalHtml({ editIndex, showForm, formInnerHtml }) {
-    if (editIndex === null && !showForm) return '';
-    return `<div id="tp-modal-backdrop">
-    <div id="tp-modal-box" role="dialog" aria-modal="true" aria-label="${editIndex !== null ? 'Edit Assignment' : 'Add Assignment'}">
-      <button id="tp-modal-close" aria-label="Close">&times;</button>
-      ${formInnerHtml}
-    </div>
-  </div>`;
-  }
-
-  function fabHtml() {
-    return `<button id="tp-add-toggle" class="tp-fab" aria-label="Add Assignment">+</button>`;
-  }
-
   global.TPViews = global.TPViews || {};
-  Object.assign(global.TPViews, {
-    topbarHtml,
-    overdueBannerHtml,
-    streakBannerHtml,
-    emptyStateHtml,
-    ioControlsHtml,
-    devToolbarHtml,
-    courseManagerHtml,
-    modalHtml,
-    fabHtml,
-  });
+  Object.assign(global.TPViews, { devToolbarHtml });
 })(typeof window !== 'undefined' ? window : globalThis);

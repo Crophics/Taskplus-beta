@@ -1,473 +1,433 @@
 /* bind-events.js — Wire DOM event handlers after each render */
 (function (global) {
-  /**
-   * @param {HTMLElement} root
-   * @param {object} c  live bindings from the main app closure
-   */
+  const LONG_PRESS_MS = 500;
+  const LONG_PRESS_MOVE_TOLERANCE = 10;
+
   function bindEvents(root, api) {
-const addToggle = document.getElementById('tp-add-toggle');
-if(addToggle) addToggle.onclick = ()=>{ api.showForm = true; api.render(); };
+    const TL = window.TPTodayLogic;
 
-const modalBackdrop = document.getElementById('tp-modal-backdrop');
-if(modalBackdrop){
-  modalBackdrop.addEventListener('click', (e)=>{
-    if(e.target === modalBackdrop){ api.editIndex=null; api.showForm=false; api.render(); }
-  });
-}
-const modalClose = document.getElementById('tp-modal-close');
-if(modalClose) modalClose.onclick = ()=>{ api.editIndex=null; api.showForm=false; api.render(); };
-
-const exportBtn = document.getElementById('tp-export');
-if(exportBtn) exportBtn.onclick = api.exportData;
-const exportIcsBtn = document.getElementById('tp-export-ics');
-if(exportIcsBtn) exportIcsBtn.onclick = api.exportIcs;
-const importBtn = document.getElementById('tp-import-btn');
-if(importBtn) importBtn.onclick = ()=> document.getElementById('tp-import')?.click();
-const importEl = document.getElementById('tp-import');
-if(importEl) importEl.onchange = (e)=>{
-  if(e.target.files[0]) api.importData(e.target.files[0]);
-};
-
-const courseField = document.getElementById('tp-course');
-if(courseField){
-  courseField.addEventListener('input', (e)=>{
-    const dependsSelect = document.getElementById('tp-depends');
-    const existing = api.editIndex!==null ? api.items[api.editIndex] : null;
-    dependsSelect.innerHTML = api.dependsOptionsHtml(e.target.value, '', existing);
-  });
-}
-
-const dueInput = document.getElementById('tp-due');
-if(dueInput){
-  const wrap = dueInput.closest('.tp-date-wrap');
-  const syncDatePlaceholder = ()=>{
-    if(wrap) wrap.classList.toggle('tp-has-date', !!dueInput.value);
-  };
-  syncDatePlaceholder();
-  dueInput.addEventListener('input', syncDatePlaceholder);
-  dueInput.addEventListener('change', syncDatePlaceholder);
-}
-
-const saveBtn = document.getElementById('tp-save');
-if(saveBtn){
-  saveBtn.onclick = ()=>{
-    const title = document.getElementById('tp-title').value.trim();
-    const course = document.getElementById('tp-course').value.trim();
-    const due = document.getElementById('tp-due').value;
-    const unitsRaw = document.getElementById('tp-units').value.trim();
-    const total = unitsRaw ? parseFloat(unitsRaw) : 1;
-    const unit = document.getElementById('tp-unitlabel').value.trim() || 'Assignment';
-    const notes = document.getElementById('tp-notes').value.trim();
-    const dependsOn = document.getElementById('tp-depends').value;
-    const recurring = document.getElementById('tp-recurring').value;
-    const subtaskLines = document.getElementById('tp-subtasks').value.split('\n').map(s=>s.trim()).filter(Boolean);
-    const titleEl = document.getElementById('tp-title');
-    const dueEl = document.getElementById('tp-due');
-    const dueWrap = dueEl ? dueEl.closest('.tp-date-wrap') : null;
-    [titleEl,dueEl].forEach(el=>{ if(el) el.classList.remove('tp-field-error'); });
-    if(dueWrap) dueWrap.classList.remove('tp-field-error');
-    const missing = [];
-    if(!title) missing.push(titleEl);
-    if(!due) missing.push(dueEl);
-    if(missing.length){
-      missing.forEach(el=>{
-        if(el === dueEl && dueWrap) dueWrap.classList.add('tp-field-error');
-        else el.classList.add('tp-field-error');
-      });
-      missing[0].focus();
-      return;
+    /* ---- Logging / completing (shared by Today rows, Get-ahead, quick-menu) ---- */
+    function logOne(idx, sourceEl) {
+      const it = api.items[idx];
+      if (!it) return;
+      const workBefore = api.hasTodayWorkRemaining(); // refreshes it.dailyTarget as a side effect
+      const metBefore = TL.met(it);
+      const prevDone = it.done;
+      it.done = Math.min(it.done + 1, it.total);
+      it.today = (it.today || 0) + (it.done - prevDone);
+      api.touchItem(it);
+      const reachedDailyTarget = !metBefore && TL.met(it);
+      const fullyCompleted = it.done >= it.total && !it.completed;
+      if (fullyCompleted) {
+        it.completed = true;
+        it.completedAt = api.today();
+        if (it.recurring) api.items.push(api.makeRecurringClone(it));
+      }
+      if (fullyCompleted || reachedDailyTarget) {
+        const rect = sourceEl.getBoundingClientRect();
+        const workAfter = api.hasTodayWorkRemaining();
+        if (workBefore && !workAfter) {
+          api.logDayComplete();
+          api.triggerCelebration(window.innerWidth / 2, window.innerHeight * 0.25, true);
+        } else {
+          api.triggerCelebration(rect.left + rect.width / 2, rect.top + rect.height / 2, false);
+        }
+      }
+      api.save();
     }
-    const prevSubtasks = (api.editIndex!==null && api.items[api.editIndex].subtasks) || [];
-    const subtasks = subtaskLines.map(text=>{
-      const prev = prevSubtasks.find(s=>s.text===text);
-      return { text, done: prev ? prev.done : false };
-    });
-    if(api.editIndex!==null){
-      const it = api.items[api.editIndex];
-      it.title=title; it.course=course; it.due=due; it.total=total; it.unit=unit; it.notes=notes;
-      it.dependsOn=dependsOn; it.recurring=recurring; it.subtasks=subtasks;
-      it.done = Math.min(it.done, total);
-      if(api.touchItem) api.touchItem(it);
-      else it.updatedAt = Date.now();
-      if(api.isDevModeTrigger(it.title, it.total)) api.activateDevMode();
-      api.editIndex = null;
-    } else {
-      const maxOrder = api.items.reduce((m,x)=> Math.max(m, x.order ?? -1), -1);
-      api.items.push({id:api.newItemId(),title,course,due,total,unit,notes,done:0,completed:false,dependsOn,recurring,subtasks,completedAt:null,createdAt:api.today(),archived:false,order:maxOrder+1,updatedAt:Date.now()});
-      if(api.isDevModeTrigger(title, total)) api.activateDevMode();
-      api.pendingScrollId = 'tp-card-'+(api.items.length-1);
-      api.pendingScrollAlign = 'top';
-    }
-    api.showForm = false;
-    api.save();
-  };
-}
-const cancelBtn = document.getElementById('tp-cancel');
-if(cancelBtn) cancelBtn.onclick = ()=>{ api.editIndex=null; api.showForm=false; api.render(); };
 
-const modalBox = document.getElementById('tp-modal-box');
-if(modalBox && saveBtn){
-  modalBox.addEventListener('keydown', (e)=>{
-    if(e.key==='Enter' && e.target.tagName==='INPUT'){
-      e.preventDefault();
-      saveBtn.click();
-    }
-  });
-}
-
-{ const __el = document.getElementById('tp-sort'); if(__el) __el.onchange = (e)=>{ api.sortMode=e.target.value; api.savePrefs(); api.render(); }; }
-const todayToggleBtn = document.getElementById('tp-today-toggle');
-if(todayToggleBtn) todayToggleBtn.onclick = ()=>{
-  api.todayExpanded = !api.todayExpanded;
-  api.pendingTodayAnim = true;
-  api.savePrefs();
-  api.render();
-};
-const todayCard = document.getElementById('tp-today-card');
-if(todayCard) todayCard.addEventListener('click', (e)=>{
-  // Ignore clicks on the toggle button or on rows that have their own
-  // click behavior (scroll-to-card) — only empty space toggles.
-  if(e.target.closest('#tp-today-toggle') || e.target.closest('.tp-today-clickable')) return;
-  api.todayExpanded = !api.todayExpanded;
-  api.pendingTodayAnim = true;
-  api.savePrefs();
-  api.render();
-});
-{ const __el = document.getElementById('tp-show-completed'); if(__el) __el.onchange = (e)=>{ api.hideDone = !e.target.checked; api.savePrefs(); api.render(); }; }
-{ const __el = document.getElementById('tp-show-archived'); if(__el) __el.onchange = (e)=>{ api.showArchived = e.target.checked; api.savePrefs(); api.render(); }; }
-{
-  const __filter = document.getElementById('tp-filter');
-  if(__filter) __filter.oninput = (e)=>{
-    api.pendingFocus = {id:'tp-filter', selStart:e.target.selectionStart, selEnd:e.target.selectionEnd};
-    api.searchTerm=e.target.value; api.savePrefs(); api.render();
-  };
-}
-const searchClearBtn = document.getElementById('tp-search-clear');
-if(searchClearBtn) searchClearBtn.onclick = ()=>{
-  api.searchTerm = '';
-  api.savePrefs();
-  api.pendingFocus = {id:'tp-filter', selStart:0, selEnd:0};
-  api.render();
-};
-const overdueBanner = document.getElementById('tp-overdue-banner');
-if(overdueBanner) overdueBanner.onclick = ()=>{
-  api.overdueFilterActive = !api.overdueFilterActive;
-  api.render();
-};
-const clearFiltersBtn = document.getElementById('tp-clear-filters');
-if(clearFiltersBtn) clearFiltersBtn.onclick = ()=>{
-  api.searchTerm = '';
-  api.hideDone = false;
-  api.overdueFilterActive = false;
-  api.savePrefs();
-  api.render();
-};
-{
-  const __el = document.getElementById('tp-theme-select');
-  if(__el) __el.onchange = (e)=>{
-    api.theme = e.target.value;
-    api.applyTheme();
-    api.savePrefs();
-    api.render();
-  };
-}
-{ const __el = document.getElementById('tp-clear-completed'); if(__el) __el.onclick = api.clearCompleted; }
-
-const devToolbarBtn = document.getElementById('tp-dev-toolbar-btn');
-if(devToolbarBtn){
-  devToolbarBtn.onclick = ()=>{
-    api.devPanelOpen = !api.devPanelOpen;
-    api.saveDevPanelOpen();
-    api.render();
-  };
-}
-const devTriggerNotify = document.getElementById('tp-dev-trigger-notify');
-if(devTriggerNotify){
-  devTriggerNotify.onclick = ()=>{
-    if (!('Notification' in window)) {
-      alert('This browser does not support desktop notifications.');
-      return;
-    }
-    Notification.requestPermission().then(permission => {
-      if (permission === 'granted') {
-        new Notification('🧪 Dev ping', { body: 'A little planner nudge just for testing ✨', icon: 'icons/icon-192.png' });
+    function toggleComplete(idx) {
+      const it = api.items[idx];
+      if (!it) return;
+      const completing = !it.completed;
+      const workBefore = api.hasTodayWorkRemaining();
+      const prevDone = it.done;
+      it.completed = !it.completed;
+      if (it.completed) {
+        it.done = it.total;
+        it.today = (it.today || 0) + Math.max(it.done - prevDone, 0);
+        it.completedAt = api.today();
+        if (it.recurring) api.items.push(api.makeRecurringClone(it));
       } else {
-        alert('Notification permission denied.');
+        it.completedAt = null;
+        it.archived = false;
       }
-    });
-  };
-}
-const devAdvance1 = document.getElementById('tp-dev-advance-1');
-if(devAdvance1){
-  devAdvance1.onclick = ()=>{
-    const offset = Number(localStorage.getItem(api.DAY_OFFSET_KEY) || 0);
-    localStorage.setItem(api.DAY_OFFSET_KEY, String(offset + 1));
-    alert('Simulated moving forward 1 day. Reloading...');
-    location.reload();
-  };
-}
-const devAdvance7 = document.getElementById('tp-dev-advance-7');
-if(devAdvance7){
-  devAdvance7.onclick = ()=>{
-    const offset = Number(localStorage.getItem(api.DAY_OFFSET_KEY) || 0);
-    localStorage.setItem(api.DAY_OFFSET_KEY, String(offset + 7));
-    alert('Simulated moving forward 7 days. Reloading...');
-    location.reload();
-  };
-}
-const devReset = document.getElementById('tp-dev-reset');
-const devResetConfirm = document.getElementById('tp-dev-reset-confirm');
-if(devReset && devResetConfirm){
-  // Uses an in-page confirm instead of window.confirm() - native dialogs
-  // are blocked in sandboxed iframe previews (e.g. Claude's artifact
-  // viewer), which silently no-ops this button there.
-  devReset.onclick = ()=>{
-    devResetConfirm.style.display = 'block';
-  };
-  const yesBtn = document.getElementById('tp-dev-reset-confirm-yes');
-  const noBtn = document.getElementById('tp-dev-reset-confirm-no');
-  if(yesBtn) yesBtn.onclick = ()=>{
-    localStorage.clear();
-    sessionStorage.clear();
-    location.reload();
-  };
-  if(noBtn) noBtn.onclick = ()=>{
-    devResetConfirm.style.display = 'none';
-  };
-}
-const devExit = document.getElementById('tp-dev-exit');
-if(devExit){
-  devExit.onclick = ()=>{
-    api.deactivateDevMode();
-    api.render();
-  };
-}
-
-const manageBtn = document.getElementById('tp-manage-courses');
-if(manageBtn) manageBtn.onclick = ()=>{
-  api.showCourseManager = !api.showCourseManager;
-  if(api.showCourseManager){ api.pendingScrollId = 'tp-course-manager'; api.pendingScrollAlign = 'end'; }
-  api.render();
-};
-
-const notifyBtn = document.getElementById('tp-enable-notify');
-if(notifyBtn) notifyBtn.onclick = async ()=>{
-  try {
-    if (window.tpSync && window.tpSync.enablePush) {
-      const res = await window.tpSync.enablePush(api.notifyHour);
-      if (res.ok) {
-        if (api.showToast) api.showToast('Reminders on — including when the app is closed');
-        else if (window.TPToast) window.TPToast.show('Reminders on — including when the app is closed');
-      } else if (res.reason === 'missing-vapid') {
-        alert(res.message || 'Add your VAPID key to js/fcm-config.js');
-      } else if (res.reason === 'denied') {
-        alert('Notification permission denied. You can enable it in browser settings.');
-      } else if (res.reason === 'unsupported') {
-        alert('Push notifications are not supported in this browser.');
+      api.touchItem(it);
+      if (completing) {
+        const workAfter = api.hasTodayWorkRemaining();
+        if (workBefore && !workAfter) {
+          api.logDayComplete();
+          api.triggerCelebration(window.innerWidth / 2, window.innerHeight * 0.25, true);
+        }
       }
-    } else if ('Notification' in window) {
-      const perm = await Notification.requestPermission();
-      if (perm !== 'granted') alert('Notification permission denied.');
+      api.save();
     }
-  } catch (e) {
-    console.warn(e);
-    alert('Could not enable push: ' + (e && e.message ? e.message : e));
-  }
-  api.checkAndNotify();
-  api.render();
-};
 
+    root.querySelectorAll('.tp-log').forEach(b => b.onclick = () => logOne(parseInt(b.dataset.i), b));
+    root.querySelectorAll('.tp-complete').forEach(b => b.onclick = () => toggleComplete(parseInt(b.dataset.i)));
+    root.querySelectorAll('.tp-del').forEach(b => b.onclick = () => api.deleteItemAt(parseInt(b.dataset.i)));
 
-{
-  const nh = document.getElementById('tp-notify-hour');
-  const nd = document.getElementById('tp-notify-digest');
-  if(nh) nh.onchange = ()=>{ api.setNotifyHour(Number(nh.value)); };
-  if(nd) nd.onchange = ()=>{ api.notifyDigest = !!nd.checked; api.savePrefs(); };
-}
-
-root.querySelectorAll('.tp-course-color').forEach(inp=>{
-  inp.onchange = ()=>{
-    const key = inp.dataset.course.trim().toLowerCase();
-    api.courseColors[key] = inp.value;
-    api.saveCourseColors();
-    api.render();
-  };
-});
-root.querySelectorAll('.tp-course-rename').forEach(inp=>{
-  inp.addEventListener('change', ()=>{
-    const oldName = inp.dataset.course;
-    const newName = inp.value.trim();
-    if(newName && newName!==oldName) api.renameCourse(oldName, newName);
-  });
-});
-
-root.querySelectorAll('.tp-today-clickable[data-item-i]').forEach(row=>{
-  row.onclick = ()=>{
-    const targetId = 'tp-card-'+row.dataset.itemI;
-    if(!api.scrollToAndHighlight(targetId, 'top')){
-      // Probably hidden by an active search filter — clear it and retry after re-render.
-      if(api.searchTerm){ api.searchTerm = ''; api.savePrefs(); }
-      api.pendingScrollId = targetId;
-      api.pendingScrollAlign = 'top';
+    /* ---- Tab bar ---- */
+    root.querySelectorAll('.tp-tab[data-tab]').forEach(b => b.onclick = () => {
+      api.tab = b.dataset.tab;
+      api.savePrefs();
       api.render();
-    }
-  };
-});
-
-root.querySelectorAll('.tp-subtask-toggle').forEach(cb=>cb.onchange=()=>{
-  const it = api.items[cb.dataset.i];
-  it.subtasks[cb.dataset.si].done = cb.checked;
-  if(api.touchItem) api.touchItem(it); else it.updatedAt = Date.now();
-  api.save();
-});
-
-root.querySelectorAll('.tp-log').forEach(b=>b.onclick=()=>{
-  const it = api.items[b.dataset.i];
-  const workBefore = api.hasTodayWorkRemaining(); // also refreshes it.dailyTarget as a side effect
-  const metBefore = window.TPTodayLogic.met(it);
-  const prevDone = it.done;
-  it.done = Math.min(it.done+1, it.total);
-  it.today = (it.today||0) + (it.done - prevDone);
-    if(api.touchItem) api.touchItem(it); else it.updatedAt = Date.now();
-  const reachedDailyTarget = !metBefore && window.TPTodayLogic.met(it);
-  const fullyCompleted = it.done>=it.total && !it.completed;
-  if(fullyCompleted){
-    it.completed = true;
-    it.completedAt = api.today();
-    if(it.recurring) api.items.push(api.makeRecurringClone(it));
-  }
-    if(fullyCompleted || reachedDailyTarget){
-    const rect = b.getBoundingClientRect();
-    const workAfter = api.hasTodayWorkRemaining();
-    if(workBefore && !workAfter){
-      // Day just finished — log it before save/render so the streak 🔥
-      // text appears on this same paint (not the next interaction).
-      if(api.logDayComplete) api.logDayComplete();
-      api.triggerCelebration(window.innerWidth/2, window.innerHeight*0.25, true);
-    } else {
-      api.triggerCelebration(rect.left + rect.width/2, rect.top + rect.height/2, false);
-    }
-  }
-  api.save();
-});
-root.querySelectorAll('.tp-move-up').forEach(b=>b.onclick=()=>{
-  const pos = parseInt(b.dataset.pos);
-  if(pos<=0) return;
-  const curr = api.list[pos].it, prev = api.list[pos-1].it;
-  const tmp = curr.order; curr.order = prev.order; prev.order = tmp;
-  api.save();
-});
-root.querySelectorAll('.tp-move-down').forEach(b=>b.onclick=()=>{
-  const pos = parseInt(b.dataset.pos);
-  if(pos>=api.list.length-1) return;
-  const curr = api.list[pos].it, next = api.list[pos+1].it;
-  const tmp = curr.order; curr.order = next.order; next.order = tmp;
-  api.save();
-});
-
-root.querySelectorAll('.tp-drag-handle').forEach(handle=>{
-  handle.addEventListener('dragstart', (e)=>{
-    api.dragSrcIndex = parseInt(handle.dataset.i);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(api.dragSrcIndex));
-    const card = handle.closest('.tp-card');
-    if(card) card.classList.add('tp-dragging');
-  });
-  handle.addEventListener('dragend', ()=>{
-    root.querySelectorAll('.tp-card.tp-dragging').forEach(c=>c.classList.remove('tp-dragging'));
-    root.querySelectorAll('.tp-card.tp-drop-target').forEach(c=>c.classList.remove('tp-drop-target'));
-    api.dragSrcIndex = null;
-  });
-});
-root.querySelectorAll('.tp-card[data-i]').forEach(card=>{
-  card.addEventListener('dragover', (e)=>{
-    if(api.dragSrcIndex===null) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    card.classList.add('tp-drop-target');
-  });
-  card.addEventListener('dragleave', ()=>{
-    card.classList.remove('tp-drop-target');
-  });
-  card.addEventListener('drop', (e)=>{
-    e.preventDefault();
-    card.classList.remove('tp-drop-target');
-    const targetIdx = parseInt(card.dataset.i);
-    if(api.dragSrcIndex===null || targetIdx===api.dragSrcIndex) return;
-    api.reorderByDrag(api.dragSrcIndex, targetIdx, api.list);
-    api.dragSrcIndex = null;
-  });
-});
-root.querySelectorAll('.tp-edit').forEach(b=>b.onclick=()=>{
-  api.editIndex = parseInt(b.dataset.i); api.pendingFocus = 'none'; api.render();
-});
-root.querySelectorAll('.tp-complete').forEach(b=>b.onclick=()=>{
-  const it = api.items[b.dataset.i];
-  const completing = !it.completed;
-  const workBefore = api.hasTodayWorkRemaining();
-  const prevDone = it.done;
-  it.completed = !it.completed;
-  if(it.completed){
-    it.done = it.total;
-    it.today = (it.today||0) + Math.max(it.done - prevDone, 0);
-    it.completedAt = api.today();
-    if(it.recurring) api.items.push(api.makeRecurringClone(it));
-  } else {
-    it.completedAt = null;
-    it.archived = false;
-  }
-  if(api.touchItem) api.touchItem(it); else it.updatedAt = Date.now();
-    if(completing){
-    const rect = b.getBoundingClientRect();
-    const workAfter = api.hasTodayWorkRemaining();
-    if(workBefore && !workAfter){
-      // Day just finished — log it before save/render so the streak 🔥
-      // text appears on this same paint (not the next interaction).
-      if(api.logDayComplete) api.logDayComplete();
-      api.triggerCelebration(window.innerWidth/2, window.innerHeight*0.25, true);
-    } else {
-      api.triggerCelebration(rect.left + rect.width/2, rect.top + rect.height/2, false);
-    }
-  }
-  api.save();
-});
-root.querySelectorAll('.tp-del').forEach(b=>b.onclick=()=>{
-  api.deleteItemAt(parseInt(b.dataset.i));
-});
-
-// Restore focus to whatever the user was interacting with before this api.render.
-if(api.pendingFocus === 'title'){
-  const t = document.getElementById('tp-title');
-  if(t) t.focus();
-} else if(api.pendingFocus){
-  const el = document.getElementById(api.pendingFocus.id);
-  if(el){
-    el.focus();
-    if(api.pendingFocus.selStart!=null && el.setSelectionRange){
-      try{ el.setSelectionRange(api.pendingFocus.selStart, api.pendingFocus.selEnd); }catch(e){}
-    }
-  }
-}
-api.pendingFocus = null;
-
-if(api.pendingScrollId){
-  api.scrollToAndHighlight(api.pendingScrollId, api.pendingScrollAlign);
-  api.pendingScrollId = null;
-  api.pendingScrollAlign = 'end';
-}
-
-root.querySelectorAll('details.tp-export-dropdown').forEach(d=>{
-  d.addEventListener('toggle', ()=>{
-    if(!d.open) return;
-    requestAnimationFrame(()=>{
-      const panel = d.querySelector('.tp-dropdown-panel');
-      if(!panel) return;
-      const overflow = panel.getBoundingClientRect().bottom - window.innerHeight;
-      if(overflow > 0) window.scrollBy({top: overflow + 16, behavior:'smooth'});
     });
-  });
-});
+    const addToggle = document.getElementById('tp-add-toggle');
+    if (addToggle) addToggle.onclick = () => { api.openAddSheet(); api.render(); };
 
+    /* ---- Today screen: tap a row body to open the quick-action menu ---- */
+    root.querySelectorAll('.tp-t-row, .tp-t-ahead-row').forEach(row => {
+      row.onclick = (e) => {
+        if (e.target.closest('.tp-t-action') || e.target.closest('.tp-t-ahead-more')) return;
+        const idx = Number(row.dataset.itemI);
+        if (!Number.isNaN(idx)) { api.menuFor = idx; api.render(); }
+      };
+    });
+
+    /* ---- All screen ---- */
+    {
+      const search = document.getElementById('tp-a-search');
+      if (search) search.oninput = (e) => {
+        api.pendingFocus = { id: 'tp-a-search', selStart: e.target.selectionStart, selEnd: e.target.selectionEnd };
+        api.searchTerm = e.target.value;
+        api.savePrefs();
+        api.render();
+      };
+    }
+    const searchClear = document.getElementById('tp-a-search-clear');
+    if (searchClear) searchClear.onclick = () => {
+      api.searchTerm = '';
+      api.savePrefs();
+      api.pendingFocus = { id: 'tp-a-search', selStart: 0, selEnd: 0 };
+      api.render();
+    };
+    root.querySelectorAll('.tp-a-chip[data-sort]').forEach(b => b.onclick = () => {
+      api.allSortMode = b.dataset.sort;
+      api.savePrefs();
+      api.render();
+    });
+    root.querySelectorAll('.tp-a-chip[data-course-filter]').forEach(b => b.onclick = () => {
+      const val = b.dataset.courseFilter;
+      api.allFilterCourse = (val && val.toLowerCase() === (api.allFilterCourse || '').toLowerCase()) ? '' : val;
+      api.savePrefs();
+      api.render();
+    });
+
+    // Drag to reorder: dragging always switches the All tab into its
+    // manual/custom order (see js/all-logic.js) so the reorder is visible.
+    root.querySelectorAll('.tp-a-drag').forEach(handle => {
+      handle.addEventListener('dragstart', (e) => {
+        api.dragSrcIndex = parseInt(handle.dataset.i);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(api.dragSrcIndex));
+        const card = handle.closest('.tp-a-card');
+        if (card) card.classList.add('tp-dragging');
+      });
+      handle.addEventListener('dragend', () => {
+        root.querySelectorAll('.tp-a-card.tp-dragging').forEach(c => c.classList.remove('tp-dragging'));
+        root.querySelectorAll('.tp-a-card.tp-drop-target').forEach(c => c.classList.remove('tp-drop-target'));
+        api.dragSrcIndex = null;
+      });
+    });
+    root.querySelectorAll('.tp-a-card[data-i]').forEach(card => {
+      card.addEventListener('dragover', (e) => {
+        if (api.dragSrcIndex === null) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        card.classList.add('tp-drop-target');
+      });
+      card.addEventListener('dragleave', () => card.classList.remove('tp-drop-target'));
+      card.addEventListener('drop', (e) => {
+        e.preventDefault();
+        card.classList.remove('tp-drop-target');
+        const targetIdx = parseInt(card.dataset.i);
+        if (api.dragSrcIndex === null || targetIdx === api.dragSrcIndex) return;
+        if (api.allSortMode !== 'custom') { api.allSortMode = 'custom'; api.savePrefs(); }
+        api.reorderByDrag(api.dragSrcIndex, targetIdx, api.allList);
+        api.dragSrcIndex = null;
+      });
+    });
+
+    // Long-press an All-tab card (not its drag handle) to open the quick-action menu.
+    root.querySelectorAll('.tp-a-card[data-i]').forEach(card => {
+      let timer = null, startX = 0, startY = 0;
+      const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+      card.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.tp-a-drag')) return;
+        startX = e.clientX; startY = e.clientY;
+        timer = setTimeout(() => {
+          timer = null;
+          api.menuFor = parseInt(card.dataset.i);
+          api.render();
+        }, LONG_PRESS_MS);
+      });
+      card.addEventListener('pointermove', (e) => {
+        if (!timer) return;
+        if (Math.abs(e.clientX - startX) > LONG_PRESS_MOVE_TOLERANCE || Math.abs(e.clientY - startY) > LONG_PRESS_MOVE_TOLERANCE) cancel();
+      });
+      ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt => card.addEventListener(evt, cancel));
+    });
+
+    /* ---- Quick-action menu ---- */
+    const qmenuBackdrop = document.getElementById('tp-qmenu-backdrop');
+    if (qmenuBackdrop) qmenuBackdrop.addEventListener('click', (e) => {
+      if (e.target === qmenuBackdrop) { api.menuFor = null; api.render(); }
+    });
+    const qmLog = document.getElementById('tp-qm-log');
+    if (qmLog) qmLog.onclick = () => { logOne(parseInt(qmLog.dataset.i), qmLog); api.menuFor = null; api.render(); };
+    const qmComplete = document.getElementById('tp-qm-complete');
+    if (qmComplete) qmComplete.onclick = () => { toggleComplete(parseInt(qmComplete.dataset.i)); api.menuFor = null; api.render(); };
+    const qmPush = document.getElementById('tp-qm-push');
+    if (qmPush) qmPush.onclick = () => {
+      const it = api.items[parseInt(qmPush.dataset.i)];
+      if (it) { it.due = api.addDays(it.due, 1); api.touchItem(it); api.menuFor = null; api.save(); }
+    };
+    const qmEdit = document.getElementById('tp-qm-edit');
+    if (qmEdit) qmEdit.onclick = () => {
+      const idx = parseInt(qmEdit.dataset.i);
+      api.menuFor = null;
+      api.openAddSheet(idx);
+      api.render();
+    };
+    const qmDelete = document.getElementById('tp-qm-delete');
+    if (qmDelete) qmDelete.onclick = () => {
+      const idx = parseInt(qmDelete.dataset.i);
+      api.menuFor = null;
+      api.deleteItemAt(idx);
+    };
+
+    /* ---- Week screen ---- */
+    root.querySelectorAll('.tp-w-col[data-day]').forEach(col => col.onclick = () => {
+      api.weekSelDay = Number(col.dataset.day);
+      api.render();
+    });
+
+    /* ---- Settings screen ---- */
+    root.querySelectorAll('.tp-s-segment[data-theme-choice]').forEach(b => b.onclick = () => {
+      api.theme = b.dataset.themeChoice;
+      api.applyTheme();
+      api.savePrefs();
+      api.render();
+    });
+    const notifyDigestToggle = document.getElementById('tp-notify-digest');
+    if (notifyDigestToggle) notifyDigestToggle.onclick = () => {
+      api.notifyDigest = !api.notifyDigest;
+      api.savePrefs();
+      api.render();
+    };
+    const cycleHourBtn = document.getElementById('tp-cycle-hour');
+    if (cycleHourBtn) cycleHourBtn.onclick = () => {
+      api.setNotifyHour((Number(cycleHourBtn.dataset.hour) + 1) % 24);
+    };
+    const notifyBtn = document.getElementById('tp-enable-notify');
+    if (notifyBtn) notifyBtn.onclick = async () => {
+      try {
+        if (window.tpSync && window.tpSync.enablePush) {
+          const res = await window.tpSync.enablePush(api.notifyHour);
+          if (res.ok) api.showToast('Reminders on — including when the app is closed');
+          else if (res.reason === 'missing-vapid') alert(res.message || 'Add your VAPID key to js/fcm-config.js');
+          else if (res.reason === 'denied') alert('Notification permission denied. You can enable it in browser settings.');
+          else if (res.reason === 'unsupported') alert('Push notifications are not supported in this browser.');
+        } else if ('Notification' in window) {
+          const perm = await Notification.requestPermission();
+          if (perm !== 'granted') alert('Notification permission denied.');
+        }
+      } catch (e) {
+        console.warn(e);
+        alert('Could not enable push: ' + (e && e.message ? e.message : e));
+      }
+      api.checkAndNotify();
+      api.render();
+    };
+    const manageBtn = document.getElementById('tp-manage-courses');
+    if (manageBtn) manageBtn.onclick = () => { api.tab = 'courses'; api.savePrefs(); api.render(); };
+    const exportBtn = document.getElementById('tp-export');
+    if (exportBtn) exportBtn.onclick = api.exportData;
+    const exportIcsBtn = document.getElementById('tp-export-ics');
+    if (exportIcsBtn) exportIcsBtn.onclick = api.exportIcs;
+    const importEl = document.getElementById('tp-import');
+    if (importEl) importEl.onchange = (e) => { if (e.target.files[0]) api.importData(e.target.files[0]); };
+    const clearCompletedBtn = document.getElementById('tp-clear-completed');
+    if (clearCompletedBtn) clearCompletedBtn.onclick = api.clearCompleted;
+
+    /* ---- Dev toolbar (unchanged from the desktop app) ---- */
+    const devToolbarBtn = document.getElementById('tp-dev-toolbar-btn');
+    if (devToolbarBtn) devToolbarBtn.onclick = () => { api.devPanelOpen = !api.devPanelOpen; api.saveDevPanelOpen(); api.render(); };
+    const devTriggerNotify = document.getElementById('tp-dev-trigger-notify');
+    if (devTriggerNotify) devTriggerNotify.onclick = () => {
+      if (!('Notification' in window)) { alert('This browser does not support desktop notifications.'); return; }
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') new Notification('🧪 Dev ping', { body: 'A little planner nudge just for testing ✨', icon: 'icons/icon-192.png' });
+        else alert('Notification permission denied.');
+      });
+    };
+    const devAdvance1 = document.getElementById('tp-dev-advance-1');
+    if (devAdvance1) devAdvance1.onclick = () => {
+      const offset = Number(localStorage.getItem(api.DAY_OFFSET_KEY) || 0);
+      localStorage.setItem(api.DAY_OFFSET_KEY, String(offset + 1));
+      alert('Simulated moving forward 1 day. Reloading...');
+      location.reload();
+    };
+    const devAdvance7 = document.getElementById('tp-dev-advance-7');
+    if (devAdvance7) devAdvance7.onclick = () => {
+      const offset = Number(localStorage.getItem(api.DAY_OFFSET_KEY) || 0);
+      localStorage.setItem(api.DAY_OFFSET_KEY, String(offset + 7));
+      alert('Simulated moving forward 7 days. Reloading...');
+      location.reload();
+    };
+    const devReset = document.getElementById('tp-dev-reset');
+    const devResetConfirm = document.getElementById('tp-dev-reset-confirm');
+    if (devReset && devResetConfirm) {
+      devReset.onclick = () => { devResetConfirm.style.display = 'block'; };
+      const yesBtn = document.getElementById('tp-dev-reset-confirm-yes');
+      const noBtn = document.getElementById('tp-dev-reset-confirm-no');
+      if (yesBtn) yesBtn.onclick = () => { localStorage.clear(); sessionStorage.clear(); location.reload(); };
+      if (noBtn) noBtn.onclick = () => { devResetConfirm.style.display = 'none'; };
+    }
+    const devExit = document.getElementById('tp-dev-exit');
+    if (devExit) devExit.onclick = () => { api.deactivateDevMode(); api.render(); };
+
+    /* ---- Courses screen ---- */
+    root.querySelectorAll('.tp-c-name[data-course-id]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const id = inp.dataset.courseId;
+        const newName = inp.value.trim();
+        const course = window.TPCourses.byId(api.courses, id);
+        if (course && newName && newName !== course.name) {
+          if ((api.allFilterCourse || '').toLowerCase() === course.name.toLowerCase()) api.allFilterCourse = newName;
+          window.TPCourses.renameCourse(api.items, api.courses, id, newName);
+          api.saveCourses();
+          api.save();
+        } else {
+          api.render();
+        }
+      });
+    });
+    root.querySelectorAll('.tp-c-swatch[data-course-id]').forEach(sw => sw.onclick = () => {
+      window.TPCourses.setCourseColor(api.courses, sw.dataset.courseId, sw.dataset.color);
+      api.saveCourses();
+      api.render();
+    });
+    root.querySelectorAll('[data-delete-course]').forEach(b => b.onclick = () => {
+      const id = b.dataset.deleteCourse;
+      const course = window.TPCourses.byId(api.courses, id);
+      if (course && (api.allFilterCourse || '').toLowerCase() === course.name.toLowerCase()) api.allFilterCourse = '';
+      window.TPCourses.deleteCourse(api.courses, id);
+      api.saveCourses();
+      api.render();
+    });
+    const newCourseNameInput = document.getElementById('tp-c-new-name');
+    if (newCourseNameInput) newCourseNameInput.oninput = (e) => {
+      api.newCourseName = e.target.value;
+      api.pendingFocus = { id: 'tp-c-new-name', selStart: e.target.selectionStart, selEnd: e.target.selectionEnd };
+      api.render();
+    };
+    root.querySelectorAll('.tp-c-new-swatch').forEach(sw => sw.onclick = () => { api.newCourseColor = sw.dataset.color; api.render(); });
+    const addCourseBtn = document.getElementById('tp-c-add');
+    if (addCourseBtn) addCourseBtn.onclick = () => {
+      const created = window.TPCourses.addCourse(api.courses, api.newCourseName, api.newCourseColor);
+      if (created) {
+        api.lastAddedCourseId = created.id;
+        api.newCourseName = '';
+        api.newCourseColor = window.TPCourses.nextPaletteColor(api.courses);
+        api.saveCourses();
+      }
+      api.render();
+    };
+    const backBtn = document.getElementById('tp-c-back');
+    if (backBtn) backBtn.onclick = () => { api.tab = 'settings'; api.savePrefs(); api.render(); };
+
+    /* ---- Add sheet ---- */
+    const sheetBackdrop = document.getElementById('tp-sheet-backdrop');
+    if (sheetBackdrop) sheetBackdrop.addEventListener('click', (e) => {
+      if (e.target === sheetBackdrop) { api.closeAddSheet(); api.render(); }
+    });
+    const sheetCancel = document.getElementById('tp-sheet-cancel');
+    if (sheetCancel) sheetCancel.onclick = () => { api.closeAddSheet(); api.render(); };
+    const addTitle = document.getElementById('tp-add-title');
+    if (addTitle) addTitle.oninput = (e) => {
+      api.draft.title = e.target.value;
+      api.pendingFocus = { id: 'tp-add-title', selStart: e.target.selectionStart, selEnd: e.target.selectionEnd };
+      api.render();
+    };
+    const addUnit = document.getElementById('tp-add-unit');
+    if (addUnit) addUnit.oninput = (e) => {
+      api.draft.unit = e.target.value;
+      api.pendingFocus = { id: 'tp-add-unit', selStart: e.target.selectionStart, selEnd: e.target.selectionEnd };
+      api.render();
+    };
+    const addDue = document.getElementById('tp-add-due');
+    if (addDue) addDue.oninput = (e) => { api.draft.due = e.target.value; api.pendingFocus = { id: 'tp-add-due' }; api.render(); };
+    const addAmount = document.getElementById('tp-add-amount');
+    if (addAmount) addAmount.oninput = (e) => { api.draft.amount = Math.max(1, parseInt(e.target.value) || 1); api.pendingFocus = { id: 'tp-add-amount' }; api.render(); };
+    const addMinus = document.getElementById('tp-add-minus');
+    if (addMinus) addMinus.onclick = () => { api.draft.amount = Math.max(1, (Number(api.draft.amount) || 1) - 1); api.render(); };
+    const addPlus = document.getElementById('tp-add-plus');
+    if (addPlus) addPlus.onclick = () => { api.draft.amount = (Number(api.draft.amount) || 1) + 1; api.render(); };
+    const courseTrigger = document.getElementById('tp-add-course-trigger');
+    if (courseTrigger) courseTrigger.onclick = () => { api.pickerOpen = !api.pickerOpen; api.render(); };
+    root.querySelectorAll('.tp-add-course-option[data-course-id]').forEach(opt => opt.onclick = () => {
+      api.draft.courseId = opt.dataset.courseId;
+      api.pickerOpen = false;
+      api.render();
+    });
+    const manageFromSheet = document.getElementById('tp-add-manage-courses');
+    if (manageFromSheet) manageFromSheet.onclick = () => {
+      api.closeAddSheet();
+      api.tab = 'courses';
+      api.savePrefs();
+      api.render();
+    };
+    const addSubmit = document.getElementById('tp-add-submit');
+    if (addSubmit) addSubmit.onclick = () => {
+      const titleEl = document.getElementById('tp-add-title');
+      const dueEl = document.getElementById('tp-add-due');
+      const title = api.draft.title.trim();
+      const due = api.draft.due;
+      [titleEl, dueEl].forEach(el => el && el.classList.remove('tp-field-error'));
+      if (!title || !due) {
+        if (!title && titleEl) titleEl.classList.add('tp-field-error');
+        if (!due && dueEl) dueEl.classList.add('tp-field-error');
+        return;
+      }
+      const amount = Math.max(1, Number(api.draft.amount) || 1);
+      const course = window.TPCourses.byId(api.courses, api.draft.courseId);
+      const courseName = course ? course.name : '';
+      const unit = api.draft.unit.trim();
+      if (api.editIndex !== null) {
+        const it = api.items[api.editIndex];
+        it.title = title; it.course = courseName; it.due = due; it.total = amount; it.unit = unit;
+        it.done = Math.min(it.done, amount);
+        api.touchItem(it);
+        if (api.isDevModeTrigger(it.title, it.total)) api.activateDevMode();
+      } else {
+        const maxOrder = api.items.reduce((m, x) => Math.max(m, x.order ?? -1), -1);
+        api.items.push({
+          id: api.newItemId(), title, course: courseName, due, total: amount, unit,
+          notes: '', done: 0, today: 0, completed: false, dependsOn: '', recurring: '',
+          subtasks: [], completedAt: null, createdAt: api.today(), archived: false,
+          order: maxOrder + 1, updatedAt: Date.now(),
+        });
+        if (api.isDevModeTrigger(title, amount)) api.activateDevMode();
+        api.tab = 'today';
+        api.savePrefs();
+      }
+      api.closeAddSheet();
+      api.save();
+    };
+
+    // Restore focus to whatever the user was interacting with before this render.
+    if (api.pendingFocus) {
+      const el = document.getElementById(api.pendingFocus.id);
+      if (el) {
+        el.focus();
+        if (api.pendingFocus.selStart != null && el.setSelectionRange) {
+          try { el.setSelectionRange(api.pendingFocus.selStart, api.pendingFocus.selEnd); } catch (e) {}
+        }
+      }
+    }
+    api.pendingFocus = null;
   }
 
   global.TPBind = { bindEvents };

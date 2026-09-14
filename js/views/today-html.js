@@ -15,7 +15,7 @@
   }
 
   function targetRowHtml(entry, ctx) {
-    const { escapeHtml, courseColorFor, relativeDueLabel, unitLabel, capUnit, TPTodayLogic, itemIndexMap } = ctx;
+    const { escapeHtml, courseColorFor, relativeDueLabel, TPTodayLogic, itemIndexMap } = ctx;
     const it = entry.it;
     const idx = itemIndexMap.get(it);
     const target = TPTodayLogic.dayTarget(it);
@@ -71,7 +71,7 @@
 
   function todayScreenHtml(ctx) {
     const {
-      streak, dateLabel, weekdayLabel, screen, escapeHtml, itemIndexMap,
+      streak, dateLabel, weekdayLabel, screen, escapeHtml,
       totalLoggedToday,
     } = ctx;
     const targets = screen.targets;

@@ -185,6 +185,15 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     return { ...(remoteColors || {}), ...(localColors || {}) };
   }
 
+  // Same union-by-id philosophy as mergeCourseColors: courses carry no
+  // updatedAt of their own, so on a same-id conflict local just wins.
+  function mergeCourses(localCourses, remoteCourses) {
+    const map = new Map();
+    (remoteCourses || []).forEach((c) => map.set(c.id, c));
+    (localCourses || []).forEach((c) => map.set(c.id, c));
+    return [...map.values()];
+  }
+
   function mergePrefs(localPrefs, remotePrefs) {
     // Prefer local for same keys (device may have just changed UI prefs)
     return { ...(remotePrefs || {}), ...(localPrefs || {}) };
@@ -209,6 +218,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     return {
       items,
       courseColors: JSON.parse(localStorage.getItem("tp-course-colors") || "{}"),
+      courses: JSON.parse(localStorage.getItem("tp-courses") || "[]"),
       dayCompleteLog: JSON.parse(localStorage.getItem("tp-day-complete-log") || "[]"),
       deletedLog,
       prefs: syncPrefs,
@@ -219,6 +229,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     applyingRemote = true;
     if (data.items) localStorage.setItem("tp-assignments", JSON.stringify(data.items));
     if (data.courseColors) localStorage.setItem("tp-course-colors", JSON.stringify(data.courseColors));
+    if (data.courses) localStorage.setItem("tp-courses", JSON.stringify(data.courses));
     if (data.dayCompleteLog) localStorage.setItem("tp-day-complete-log", JSON.stringify(data.dayCompleteLog));
     if (data.deletedLog) localStorage.setItem("tp-deleted-log", JSON.stringify(data.deletedLog));
     if (data.prefs) {
@@ -243,6 +254,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     const merged = {
       items,
       courseColors: mergeCourseColors(local.courseColors, remoteData.courseColors),
+      courses: mergeCourses(local.courses, remoteData.courses),
       dayCompleteLog: mergeDayLog(local.dayCompleteLog, remoteData.dayCompleteLog),
       deletedLog,
       prefs: mergePrefs(local.prefs, remoteData.prefs),

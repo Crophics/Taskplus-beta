@@ -55,7 +55,7 @@
     return dayLabels[tied[0].dayIndex];
   }
 
-  function statTiles(ctx, days) {
+  function statTiles(ctx) {
     const { items, today, daysBetween } = ctx;
     const dueThisWeek = items.filter(it => !it.completed && !it.archived && daysBetween(today(), it.due) >= 0 && daysBetween(today(), it.due) <= 6).length;
     const unitsLeft = items.reduce((sum, it) => {
@@ -65,5 +65,31 @@
     return { dueThisWeek, unitsLeft: Math.round(unitsLeft * 10) / 10 };
   }
 
-  global.TPWeekLogic = { paceItemAcrossDays, computePacedLoad, heaviestDayLabel, statTiles };
+  /** Items (with their load share) contributing to one day, for the day-detail card. */
+  function contributionsForDay(ctx, dayIndex) {
+    const { items, today, daysBetween } = ctx;
+    const out = [];
+    items.filter(it => !it.completed && !it.archived).forEach(it => {
+      const contribs = paceItemAcrossDays(it, today(), daysBetween);
+      const forDay = contribs.find(c => c.dayIndex === dayIndex);
+      if (forDay) out.push({ it, load: forDay.load });
+    });
+    return out;
+  }
+
+  function byCourseBreakdown(items, colorFor) {
+    const byCourse = new Map();
+    items.filter(it => !it.archived).forEach(it => {
+      const key = (it.course || '').trim() || 'No course';
+      if (!byCourse.has(key)) byCourse.set(key, { name: key, total: 0, completed: 0 });
+      const c = byCourse.get(key);
+      c.total++;
+      if (it.completed) c.completed++;
+    });
+    return [...byCourse.values()]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(c => ({ ...c, pct: c.total ? Math.round((c.completed / c.total) * 100) : 0, color: colorFor(c.name) }));
+  }
+
+  global.TPWeekLogic = { paceItemAcrossDays, computePacedLoad, heaviestDayLabel, statTiles, contributionsForDay, byCourseBreakdown };
 })(typeof window !== 'undefined' ? window : globalThis);

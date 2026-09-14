@@ -1,5 +1,7 @@
 /* app.js — Main Taskplus application
-   Depends on: js/utils.js, js/toast.js, js/html.js, js/theme.js, js/notify.js, js/io.js, js/week-chart.js, js/form.js, js/views/*, js/today-logic.js, js/bind-events.js, js/boot.js, firebase-sync.js
+   Depends on: js/utils.js, js/toast.js, js/html.js, js/theme.js, js/notify.js,
+   js/io.js, js/courses.js, js/all-logic.js, js/week-logic.js, js/views/*,
+   js/today-logic.js, js/bind-events.js, js/boot.js, firebase-sync.js
 */
 (function(){
   /* ---- Storage keys & sync ---- */
@@ -8,7 +10,7 @@
     if(!window.tpSync) return;
     let prefsNow = {};
     try{ prefsNow = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); }catch(e){}
-    const { theme: _theme, todayExpanded: _todayExpanded, tab: _tab, ...syncPrefs } = prefsNow;
+    const { theme: _theme, tab: _tab, ...syncPrefs } = prefsNow;
     window.tpSync.push({
       items,
       courseColors,
@@ -81,56 +83,48 @@
     try{ deletedLog = JSON.parse(localStorage.getItem(DELETED_LOG_KEY)) || []; }catch(e){ deletedLog = []; }
     let p = {};
     try{ p = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); }catch(e){}
-    if(p.sortMode !== undefined) sortMode = p.sortMode;
-    if(p.hideDone !== undefined) hideDone = !!p.hideDone;
-    if(p.showArchived !== undefined) showArchived = !!p.showArchived;
+    if(p.allSortMode !== undefined) allSortMode = p.allSortMode;
+    if(p.searchTerm !== undefined) searchTerm = p.searchTerm;
     if(p.notifyHour !== undefined && Number.isInteger(p.notifyHour)) notifyHour = p.notifyHour;
     if(p.notifyDigest !== undefined) notifyDigest = !!p.notifyDigest;
     render();
   });
   let devMode = localStorage.getItem(DEV_MODE_KEY) === '1';
   let devPanelOpen = localStorage.getItem(DEV_PANEL_KEY) === '1';
-  let editIndex = null;
-  let showForm = false;
-  let showCourseManager = false;
-  // Tracks which element should regain focus after the next render.
-  // Either the string 'title' (focus the form's title field) or
-  // {id, selStart, selEnd} to restore focus + cursor position on a specific input.
+  let editIndex = null; // set while the Add sheet is editing an existing item
+  // Tracks which element should regain focus after the next render, as
+  // {id, selStart, selEnd}.
   let pendingFocus = null;
-  let pendingScrollId = null;
-  let pendingScrollAlign = 'end';
-  let pendingTodayAnim = false;
-  let weekChartAnimated = false;
-  let overdueFilterActive = false;
   let dragSrcIndex = null;
   let celebrationPending = null;
 
   let prefs = {};
   try{ prefs = JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; }catch(e){ prefs = {}; }
-  let sortMode = prefs.sortMode || 'urgency';
-  let hideDone = !!prefs.hideDone;
-  let showArchived = !!prefs.showArchived;
-  let searchTerm = prefs.searchTerm || '';
+  let searchTerm = prefs.searchTerm || ''; // All-tab search text
   let theme = ['dark','light','blue','auto'].includes(prefs.theme) ? prefs.theme : 'blue';
-  let todayExpanded = !!prefs.todayExpanded;
   const TABS = ['today','all','week','settings','courses'];
   let tab = TABS.includes(prefs.tab) ? prefs.tab : 'today';
   let addOpen = false;
   let pickerOpen = false;
-  let menuFor = null; // index into `items`, for the long-press quick-action menu
+  let menuFor = null; // index into `items`, for the quick-action menu
   let allSortMode = prefs.allSortMode || 'urgency';
   let allFilterCourse = '';
   let weekSelDay = 0;
   let draft = null; // in-progress Add-sheet form state, see js/views/add-sheet-html.js
+  let newCourseName = '';
+  let newCourseColor = window.TPCourses.nextPaletteColor(courses);
+  let lastAddedCourseId = null;
   // Which hour (0-23, local time) the server-side digest fires at. Mirrors
   // functions/index.js's own default of 8 for a brand new user who hasn't
   // touched the picker yet.
   let notifyHour = Number.isInteger(prefs.notifyHour) ? prefs.notifyHour : 8;
   let notifyDigest = prefs.notifyDigest !== false; // default on
 
+  // Legacy field: no longer written from this app (see courseColorFor()
+  // below), only read + round-tripped through syncPush so a push from here
+  // doesn't blank it out for the desktop app on the same account.
   let courseColors = {};
   try{ courseColors = JSON.parse(localStorage.getItem(COURSE_COLORS_KEY)) || {}; }catch(e){ courseColors = {}; }
-  function saveCourseColors(){ localStorage.setItem(COURSE_COLORS_KEY, JSON.stringify(courseColors)); syncPush(); }
 
   // Logged only on days where nothing required is left - not just "did
   // something" - so the streak reflects actually staying caught up.
@@ -173,7 +167,7 @@
   pruneDeletedLog();
 
   function savePrefs(){
-    localStorage.setItem(PREFS_KEY, JSON.stringify({sortMode,hideDone,showArchived,searchTerm,theme,todayExpanded,notifyHour,notifyDigest,tab,allSortMode}));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({searchTerm,theme,notifyHour,notifyDigest,tab,allSortMode}));
     syncPush();
   }
 
@@ -190,73 +184,37 @@
   const root = document.getElementById('tp-app');
 
   document.addEventListener('keydown', (e)=>{
-    if(e.key === 'Escape' && (editIndex!==null || showForm)){
-      editIndex = null; showForm = false; render();
-      return;
-    }
-    const tag = document.activeElement ? document.activeElement.tagName : '';
-    const typing = tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT';
-    if(!typing && editIndex===null && !showForm){
-      if(e.key==='n'){
-        e.preventDefault(); showForm = true; pendingFocus = 'title'; render();
-      } else if(e.key==='/'){
-        e.preventDefault();
-        const f = document.getElementById('tp-filter');
-        if(f) f.focus();
-      }
+    if(e.key === 'Escape'){
+      if(menuFor!==null){ menuFor = null; render(); return; }
+      if(addOpen){ closeAddSheet(); render(); return; }
     }
   });
 
-  /* ---- Course colors ---- */
-  const defaultColors = ['#1fae8e','#f0a824','#e8553c','#4361ee','#b83fd1','#2ea9dd','#e0538a'];
-  let currentColorMap = {};
-  function computeCourseColorMap(){
-    const courseKeys = [...new Set(items.map(i=>(i.course||'').trim().toLowerCase()).filter(Boolean))].sort();
-    const map = {};
-    const usedColors = new Set();
-    // Manual overrides get priority and reserve their color.
-    courseKeys.forEach(key=>{
-      if(courseColors[key]){
-        map[key] = courseColors[key];
-        usedColors.add(courseColors[key]);
-      }
-    });
-    // Everyone else gets the first unused color from the palette.
-    // Only once every color is taken do we fall back to hash-based reuse.
-    courseKeys.forEach(key=>{
-      if(map[key]) return;
-      let assigned = defaultColors.find(c=>!usedColors.has(c));
-      if(!assigned){
-        let h=0; for(let c of key) h = (h*31 + c.charCodeAt(0))>>>0;
-        assigned = defaultColors[h % defaultColors.length];
-      }
-      map[key] = assigned;
-      usedColors.add(assigned);
-    });
-    return map;
-  }
-  function courseColor(course){
-    const key = (course||'').trim().toLowerCase();
-    if(!key) return '#888';
-    return currentColorMap[key] || '#888';
-  }
+  // Rendering reads colors from the `courses` collection (js/courses.js) via
+  // courseColorFor() below, backed by the `courses` collection.
+  function courseColorFor(name){ return window.TPCourses.colorFor(courses, name); }
   const contrastTextColor = window.TP.contrastTextColor;
 
-  function renameCourse(oldName, newName){
-    const oldKey = oldName.trim().toLowerCase();
-    const newKey = newName.trim().toLowerCase();
-    items.forEach(it=>{
-      if((it.course||'').trim().toLowerCase()===oldKey) it.course = newName.trim();
-    });
-    if(oldKey!==newKey && courseColors[oldKey]){
-      courseColors[newKey] = courseColors[oldKey];
-      delete courseColors[oldKey];
-      saveCourseColors();
+  function openAddSheet(idx){
+    if(idx!=null && items[idx]){
+      const it = items[idx];
+      const course = window.TPCourses.byName(courses, it.course);
+      editIndex = idx;
+      draft = { title: it.title, courseId: course ? course.id : null, due: it.due, amount: it.total, unit: it.unit || '' };
+    } else {
+      editIndex = null;
+      const preselected = lastAddedCourseId && window.TPCourses.byId(courses, lastAddedCourseId) ? lastAddedCourseId : null;
+      draft = { title: '', courseId: preselected, due: '', amount: 1, unit: '' };
     }
-    save();
+    pickerOpen = false;
+    addOpen = true;
   }
-
-  const scrollToAndHighlight = window.TP.scrollToAndHighlight;
+  function closeAddSheet(){
+    addOpen = false;
+    pickerOpen = false;
+    editIndex = null;
+    draft = null;
+  }
 
   const burstConfetti = window.TP.burstConfetti;
   function save(){
@@ -440,7 +398,7 @@
     return {
       id: newItemId(),
       title: it.title, course: it.course, due: nextDueDate(it.due, it.recurring),
-      total: it.total, unit: it.unit, notes: it.notes, done: 0, completed: false,
+      total: it.total, unit: it.unit, notes: it.notes, done: 0, today: 0, completed: false,
       dependsOn: '', recurring: it.recurring,
       subtasks: (it.subtasks||[]).map(s=>({text:s.text, done:false})),
       completedAt: null, createdAt: today(), archived: false, order: maxOrder+1,
@@ -493,14 +451,6 @@
     });
   }
 
-  function dependsOptionsHtml(course, selected, excludeItem){
-    return window.TPForm.dependsOptionsHtml(items, course, selected, excludeItem);
-  }
-
-  function formHtml(existing){
-    return window.TPForm.formHtml(items, existing);
-  }
-
   function exportData(){
     window.TPIo.exportData(items);
   }
@@ -509,46 +459,6 @@
   }
   function importData(file){
     window.TPIo.importData(file, (data)=>{ items = data; save(); });
-  }
-  const linkifyNotes = window.TPHtml.linkifyNotes;
-
-  function weekChartHtml(summaryText, animate){
-    return window.TPWeekChart.weekChartHtml({
-      items, summaryText, animate, today, addDays, courseColor
-    });
-  }
-
-  function getDailyStreakNotice(){
-    const todayKey = today();
-    const seen = localStorage.getItem('tp-streak-banner-seen-date');
-    const dismissed = localStorage.getItem('tp-streak-banner-dismissed-date');
-    if(seen === todayKey || dismissed === todayKey) return null;
-
-    const streak = currentStreak();
-    if(streak > 0){
-      return {
-        message: `Your ${streak}-day streak is still active. Keep the momentum going today.`
-      };
-    }
-
-    // Only announce "streak ended" when a real streak just broke: the day
-    // before yesterday is logged (streak was alive) but yesterday is not
-    // (missed that day). Empty installs, imports with no recent history, and
-    // streaks that died days ago must not show this banner.
-    const yesterday = addDays(todayKey, -1);
-    const dayBeforeYesterday = addDays(todayKey, -2);
-    const daySet = new Set(dayCompleteLog);
-    const justEnded = daySet.has(dayBeforeYesterday) && !daySet.has(yesterday);
-    if(!justEnded) return null;
-
-    return {
-      message: 'Your streak ended today. Reset your focus and build it back tomorrow.'
-    };
-  }
-
-  function dismissDailyStreakNotice(){
-    localStorage.setItem('tp-streak-banner-dismissed-date', today());
-    localStorage.setItem('tp-streak-banner-seen-date', today());
   }
 
   // Computes which items are "required today" (multi-part items that still need
@@ -570,117 +480,87 @@
     return window.TPTodayLogic.hasTodayWorkRemaining(todayLogicCtx());
   }
 
+  function allGroups(){
+    return window.TPAllLogic.buildGroups({
+      items, query: searchTerm, sortMode: allSortMode, filterCourse: allFilterCourse,
+      isLocked, today, daysBetween,
+    });
+  }
 
   /* ---- Render ---- */
   function render(){
-    currentColorMap = computeCourseColorMap();
     const V = window.TPViews;
-    // Check for day-completion BEFORE computing the streak text below, so
-    // finishing your last task shows the updated streak instantly instead
-    // of waiting until the next render.
-    if(computeTodayPanel().allDoneToday) logDayComplete();
-    let html = '';
-    html += V.topbarHtml({ searchTerm, sortMode });
-
-    const overdueCount = items.filter(it=>!it.completed && !it.archived && !isLocked(it) && daysBetween(today(), it.due)<0).length;
-    html += V.overdueBannerHtml({ overdueCount, overdueFilterActive });
-
-    const totalActive = items.filter(i=>!i.completed).length;
-    const totalCompleted = items.filter(i=>i.completed).length;
-    const streak = currentStreak();
-    const streakText = streak > 0 ? `${streak}-day streak 🔥` : '';
-    const summaryText = `${totalActive} active \u00b7 ${totalCompleted} completed${streak>0? ' \u00b7 '+streakText : ''}`;
-
-    html += weekChartHtml(summaryText, !weekChartAnimated);
-    weekChartAnimated = true;
-
-    html += V.streakBannerHtml({ streakNotice: getDailyStreakNotice() });
-
-    let list = items.map((it,i)=>({it,i}));
-    if(!showArchived) list = list.filter(x=>!x.it.archived);
-    if(hideDone) list = list.filter(x=>!x.it.completed);
-    if(overdueFilterActive) list = list.filter(x=>!x.it.completed && !isLocked(x.it) && daysBetween(today(), x.it.due)<0);
-    if(searchTerm){
-      const q = searchTerm.toLowerCase();
-      list = list.filter(x=>
-        (x.it.title||'').toLowerCase().includes(q) ||
-        (x.it.course||'').toLowerCase().includes(q) ||
-        (x.it.notes||'').toLowerCase().includes(q)
-      );
-    }
-    function sortPriority(it){ return isLocked(it) ? 1 : (it.completed ? 2 : 0); }
-
-    if(sortMode==='custom') list.sort((a,b)=>{
-      const pa=sortPriority(a.it), pb=sortPriority(b.it);
-      if(pa!==pb) return pa-pb;
-      return (a.it.order ?? a.i) - (b.it.order ?? b.i);
-    });
-    else if(sortMode==='due') list.sort((a,b)=>{
-      const pa=sortPriority(a.it), pb=sortPriority(b.it);
-      if(pa!==pb) return pa-pb;
-      return a.it.due.localeCompare(b.it.due);
-    });
-    else list.sort((a,b)=>{
-      const pa=sortPriority(a.it), pb=sortPriority(b.it);
-      if(pa!==pb) return pa-pb;
-      return daysBetween(today(),a.it.due) - daysBetween(today(),b.it.due);
-    });
-
-    const panel = computeTodayPanel();
-    const { requiredTight, requiredPace, optionalBuckets, hasRequired, pickBuckets, allDoneToday } = panel;
+    const escapeHtml = window.TPHtml.escapeHtml;
     const itemIndexMap = new Map(items.map((it,idx)=>[it, idx]));
+    // Check for day-completion BEFORE computing the streak below, so
+    // finishing your last task shows the updated streak on this same paint.
+    const panel = computeTodayPanel();
+    if(panel.allDoneToday) logDayComplete();
+    const streak = currentStreak();
 
-    const todayResult = V.todayPanelHtml({
-      itemIndexMap, todayExpanded, requiredTight, requiredPace, optionalBuckets,
-      pickBuckets, hasRequired, allDoneToday, onAllDone: logDayComplete,
-      relativeDueLabel, fmt, unitLabel, capUnit,
-    });
-    const requiredItemSet = todayResult.requiredItemSet;
-    html = todayResult.html + html;
-
-    if(list.length===0){
-      html += V.emptyStateHtml({ itemsLength: items.length, searchTerm, hideDone, overdueFilterActive });
+    let screenHtml = '';
+    if(tab==='today'){
+      const screen = window.TPTodayLogic.computeTodayScreen(panel);
+      const totalLoggedToday = items.reduce((s,it)=> s + (it.today||0), 0);
+      const d = window.TP.asDate(today());
+      screenHtml = V.todayScreenHtml({
+        streak, totalLoggedToday, screen, escapeHtml, itemIndexMap,
+        dateLabel: d.toLocaleDateString(undefined,{month:'long',day:'numeric'}),
+        weekdayLabel: d.toLocaleDateString(undefined,{weekday:'long'}),
+        courseColorFor, relativeDueLabel, unitLabel, capUnit,
+        TPTodayLogic: window.TPTodayLogic,
+      });
+    } else if(tab==='all'){
+      const groups = allGroups();
+      screenHtml = V.allScreenHtml({
+        escapeHtml, searchTerm, sortMode: allSortMode, filterCourse: allFilterCourse,
+        courses, groups, itemsLength: items.filter(i=>!i.archived).length,
+        isLocked, daysBetween, today, urgencyClass, relativeDueLabel, fmt, unitLabel, capUnit,
+        courseColorFor, contrastTextColor,
+      });
+    } else if(tab==='week'){
+      const weekCtx = { items, today, daysBetween };
+      const days = window.TPWeekLogic.computePacedLoad(weekCtx);
+      const dayLabels = days.map((_,i)=> window.TP.asDate(addDays(today(),i)).toLocaleDateString(undefined,{weekday:'long'}));
+      const stats = window.TPWeekLogic.statTiles(weekCtx);
+      const heaviestLabel = window.TPWeekLogic.heaviestDayLabel(days, dayLabels);
+      const courseStats = window.TPWeekLogic.byCourseBreakdown(items, courseColorFor);
+      const overdueCount = items.filter(it=>!it.completed && !it.archived && !isLocked(it) && daysBetween(today(), it.due)<0).length;
+      const advice = overdueCount>0
+        ? `${overdueCount} item${overdueCount===1?'':'s'} overdue — clear those first, they're weighing every day's pace down.`
+        : (heaviestLabel==='none' ? 'Nothing paced this week yet. Add a due date to see the load.' : `${heaviestLabel} carries the most load this week — consider pulling some of it forward.`);
+      screenHtml = V.weekScreenHtml({
+        escapeHtml, days, dayLabels, selDay: weekSelDay, stats, heaviestLabel,
+        courseColorFor, courseStats, advice, relativeDueLabel,
+        items, today, daysBetween, TPWeekLogic: window.TPWeekLogic,
+      });
+    } else if(tab==='settings'){
+      screenHtml = V.settingsScreenHtml({
+        theme, notifyHour, notifyDigest, courses, escapeHtml,
+        completedCount: items.filter(i=>i.completed).length,
+        syncLabel: window.tpSyncLabel || 'Sign in to sync',
+      }) + V.devToolbarHtml({ devMode, devPanelOpen });
+    } else if(tab==='courses'){
+      screenHtml = V.coursesScreenHtml({
+        escapeHtml, courses, openCountFor: (name)=> window.TPCourses.openCountForCourse(items, name),
+        draftName: newCourseName, draftColor: newCourseColor,
+      });
     }
 
-    list.forEach(({it,i}, pos)=>{
-      html += V.cardHtml({
-        it, i, pos, listLen: list.length, sortMode, requiredItemSet,
-        isLocked, daysBetween, today, addDays, urgencyClass, relativeDueLabel,
-        fmt, unitLabel, capUnit, courseColor, contrastTextColor, linkifyNotes,
-      });
-    });
+    let html = V.tabBarHtml({ tab }) + screenHtml;
 
-    html += V.ioControlsHtml({ hideDone, showArchived, theme, notifyHour, notifyDigest });
-    html += V.devToolbarHtml({ devMode, devPanelOpen });
-    html += V.courseManagerHtml({ showCourseManager, items, courseColor });
-    html += V.modalHtml({
-      editIndex, showForm,
-      formInnerHtml: formHtml(editIndex!==null ? items[editIndex] : null),
-    });
-    html += V.fabHtml();
-
+    if(addOpen && draft){
+      html += V.addSheetHtml({ draft, courses, pickerOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null });
+    }
+    if(menuFor!=null && items[menuFor]){
+      const it = items[menuFor];
+      html += V.quickMenuHtml({ it, i: menuFor, escapeHtml, relativeDueLabel, unit: it.unit || 'units' });
+    }
 
     const prevFills = {};
-    root.querySelectorAll('[data-fill-key]').forEach(el=>{
-      prevFills[el.dataset.fillKey] = el.style.width;
-    });
-    const prevCardOpacity = {};
-    root.querySelectorAll('.tp-card[id^="tp-card-"]').forEach(el=>{
-      prevCardOpacity[el.id] = getComputedStyle(el).opacity;
-    });
-    const prevTodayBodyEl = root.querySelector('.tp-today-body-anim');
-    const prevTodayBodyHeight = (pendingTodayAnim && prevTodayBodyEl) ? prevTodayBodyEl.getBoundingClientRect().height : null;
-    const prevTodayBodyHTML = (pendingTodayAnim && prevTodayBodyEl) ? prevTodayBodyEl.innerHTML : null;
+    root.querySelectorAll('[data-fill-key]').forEach(el=>{ prevFills[el.dataset.fillKey] = el.style.width; });
 
     root.innerHTML = html;
-
-    const streakDismissBtn = document.getElementById('tp-streak-dismiss');
-    if(streakDismissBtn){
-      streakDismissBtn.onclick = ()=>{
-        dismissDailyStreakNotice();
-        render();
-      };
-    }
 
     if(celebrationPending){
       const c = celebrationPending;
@@ -698,96 +578,35 @@
       }
     });
 
-    const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if(!reducedMotion){
-      root.querySelectorAll('.tp-card[id^="tp-card-"]').forEach(el=>{
-        const prev = prevCardOpacity[el.id];
-        if(prev === undefined) return;
-        const target = getComputedStyle(el).opacity;
-        if(prev !== target){
-          el.style.opacity = prev;
-          void el.offsetWidth;
-          requestAnimationFrame(()=>{ el.style.opacity = target; });
-        }
-      });
-    }
-    if(prevTodayBodyHeight!==null && !reducedMotion){
-      const newBodyEl = root.querySelector('.tp-today-body-anim');
-      if(newBodyEl){
-        const newHeight = newBodyEl.getBoundingClientRect().height;
-        // The compact and expanded bodies share the same markup for the
-        // required-items prefix, so there's no need to crossfade text.
-        if(newHeight < prevTodayBodyHeight && prevTodayBodyHTML!==null){
-          // Closing: the real (compact) content is already in the DOM, but
-          // it's shorter than what was on screen, so shrinking around it
-          // would just close a blank gap instead of clipping the outgoing
-          // rows away. Show the old (taller) content while the box shrinks,
-          // then swap in the real compact content once it's fully hidden.
-          const newHTML = newBodyEl.innerHTML;
-          newBodyEl.innerHTML = prevTodayBodyHTML;
-          newBodyEl.style.height = prevTodayBodyHeight+'px';
-          void newBodyEl.offsetWidth;
-          newBodyEl.style.transition = 'height 0.3s ease';
-          requestAnimationFrame(()=>{
-            newBodyEl.style.height = newHeight+'px';
-          });
-          newBodyEl.addEventListener('transitionend', function handler(e){
-            if(e.propertyName!=='height') return;
-            newBodyEl.innerHTML = newHTML;
-            newBodyEl.style.height = '';
-            newBodyEl.style.transition = '';
-            newBodyEl.removeEventListener('transitionend', handler);
-          });
-        } else {
-          // Opening (or same height): the new, taller content is already in
-          // the DOM - just grow into it so the extra rows are revealed as
-          // space allows.
-          newBodyEl.style.height = prevTodayBodyHeight+'px';
-          void newBodyEl.offsetWidth;
-          newBodyEl.style.transition = 'height 0.3s ease';
-          requestAnimationFrame(()=>{
-            newBodyEl.style.height = newHeight+'px';
-          });
-          newBodyEl.addEventListener('transitionend', function handler(e){
-            if(e.propertyName!=='height') return;
-            newBodyEl.style.height = '';
-            newBodyEl.style.transition = '';
-            newBodyEl.removeEventListener('transitionend', handler);
-          });
-        }
-      }
-    }
-    pendingTodayAnim = false;
-
     window.TPBind.bindEvents(root, {
-      items, list, render, save, savePrefs, exportData, exportIcs, importData,
-      dependsOptionsHtml, clearCompleted, deleteItemAt, renameCourse, saveCourseColors,
-      courseColors, reorderByDrag, makeRecurringClone, triggerCelebration, today,
-      hasTodayWorkRemaining, logDayComplete, scrollToAndHighlight, checkAndNotify, applyTheme,
+      items, allList: allGroups().flatMap(g=>g.rows), render, save, savePrefs, exportData, exportIcs, importData,
+      clearCompleted, deleteItemAt, reorderByDrag, makeRecurringClone, triggerCelebration, today, addDays,
+      hasTodayWorkRemaining, logDayComplete, checkAndNotify, applyTheme,
       isDevModeTrigger, activateDevMode, deactivateDevMode, saveDevPanelOpen, showToast,
+      saveCourses, openAddSheet, closeAddSheet, setNotifyHour,
       DAY_OFFSET_KEY,
-      get showForm(){ return showForm; }, set showForm(v){ showForm = v; },
+      get tab(){ return tab; }, set tab(v){ tab = v; },
       get editIndex(){ return editIndex; }, set editIndex(v){ editIndex = v; },
-      get sortMode(){ return sortMode; }, set sortMode(v){ sortMode = v; },
-      get todayExpanded(){ return todayExpanded; }, set todayExpanded(v){ todayExpanded = v; },
-      get pendingTodayAnim(){ return pendingTodayAnim; }, set pendingTodayAnim(v){ pendingTodayAnim = v; },
-      get hideDone(){ return hideDone; }, set hideDone(v){ hideDone = v; },
-      get showArchived(){ return showArchived; }, set showArchived(v){ showArchived = v; },
+      get draft(){ return draft; },
+      get pickerOpen(){ return pickerOpen; }, set pickerOpen(v){ pickerOpen = v; },
+      get menuFor(){ return menuFor; }, set menuFor(v){ menuFor = v; },
       get searchTerm(){ return searchTerm; }, set searchTerm(v){ searchTerm = v; },
+      get allSortMode(){ return allSortMode; }, set allSortMode(v){ allSortMode = v; },
+      get allFilterCourse(){ return allFilterCourse; }, set allFilterCourse(v){ allFilterCourse = v; },
+      get weekSelDay(){ return weekSelDay; }, set weekSelDay(v){ weekSelDay = v; },
       get pendingFocus(){ return pendingFocus; }, set pendingFocus(v){ pendingFocus = v; },
-      get overdueFilterActive(){ return overdueFilterActive; }, set overdueFilterActive(v){ overdueFilterActive = v; },
-      get theme(){ return theme; }, set theme(v){ theme = v; },
-      get showCourseManager(){ return showCourseManager; }, set showCourseManager(v){ showCourseManager = v; },
-      get pendingScrollId(){ return pendingScrollId; }, set pendingScrollId(v){ pendingScrollId = v; },
-      get pendingScrollAlign(){ return pendingScrollAlign; }, set pendingScrollAlign(v){ pendingScrollAlign = v; },
       get dragSrcIndex(){ return dragSrcIndex; }, set dragSrcIndex(v){ dragSrcIndex = v; },
       get devMode(){ return devMode; }, set devMode(v){ devMode = v; },
       get devPanelOpen(){ return devPanelOpen; }, set devPanelOpen(v){ devPanelOpen = v; },
-      get notifyHour(){ return notifyHour; }, setNotifyHour,
+      get notifyHour(){ return notifyHour; },
       get notifyDigest(){ return notifyDigest; }, set notifyDigest(v){ notifyDigest = v; },
+      get theme(){ return theme; }, set theme(v){ theme = v; },
+      get courses(){ return courses; },
+      get newCourseName(){ return newCourseName; }, set newCourseName(v){ newCourseName = v; },
+      get newCourseColor(){ return newCourseColor; }, set newCourseColor(v){ newCourseColor = v; },
+      get lastAddedCourseId(){ return lastAddedCourseId; }, set lastAddedCourseId(v){ lastAddedCourseId = v; },
       touchItem, newItemId,
     });
-
   }
   render();
 })();
