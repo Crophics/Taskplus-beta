@@ -630,7 +630,9 @@
       isDevModeTrigger, activateDevMode, deactivateDevMode, saveDevPanelOpen, showToast,
       saveCourses, openAddSheet, closeAddSheet, setNotifyHour,
       DAY_OFFSET_KEY,
-      get tab(){ return tab; }, set tab(v){ tab = v; },
+      // Every screen switch should land at the top, not wherever the
+      // previous (possibly taller) screen happened to be scrolled to.
+      get tab(){ return tab; }, set tab(v){ tab = v; if(typeof window.scrollTo === 'function') window.scrollTo(0, 0); },
       get editIndex(){ return editIndex; }, set editIndex(v){ editIndex = v; },
       get draft(){ return draft; },
       get pickerOpen(){ return pickerOpen; }, set pickerOpen(v){ pickerOpen = v; },
