@@ -214,17 +214,7 @@
   function courseColorFor(name){ return window.TPCourses.colorFor(courses, name); }
   const contrastTextColor = window.TP.contrastTextColor;
 
-  // iOS's native "scroll the focused input above the keyboard" behavior
-  // shifts document.scrollY while a sheet input is focused (e.g. the title
-  // field) - and nothing ever un-shifts it back on its own once the field
-  // blurs and the sheet closes, which is what left the page (and the
-  // fixed-position tab bar with it) sitting lower than it should. Recording
-  // the scroll position right before opening and explicitly restoring it
-  // on close fixes that directly, rather than guessing at the right value
-  // after the fact.
-  let scrollYBeforeSheet = 0;
   function openAddSheet(idx){
-    scrollYBeforeSheet = window.scrollY || 0;
     if(idx!=null && items[idx]){
       const it = items[idx];
       const course = window.TPCourses.byName(courses, it.course);
@@ -246,12 +236,9 @@
     sheetJustOpened = true;
   }
   function closeAddSheet(){
-    const restoreY = scrollYBeforeSheet;
-    // Blur whatever's focused (the title field, most likely) before the
-    // caller's next render() call rebuilds #tp-app's innerHTML out from
-    // under it - starting the keyboard-dismiss transition here, as early
-    // as possible, rather than letting the DOM removal trigger it as a
-    // side effect a moment later.
+    // Blur whatever's focused before the caller's next render() call
+    // rebuilds #tp-app's innerHTML out from under it, rather than letting
+    // the DOM removal trigger the blur as a side effect a moment later.
     if(document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
     addOpen = false;
     pickerOpen = false;
@@ -260,16 +247,6 @@
     editIndex = null;
     draft = null;
     sheetJustOpened = false;
-    // window.scrollTo(0, restoreY) alone doesn't hold when scrollY is
-    // already restoreY (a common case, e.g. 0 on a page that was never
-    // really scrolled) - that's a genuine no-op, no scroll event fires,
-    // and nothing resyncs the stuck fixed tab bar. window.TP.forceFixedResync
-    // manufactures a real displaced scroll instead. Repeating it across a
-    // delay window outraces iOS's own async keyboard-dismiss reflow, which
-    // can otherwise land after a single attempt and re-introduce the offset.
-    [0, 150, 400, 700].forEach(delay=>{
-      setTimeout(()=> window.TP.forceFixedResync(restoreY), delay);
-    });
   }
 
   const burstConfetti = window.TP.burstConfetti;
@@ -621,7 +598,22 @@
     const prevFills = {};
     root.querySelectorAll('[data-fill-key]').forEach(el=>{ prevFills[el.dataset.fillKey] = el.style.width; });
 
+    // .tp-screen is *the* scrollable element now (see css/mobile.css's
+    // page-shell comment) and gets destroyed and recreated by the
+    // innerHTML rebuild below on every render - not just a tab switch,
+    // but every log/complete/save too. Without this, any of those would
+    // silently reset your scroll position to the top of a long list.
+    // On an actual tab switch (screenJustSwitched) the fresh element's
+    // default scrollTop of 0 is exactly what's wanted, so nothing to
+    // restore there.
+    const prevScreenScrollTop = screenJustSwitched ? 0 : (root.querySelector('.tp-screen')?.scrollTop || 0);
+
     root.innerHTML = html;
+
+    if(prevScreenScrollTop){
+      const newScreen = root.querySelector('.tp-screen');
+      if(newScreen) newScreen.scrollTop = prevScreenScrollTop;
+    }
 
     if(celebrationPending){
       const c = celebrationPending;
@@ -675,7 +667,11 @@
       DAY_OFFSET_KEY,
       // Every screen switch should land at the top, not wherever the
       // previous (possibly taller) screen happened to be scrolled to.
-      get tab(){ return tab; }, set tab(v){ if(v !== tab) screenJustSwitched = true; tab = v; if(typeof window.scrollTo === 'function') window.scrollTo(0, 0); },
+      // Scrolling to the top on a switch is handled by render() itself now
+      // (screenJustSwitched skips restoring the old scroll position onto
+      // the fresh .tp-screen it creates) - body doesn't scroll at all
+      // anymore, so a window.scrollTo call here wouldn't do anything.
+      get tab(){ return tab; }, set tab(v){ if(v !== tab) screenJustSwitched = true; tab = v; },
       get screenJustSwitched(){ return screenJustSwitched; }, set screenJustSwitched(v){ screenJustSwitched = v; },
       get editIndex(){ return editIndex; }, set editIndex(v){ editIndex = v; },
       get draft(){ return draft; },

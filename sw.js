@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v34'; // bumped: manufacture a real displaced scroll instead of a same-position no-op scrollTo
+const CACHE_NAME = 'taskplus-cache-v35'; // bumped: removed position:fixed tab bar entirely (flex layout) - root fix, not another patch
 const urlsToCache = [
   './',
   './index.html',

@@ -8,29 +8,24 @@ document.addEventListener('touchstart', function(){}, {passive:true});
 // there meant a brand new listener got added on every single one of those,
 // none of them ever cleaned up).
 //
-// Two jobs:
-// 1. Keep the Add sheet's own bottom (the pacing hint + submit button)
-//    above the iOS keyboard - fixed elements don't resize when the
-//    keyboard opens, so the visual viewport shrinking is the only signal
-//    available for this. #tp-sheet is looked up fresh on every call
-//    instead of captured once, so this stays correct across sheet
-//    close/reopen without needing its own cleanup.
-// 2. General safety net for the same stuck-tab-bar bug js/app.js's
-//    closeAddSheet() fixes for the Add sheet specifically - this catches
-//    it for every OTHER focusable input in the app (search, course
-//    rename, settings...). window.TP.forceFixedResync is the real fix
-//    (see js/utils.js for why); a bare scroll nudge and a display:none
-//    toggle on the tab bar were both tried here first and did nothing.
+// Keeps the Add sheet's own bottom (the pacing hint + submit button) above
+// the iOS keyboard - fixed elements don't resize when the keyboard opens,
+// so the visual viewport shrinking is the only signal available for this.
+// #tp-sheet is looked up fresh on every call instead of captured once, so
+// this stays correct across sheet close/reopen without needing its own
+// cleanup.
+//
+// This used to also carry a tab-bar "resync" workaround for a stuck
+// position:fixed tab bar after the keyboard closed - several attempts,
+// none reliable (see git history). Removed now that css/mobile.css no
+// longer makes the tab bar position:fixed at all, which removes that
+// bug's precondition instead of patching around it.
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', function () {
     const sheet = document.getElementById('tp-sheet');
     if (sheet) {
       sheet.style.paddingBottom =
         Math.max(24, window.innerHeight - window.visualViewport.height + 24) + 'px';
-    }
-    const keyboardClosed = Math.abs(window.visualViewport.height - window.innerHeight) < 2;
-    if (keyboardClosed && window.TP && window.TP.forceFixedResync) {
-      [0, 150, 400].forEach(delay => setTimeout(() => window.TP.forceFixedResync(0), delay));
     }
   });
 }

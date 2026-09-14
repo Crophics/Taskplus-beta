@@ -5,39 +5,59 @@
 /* ---- Icons (inline SVG, see js/icons.js) ---- */
 .tp-icon{width:1em;height:1em;display:inline-block;flex:0 0 auto;vertical-align:-0.125em;}
 
-/* ---- Page shell (replaces the old css/base.css) ---- */
+/* ---- Page shell (replaces the old css/base.css) ----
+   body/#tp-app form a fixed-height flex column that never itself scrolls;
+   .tp-screen (the flex:1 child) is the ONLY scrollable element, and the
+   tab bar is a normal (non-fixed) flex sibling below it - never inside
+   the scrollable area, so it's always visually pinned at the bottom
+   without position:fixed at all.
+
+   This replaced an earlier position:fixed tab bar after it repeatedly hit
+   a well-documented WebKit bug: fixed elements can end up referencing
+   stale pre-keyboard geometry across an on-screen-keyboard open/close
+   cycle, staying visually offset until something resyncs them - and nothing
+   done from JS after the fact (nudging scroll, forcing a reflow, a real
+   manufactured scroll, the interactive-widget viewport hint) reliably
+   fixed it. Removing position:fixed removes the bug's precondition
+   entirely instead of chasing another patch for it. */
 *,*::before,*::after{box-sizing:border-box;}
-html{background:var(--bg);scrollbar-width:none;-ms-overflow-style:none;}
-html::-webkit-scrollbar{display:none;}
+html{background:var(--bg);}
 body{
-  margin:0;padding:0;min-height:100vh;min-height:100dvh;
+  margin:0;padding:0;height:100vh;height:100dvh;overflow:hidden;
+  display:flex;flex-direction:column;
   font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   color:var(--text);background:var(--bg);
   -webkit-text-size-adjust:100%;
   -webkit-tap-highlight-color:transparent;
-  scrollbar-width:none;-ms-overflow-style:none;
 }
-body::-webkit-scrollbar{display:none;}
-#tp-app{font-family:inherit;}
+#tp-app{font-family:inherit;flex:1;display:flex;flex-direction:column;min-height:0;}
 #tp-app button{font-family:inherit;margin:0;-webkit-appearance:none;appearance:none;touch-action:manipulation;}
 #tp-app input,#tp-app select,#tp-app textarea{font-family:inherit;margin:0;}
 #tp-app :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
 .tp-screen{
+  flex:1;
+  min-height:0;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;-ms-overflow-style:none;
   padding-top:calc(12px + env(safe-area-inset-top));
   padding-left:max(20px, env(safe-area-inset-left));
   padding-right:max(20px, env(safe-area-inset-right));
-  padding-bottom:calc(100px + env(safe-area-inset-bottom));
-  min-height:100vh;
-  min-height:100dvh;
+  padding-bottom:20px;
+  width:100%;
   max-width:640px;
   margin:0 auto;
   color:var(--text);
   background:var(--bg);
 }
+.tp-screen::-webkit-scrollbar{display:none;}
 /* Wraps .tp-screen only on an actual tab switch (js/app.js's
    screenJustSwitched, a one-shot flag - see the comment by its
-   declaration for why this can't just live on .tp-screen itself). */
-.tp-screen-enter{animation:tp-screen-in .22s cubic-bezier(.22,.8,.36,1);}
+   declaration for why this can't just live on .tp-screen itself). Has to
+   pass the flex:1/min-height:0/column chain through itself, since flex
+   sizing only applies to DIRECT children of a flex container and this
+   wrapper sits between #tp-app and the actual .tp-screen. */
+.tp-screen-enter{flex:1;min-height:0;display:flex;flex-direction:column;animation:tp-screen-in .22s cubic-bezier(.22,.8,.36,1);}
 
 /* Suppress the iOS text-selection callout on long-pressable rows (it was
    racing the quick-action menu's long-press timer). */
@@ -58,7 +78,12 @@ body::-webkit-scrollbar{display:none;}
 .tp-section-count{text-transform:none;letter-spacing:0;color:var(--text-dim);}
 
 /* ---- Tab bar ---- */
-.tp-tabbar{position:fixed;left:0;right:0;bottom:0;height:calc(84px + env(safe-area-inset-bottom));display:flex;align-items:stretch;background:var(--tabbar-bg);border-top:1px solid rgba(233,233,237,.1);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);z-index:500;padding-bottom:env(safe-area-inset-bottom);padding-left:max(0px, env(safe-area-inset-left));padding-right:max(0px, env(safe-area-inset-right));}
+/* No position:fixed - see the comment on the page-shell rules above for
+   why. flex:0 0 auto keeps it from being stretched/shrunk by #tp-app's
+   column flex layout; it's always visually pinned at the bottom simply
+   because it's the last flex child and .tp-screen (flex:1) is the only
+   thing that scrolls. */
+.tp-tabbar{flex:0 0 auto;height:calc(84px + env(safe-area-inset-bottom));display:flex;align-items:stretch;background:var(--tabbar-bg);border-top:1px solid rgba(233,233,237,.1);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding-bottom:env(safe-area-inset-bottom);padding-left:max(0px, env(safe-area-inset-left));padding-right:max(0px, env(safe-area-inset-right));}
 .tp-tabbar-inner{display:flex;align-items:stretch;width:100%;max-width:640px;margin:0 auto;}
 /* Press feedback here (and on most other interactive elements below) uses
    a deliberately asymmetric transition: near-instant on the way IN
