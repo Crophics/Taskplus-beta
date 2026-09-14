@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v24'; // bumped: drag-handle icon sized up + centered vertically in its card row
+const CACHE_NAME = 'taskplus-cache-v25'; // bumped: removed dead .tp-del selector from bind-events.js
 const urlsToCache = [
   './',
   './index.html',
