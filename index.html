@@ -39,31 +39,6 @@
   }
 })();
 </script>
-<script>
-// --app-height: css/mobile.css sizes the page shell off this instead of
-// 100dvh directly. The stuck-tab-bar bug survived removing position:fixed
-// entirely (the tab bar is a normal flex child now, sized purely by its
-// container's height) - which means the bug was never really about fixed
-// positioning specifically. It's that the underlying viewport HEIGHT VALUE
-// itself is what's stale right after the on-screen keyboard closes in this
-// standalone-PWA/WKWebView context, and that stale value cascades into
-// anything sized off it, dvh unit or not. window.visualViewport's own
-// resize event reliably reports the correct live height when it fires
-// (already relied on for the Add sheet's own keyboard-avoidance padding,
-// which has never been reported broken) - so drive the page height from
-// that JS-observed value via a custom property instead of trusting the
-// CSS engine's own dvh recompute timing.
-(function(){
-  function setAppHeight(){
-    var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
-    document.documentElement.style.setProperty('--app-height', h + 'px');
-  }
-  setAppHeight();
-  window.addEventListener('resize', setAppHeight);
-  window.addEventListener('orientationchange', setAppHeight);
-  if(window.visualViewport) window.visualViewport.addEventListener('resize', setAppHeight);
-})();
-</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>

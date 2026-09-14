@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v37'; // bumped: drive page height off a JS-observed --app-height instead of the dvh unit directly
+const CACHE_NAME = 'taskplus-cache-v38'; // bumped: revert --app-height - made keyboard-open shift worse and broke the scroll workaround
 const urlsToCache = [
   './',
   './index.html',
