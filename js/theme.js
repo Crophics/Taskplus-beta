@@ -1,6 +1,6 @@
 /* theme.js — Theme application + theme-color meta */
 (function (global) {
-  const THEME_COLORS = { dark: '#111111', light: '#f4f2ec', blue: '#14161f' };
+  const THEME_COLORS = { dark: '#161826', light: '#f4f2ec', blue: '#14161f' };
 
   function updateThemeColorMeta(eff) {
     let meta = document.querySelector('meta[name="theme-color"]');
@@ -9,7 +9,7 @@
       meta.setAttribute('name', 'theme-color');
       document.head.appendChild(meta);
     }
-    meta.setAttribute('content', THEME_COLORS[eff] || THEME_COLORS.blue);
+    meta.setAttribute('content', THEME_COLORS[eff] || THEME_COLORS.dark);
   }
 
   function applyTheme(theme) {

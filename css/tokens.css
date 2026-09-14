@@ -14,6 +14,7 @@
   --sheet-shadow:0 0 0 1px #595d6c, 0 -16px 40px rgba(0,0,0,.65);
   --card-ring:#3f424d; --card-ring-hover:#595d6c;
   --backdrop:rgba(41,43,49,.6); --backdrop-menu:rgba(41,43,49,.55);
+  --tabbar-bg:rgba(22,24,38,.92);
 }
 :root[data-theme="light"]{
   --bg:#f4f2ec; --surface:#ffffff; --surface-alt:#e9e7e0;
@@ -25,6 +26,7 @@
   --sheet-shadow:0 0 0 1px #cfd2dc, 0 -16px 40px rgba(0,0,0,.18);
   --card-ring:#d8d6cf; --card-ring-hover:#b9b6ac;
   --backdrop:rgba(32,35,43,.35); --backdrop-menu:rgba(32,35,43,.3);
+  --tabbar-bg:rgba(244,242,236,.92);
 }
 :root[data-theme="blue"]{
   --bg:#14161f; --surface:#1e2130; --surface-alt:#252938;
@@ -36,4 +38,5 @@
   --sheet-shadow:0 0 0 1px #3a3f52, 0 -16px 40px rgba(0,0,0,.65);
   --card-ring:#3a3f52; --card-ring-hover:#4a5068;
   --backdrop:rgba(20,22,31,.6); --backdrop-menu:rgba(20,22,31,.55);
+  --tabbar-bg:rgba(20,22,31,.92);
 }

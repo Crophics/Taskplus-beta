@@ -101,7 +101,7 @@
   let prefs = {};
   try{ prefs = JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; }catch(e){ prefs = {}; }
   let searchTerm = prefs.searchTerm || ''; // All-tab search text
-  let theme = ['dark','light','blue','auto'].includes(prefs.theme) ? prefs.theme : 'blue';
+  let theme = ['dark','light','blue','auto'].includes(prefs.theme) ? prefs.theme : 'dark';
   const TABS = ['today','all','week','settings','courses'];
   let tab = TABS.includes(prefs.tab) ? prefs.tab : 'today';
   let addOpen = false;

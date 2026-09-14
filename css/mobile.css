@@ -1,9 +1,25 @@
 /* mobile.css — Mobile rebuild: tab bar, screens, sheets, menus.
-   Uses the token layer in css/tokens.css (--bg/--surface/--accent/etc),
-   kept separate from the legacy css/components.css.
+   Uses the token layer in css/tokens.css (--bg/--surface/--accent/etc).
 */
-#tp-app{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
-.tp-screen{padding:58px 20px calc(100px + env(safe-area-inset-bottom));min-height:100vh;box-sizing:border-box;color:var(--text);background:var(--bg);}
+
+/* ---- Page shell (replaces the old css/base.css) ---- */
+*,*::before,*::after{box-sizing:border-box;}
+html{background:var(--bg);}
+body{
+  margin:0;padding:0;min-height:100vh;
+  font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:var(--text);background:var(--bg);
+  -webkit-text-size-adjust:100%;
+  -webkit-tap-highlight-color:transparent;
+}
+#tp-app{font-family:inherit;}
+#tp-app button{font-family:inherit;margin:0;-webkit-appearance:none;appearance:none;touch-action:manipulation;}
+#tp-app input,#tp-app select,#tp-app textarea{font-family:inherit;margin:0;}
+#tp-app :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.tp-screen{padding:58px 20px calc(100px + env(safe-area-inset-bottom));min-height:100vh;color:var(--text);background:var(--bg);}
+
+/* Row flash after an edit lands (js/utils.js adds this class) */
+.tp-card-highlight{animation:tp-card-flash 1.6s ease-out;}
 
 /* ---- Section heading pattern ---- */
 .tp-section-heading{display:flex;align-items:center;gap:10px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);margin:22px 0 4px;}
@@ -12,7 +28,7 @@
 .tp-section-count{text-transform:none;letter-spacing:0;color:var(--text-dim);}
 
 /* ---- Tab bar ---- */
-.tp-tabbar{position:fixed;left:0;right:0;bottom:0;height:calc(84px + env(safe-area-inset-bottom));display:flex;align-items:stretch;background:rgba(22,24,38,.92);border-top:1px solid rgba(233,233,237,.1);backdrop-filter:blur(8px);z-index:500;padding-bottom:env(safe-area-inset-bottom);}
+.tp-tabbar{position:fixed;left:0;right:0;bottom:0;height:calc(84px + env(safe-area-inset-bottom));display:flex;align-items:stretch;background:var(--tabbar-bg);border-top:1px solid rgba(233,233,237,.1);backdrop-filter:blur(8px);z-index:500;padding-bottom:env(safe-area-inset-bottom);}
 .tp-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding-top:6px;background:none;border:none;color:var(--text-dim);font-family:inherit;cursor:pointer;margin:0;}
 .tp-tab i{font-size:18px;}
 .tp-tab-label{font-size:10px;}
@@ -108,7 +124,7 @@
 .tp-w-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;border-radius:6px;opacity:.62;cursor:pointer;}
 .tp-w-col-selected{background:rgba(145,132,217,.1);opacity:1;}
 .tp-w-col-count{font-size:10.5px;color:var(--text-dim);margin-bottom:4px;}
-.tp-w-bar,.tp-w-bar-stub{width:70%;border-radius:2px 2px 0 0;overflow:hidden;display:flex;flex-direction:column-reverse;transform-origin:bottom;}
+.tp-w-bar,.tp-w-bar-stub{width:100%;border-radius:2px 2px 0 0;overflow:hidden;display:flex;flex-direction:column-reverse;transform-origin:bottom;}
 .tp-w-bar-stub{background:var(--line);}
 .tp-w-seg{width:100%;}
 .tp-w-col-label{font-size:11px;color:var(--text-dim);margin-top:6px;}

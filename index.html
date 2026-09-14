@@ -17,14 +17,14 @@
 (function(){
   try{
     var prefs = JSON.parse(localStorage.getItem('tp-prefs')||'{}');
-    var theme = ['dark','light','blue','auto'].includes(prefs.theme) ? prefs.theme : 'blue';
+    var theme = ['dark','light','blue','auto'].includes(prefs.theme) ? prefs.theme : 'dark';
     var eff = theme;
     if(theme==='auto'){
       eff = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
     }
     document.documentElement.setAttribute('data-theme', eff);
   }catch(e){
-    document.documentElement.setAttribute('data-theme', 'blue');
+    document.documentElement.setAttribute('data-theme', 'dark');
   }
 })();
 </script>
