@@ -101,7 +101,10 @@ collections (`users/{uid}/notes/*`, `users/{uid}/cards/*`), never `data`.
 
 Production's desktop app reads the same `data` doc. New item fields
 (`source`, `estimate`, `weight`, ...) must be proven harmless to production's
-merge code before they are written there. **Decision needed** (section 9).
+merge code before they are written there. **Resolved (section 10):** imported
+items and the new fields live in beta-only Firestore documents
+(`users/{uid}/taskplus-beta/*`), and the client merges them for display.
+Production's `data` doc is not touched. Revisit when merging back.
 
 ## 4. Data model changes
 
@@ -121,6 +124,11 @@ estimate: { minutes, low, high, basis: 'quiz-limit'|'heuristic'|'model'|'history
             confidence, hash }          // see section 5
 spent:    minutes logged so far
 ```
+
+Steps reuse the existing `subtasks` array, extended to
+`{text, done, minutes, day}` so a step can carry its own time and the day it is
+planned for. Steps are what Today's "current step" and the detail screen's plan
+are built from.
 
 Identity: imported items get a **stable id derived from the source**
 (`moodle:<cmid>`), so `itemKey()` dedupes re-imports and two devices never
@@ -149,11 +157,19 @@ Layers, applied in order, most trustworthy first:
    Cached by a hash of the inputs so a re-sync never re-bills, and a
    description change is the only thing that triggers a new call. The
    Anthropic key lives only in a Worker secret.
-4. **Calibration from history.** Log actual time (a simple "I worked N min" on
-   completion, or a start/stop timer). After a few items per course/type,
+4. **Calibration from history (deferred, not in the first version).** Log actual
+   time (a simple "I worked N min" on completion, or a start/stop timer). After
+   a few items per course/type,
    learn a personal multiplier (`actual / estimated`) and apply it. This is
    what makes the estimator *yours* rather than generic.
 5. **User override** always wins and is stored as `basis: 'user'`.
+
+**Showing the range.** The detail screen shows one line, e.g. "About 2h 30m,
+likely 2h 15m to 2h 45m". The range is deliberately tight, roughly plus or
+minus 10%, once there is evidence behind it (a quiz time limit, or calibration
+from history). With little or no history for a course the range is wider, and
+the UI should say so, because a tight range with no evidence would be false
+precision. Lists (Today, Week) show only the single number ("~50m").
 
 Privacy note: layer 3 sends assignment text (course content, not grades or
 credentials) to the Anthropic API. The user should confirm they are fine with
@@ -172,9 +188,10 @@ regressed.
 New model, added alongside rather than replacing it (feature-flagged until it
 beats the old one):
 
-- **Capacity per day.** A setting with weekday defaults (e.g. 120 min on a class-heavy
-  weekday, 240 on weekends), reduced by today's class meeting time once the
-  schedule is imported (section 8). Editable per day.
+- **No daily limit setting.** Nothing to configure. Today shows the total time
+  left, and a day is flagged **heavy** when it is well above the rest of the
+  week (a relative comparison, not an absolute cap). A limit can be added later
+  if it turns out to be wanted.
 - **Minutes, not just units.** For an item with estimate E minutes and `total`
   units, minutes-per-unit = E / total. Single-unit imported assignments get
   **suggested steps** from the estimator (e.g. "read the spec", "write the
@@ -182,12 +199,18 @@ beats the old one):
   "which part of the assignment to do today" has something to point at.
 - **Allocation.** Work backward from each due date: remaining minutes spread over
   the available days before due, weighted by `weight` and urgency
-  (deadline pressure, then grade weight, then dependency unlocks). Fill today up
-  to capacity; whatever doesn't fit is flagged as "at risk" instead of silently
-  piling onto tomorrow.
+  (deadline pressure, then grade weight, then dependency unlocks). Spread the work
+  as evenly as the deadlines allow; days that still end up well above the
+  week's average are flagged heavy (a one-line nudge on Today, a highlight on
+  Week).
+- **Today is an open list, not a queue.** All of today's tasks are shown as
+  equals so the user can pick whatever they feel like doing; order follows
+  deadline pressure but nothing is locked behind anything else. Each row shows
+  the current step, due date, a time estimate and a check that completes the
+  current step.
 - **Output** reuses the existing shape (`targets`, `getAhead`) with minutes
-  added, so `today-html.js` changes are additive: per-row "~25 min", a header
-  "Plan: 2h 10m of 3h", an overload warning.
+  added, so `today-html.js` changes are additive: a per-row estimate, a header
+  total ("2h 30m left today") and the heavy-day flag.
 - `dayTarget()/met()` and the `today` counter keep their meaning; day-rollover
   reset is untouched.
 
@@ -209,13 +232,16 @@ asks us to avoid). Recommendation: Worker.
 
 iOS note: web push only works for a PWA installed to the home screen.
 
+In-app, the same events appear in a **What's new** feed (the bell on Today),
+which replaces the vault's `events.json` "recent changes" panel.
+
 ## 8. Replacing the rest of the vault (later phases)
 
 In rough priority order, by value over cost:
 
 1. **Grades**: weight, score, per-course letter scale, target grade, weighted
    average and GPA. Port `System/grades/view.js` logic into a pure module with tests.
-2. **Class schedule**: meeting times and the weekly schedule, feeding capacity.
+2. **Class schedule**: meeting times and the weekly schedule, shown on the Week screen.
 3. **Change feed**: "what's new" from sync events.
 4. **CSCI adapter**: second importer for the non-Moodle course site. Needs its
    own Basic-auth credential stored server-side. Small.
@@ -227,23 +253,64 @@ In rough priority order, by value over cost:
 Not replaced: the Obsidian vault itself can keep existing. This plan makes
 the web app the source of truth for *work*; the vault becomes optional notes.
 
-## 9. Decisions
+## 9. Screens and navigation
+
+A clickable mockup (sample data only) lives in a private design canvas, not in
+this repo; ask the owner for access. It is the visual reference for this section.
+
+**Principle.** The app answers one question: *what should I do today, and how
+long will it take?* Moodle is the default source of work, so manual entry, sync
+status and source labels stay out of the way.
+
+**Navigation.** Three tabs: **Today, Week, Courses.** The bell (What's new) and
+the gear (Settings) sit in Today's header. The old All tab and the large
+centre Add button are removed; adding an item by hand is a small "+" in Week's
+header. Search and filters are dropped for now.
+
+| Screen | What it shows |
+|---|---|
+| **Today** | A header summary (total time left, thin progress bar), a one-line heavy-day flag that links to Week, then **all of today's tasks as an open list**: course colour, current step, due date, time estimate, and a check that completes the step. A done row, then Get ahead. |
+| **Assignment detail** | Leads with the plan: "About 2h 30m, likely 2h 15m to 2h 45m" with an Edit button, then the steps (check circle, minutes, day). Below that: the Moodle description collapsed with its files, a note row, and the actions "Done with this step" and "Open in Moodle to submit". Due date and weight as chips; a small "From Moodle" tag with no sync time. |
+| **Week** | Bars of planned time per day (heavy days highlighted), the selected day's classes and tasks, an overdue row at the top, a Later section for items beyond this week, and the "+" for manual items. |
+| **Courses** | Each course's current grade against its target, plus projected GPA. |
+| **Course detail** | Grade needed on the remaining weight to hit the target, coming-up items with estimates, graded items, teacher feedback. |
+| **Settings** | Moodle status (the only place the last sync time appears), courses to sync, reminders, estimate privacy switches, theme, manage courses and colours. |
+| **Connect Moodle** | Moodle address, username, password. The password is used once to get an access token, then discarded. |
+| **What's new** | Feed of new items, moved due dates, grades, feedback and re-estimates. |
+
+Code mapping (all additive to the existing view modules): `tabbar-html.js`
+becomes three tabs with no Add button; `chrome-html.js` gains the bell and
+gear; `all-html.js` is retired and its overdue and later groupings move into
+`week-html.js`; `today-html.js` rows gain the step line and estimate;
+`settings-html.js` is reworked; new views for assignment detail, courses,
+course detail, connect and what's-new. The existing `courses-html.js` (course
+names and colours) moves under Settings as "Manage courses". Bump `CACHE_NAME`
+in `sw.js` with every change to a precached file.
+
+## 10. Decisions
 
 **Resolved by the user:**
 - Audience: mostly the owner; may be shared with others later as a proof of
   concept. Beta only for now. **Mobile app first.** Because others may use it,
   Moodle tokens are stored **per user** in the Worker (never in the browser,
-  never returned to the client), entered once on an in-app settings screen.
+  never returned to the client). The user enters their Moodle address, username
+  and password once on an in-app Connect screen; the Worker exchanges them for a
+  token (`login/token.php`, as the vault script does), stores only the token, and
+  discards the password. The school uses a normal username/password login, so no
+  SSO fallback is needed for now.
 - Imported items go in a **beta-only** Firestore document, not production's
   shared `data` doc (interpreted from "beta only"; revisit when merging back).
 - Sending assignment text to the Anthropic API for estimates: **approved**.
 - Everything, including reminders, runs on the **existing Cloudflare Worker**.
 
-**Defaults proposed, pending confirmation:**
-- Capacity: user-set minutes per weekday / weekend (start 120 / 180),
-  editable; class meeting times may reduce it later.
-- Time logging: optional "how long did it take?" prompt with quick-tap
-  options when marking an item done; skippable.
+- **Capacity:** no daily limit setting. Today shows the total and flags heavy
+  days relative to the week.
+- **Time logging:** left out of the first version. Calibration from actual
+  times (estimating layer 4) comes later.
+- **Navigation:** three tabs (Today, Week, Courses); sync time is shown only in
+  Settings; manual add is a small "+" on Week.
+- **Estimate range:** tight when backed by evidence, wider when there is no
+  history (section 5).
 
 The original questions are kept below for reference.
 
@@ -266,31 +333,37 @@ The original questions are kept below for reference.
 7. **Capacity**: fixed per-weekday minutes you set, or learned from what you
    actually complete?
 
-## 10. Phases
+## 11. Phases
 
 Each phase ships on its own and leaves the app working.
 
-- **Phase 0 — Decisions + safety.** Answer section 9. Verify new item fields
-  don't break production's merge. Add the redacted Moodle JSON fixtures.
-- **Phase 1 — Moodle read-only import.** Worker skeleton (auth check, token in
-  secret), `mapMoodleToItems()` pure module + tests, inbox doc, client merge,
-  "Sync now" button, cron. Assignments + quizzes + submission state only.
-  Imported badge and status in the UI. Bump `CACHE_NAME` on every precached change.
+- **Phase 0 — Decisions + safety.** Decisions are in section 10. Confirm the
+  beta-only document layout and that the client merges it without touching
+  production's `data` doc. Add the redacted Moodle JSON fixtures.
+- **Phase 1 — Moodle read-only import.** Worker skeleton (auth check, per-user
+  token store), username/password token exchange, `mapMoodleToItems()` pure
+  module + tests, inbox doc, client merge, cron. Assignments, quizzes and
+  submission state only. The Connect and Settings screens with course
+  selection, and the three-tab layout (Today, Week, Courses) with Add moved to
+  Week. Bump `CACHE_NAME` on every precached change.
 - **Phase 2 — Weights, grades, status.** Grade items, weight entry, per-course
-  scale, grades tab. One-time import of existing `weight`/`target` from the
-  vault via a local Node script that emits JSON for you to review.
+  scale, the Courses tab and Course detail. One-time import of existing
+  `weight`/`target` from the vault via a local Node script that emits JSON for
+  you to review.
 - **Phase 3 — Minutes-based planning with heuristic estimates.** Estimate
-  field, quiz-limit and heuristic layers, capacity setting, the new planner
-  behind a flag, Today UI additions.
-- **Phase 4 — LLM estimates, suggested steps, calibration.** `/api/estimate`,
-  caching, time logging, personal multiplier.
+  field, quiz-limit and heuristic layers, the new planner behind a flag, the
+  heavy-day flag, Today rows with step and estimate, and the plan-first
+  assignment detail screen.
+- **Phase 4 — LLM estimates and suggested steps.** `/api/estimate`, caching,
+  steps with minutes and days, and range width driven by evidence. Calibration
+  from logged time is deferred beyond this phase.
 - **Phase 5 — Notifications.** Event detection in sync, FCM delivery, daily
   plan digest.
 - **Phase 6 — Vault content.** Schedule, CSCI, lectures, flashcards, backup.
 - **Phase 7 — Cutover.** Run both in parallel for a couple of weeks, compare, then
   retire the Windows scheduled tasks.
 
-## 11. Testing strategy
+## 12. Testing strategy
 
 - Pure modules (`moodle-map`, `estimate`, `planner`, `grades`) load under
   `node --test` like the existing logic modules, with fixtures captured from
@@ -302,12 +375,14 @@ Each phase ships on its own and leaves the app working.
 - Dry-run mode for the sync (as the vault script has): show what would change
   before writing.
 
-## 12. Risks
+## 13. Risks
 
 - **School's Moodle terms/rate limits.** A token-based, once-or-twice-daily
   read of your own data via the mobile web-service is the same thing the vault
   already does; keep it that cadence.
-- **Shared Firestore with production** (3.4) — biggest accidental-breakage risk.
+- **Merging back to production later.** Beta uses its own Firestore documents
+  (3.4), so merging means reconciling them with production's `data` doc and its
+  merge code. Plan that migration before merging, not after.
 - **Service-worker caching**: every precached-file change must bump `CACHE_NAME`.
 - **Estimator trust**: a wrong estimate silently misplans your week. Show the
   basis and range, make override one tap, and don't hide at-risk work.
