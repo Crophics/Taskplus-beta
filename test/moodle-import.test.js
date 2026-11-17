@@ -3,6 +3,7 @@ const assert = require('node:assert');
 
 global.window = global;
 require('../js/courses.js');
+require('../js/estimate-logic.js');
 require('../js/moodle-client.js');
 
 const M = global.TPMoodle;
@@ -37,9 +38,15 @@ test('a new record becomes a normal one-unit item with Moodle details on `source
   assert.strictEqual(it.title, 'Assignment 6');
   assert.strictEqual(it.course, 'MATH 2400');
   assert.strictEqual(it.due, '2026-11-19');
-  assert.strictEqual(it.total, 1);
-  assert.strictEqual(it.unit, 'assignment');
-  assert.strictEqual(M.mergeImported([], [rec({ id: 'moodle:9', cmid: 9, kind: 'quiz' })], ctx()).items[0].unit, 'quiz');
+  // 100 pts -> 120 base, a 2-word description x0.85, +15 for the handout = 115 min -> 2 parts
+  assert.strictEqual(it.estimate.minutes, 115);
+  assert.strictEqual(it.estimate.basis, 'heuristic');
+  assert.strictEqual(it.total, 2);
+  assert.strictEqual(it.unit, 'part');
+  const quizItem = M.mergeImported([], [rec({ id: 'moodle:9', cmid: 9, kind: 'quiz', timeLimitMin: 20 })], ctx()).items[0];
+  assert.strictEqual(quizItem.total, 1, 'a quiz is one sitting');
+  assert.strictEqual(quizItem.unit, 'quiz');
+  assert.strictEqual(quizItem.estimate.basis, 'quiz-limit');
   assert.strictEqual(it.done, 0);
   assert.strictEqual(it.completed, false);
   assert.strictEqual(it.createdAt, TODAY);
@@ -91,7 +98,7 @@ test('a submitted record completes an open item, but never un-completes one', ()
   const first = M.mergeImported([], [rec()], ctx());
   const done = M.mergeImported(first.items, [rec({ state: 'submitted' })], ctx());
   assert.strictEqual(done.items[0].completed, true);
-  assert.strictEqual(done.items[0].done, 1);
+  assert.strictEqual(done.items[0].done, done.items[0].total, 'completing finishes every part');
   assert.strictEqual(done.items[0].completedAt, TODAY);
   assert.strictEqual(done.stats.completed, 1);
   const back = M.mergeImported(done.items, [rec({ state: 'none' })], ctx());
@@ -155,4 +162,54 @@ test('summarize reads naturally', () => {
   assert.strictEqual(M.summarize({ added: 0, moved: 0, completed: 0 }), 'Moodle is up to date');
   assert.strictEqual(M.summarize({ added: 2, moved: 1, completed: 0 }), 'Moodle: 2 new, 1 date changed');
   assert.strictEqual(M.summarize({ added: 0, moved: 3, completed: 1 }), 'Moodle: 3 dates changed, 1 submitted');
+});
+
+test('an item already submitted when first imported gets an estimate but is not split', () => {
+  const out = M.mergeImported([], [rec({ state: 'submitted', dueTs: ts(2026, 11, 15) })], ctx());
+  assert.strictEqual(out.items[0].completed, true);
+  assert.strictEqual(out.items[0].total, 1);
+  assert.ok(out.items[0].estimate.minutes > 0);
+});
+
+test('changed Moodle details re-estimate an untouched item and re-split its parts', () => {
+  const first = M.mergeImported([], [rec()], ctx());
+  assert.strictEqual(first.items[0].total, 2);
+  const long = 'word '.repeat(400);
+  const again = M.mergeImported(first.items, [rec({ description: long })], ctx({ now: NOW + 1000 }));
+  // 120 x1.4 = 168 + 15 = 183 -> 185 min -> 4 parts
+  assert.strictEqual(again.items[0].estimate.minutes, 185);
+  assert.strictEqual(again.items[0].total, 4);
+  assert.strictEqual(again.items[0].updatedAt, NOW + 1000);
+});
+
+test('re-estimating keeps the parts of an item with progress, and never touches a user-set estimate', () => {
+  const first = M.mergeImported([], [rec()], ctx());
+  const started = { ...first.items[0], done: 1, today: 1 };
+  const long = 'word '.repeat(400);
+  const again = M.mergeImported([started], [rec({ description: long })], ctx());
+  assert.strictEqual(again.items[0].estimate.minutes, 185);
+  assert.strictEqual(again.items[0].total, 2, 'progress is not reinterpreted');
+  assert.strictEqual(again.items[0].done, 1);
+
+  const mine = { ...first.items[0], estimate: global.TPEstimate.userEstimate(30) };
+  const kept = M.mergeImported([mine], [rec({ description: long })], ctx());
+  assert.strictEqual(kept.items[0].estimate.minutes, 30);
+  assert.strictEqual(kept.items[0].estimate.basis, 'user');
+});
+
+test('items imported before estimates existed get one on the next sync', () => {
+  const legacy = { ...M.mergeImported([], [rec()], ctx()).items[0] };
+  delete legacy.estimate;
+  legacy.total = 1;
+  legacy.unit = 'assignment';
+  const out = M.mergeImported([legacy], [rec()], ctx({ now: NOW + 1 }));
+  assert.strictEqual(out.items[0].estimate.minutes, 115);
+  assert.strictEqual(out.items[0].total, 2);
+});
+
+test('submission types and word limit reach the item and the estimate', () => {
+  const out = M.mergeImported([], [rec({ points: 10, title: 'Response', description: 'x', files: [], submissionTypes: ['onlinetext'], wordLimit: 1500 })], ctx());
+  assert.deepStrictEqual(out.items[0].source.submissionTypes, ['onlinetext']);
+  assert.strictEqual(out.items[0].source.wordLimit, 1500);
+  assert.strictEqual(out.items[0].estimate.minutes, 170);
 });

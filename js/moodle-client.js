@@ -44,6 +44,8 @@
       description: rec.description || '',
       files: rec.files || [],
       timeLimitMin: rec.timeLimitMin == null ? null : rec.timeLimitMin,
+      submissionTypes: rec.submissionTypes || [],
+      wordLimit: rec.wordLimit == null ? null : rec.wordLimit,
       // A sync that ran out of call budget reports state: null for some items;
       // keep what we knew rather than forgetting it.
       state: rec.state == null ? (prev && prev.state) || null : rec.state,
@@ -78,7 +80,7 @@
       if (idx === undefined) {
         const submitted = rec.state === 'submitted';
         if (submitted && daysBetween(due, today) > RECENT_SUBMITTED_DAYS) { stats.skippedOld++; return; }
-        const item = {
+        let item = {
           id: rec.id, title: rec.title, course: rec.course, due,
           // `unit` is what Today's pill shows for one-sitting work; empty would read "Reading".
           total: 1, unit: rec.kind === 'quiz' ? 'quiz' : 'assignment', notes: '', done: submitted ? 1 : 0, today: 0,
@@ -86,6 +88,9 @@
           completedAt: submitted ? today : null, createdAt: today, archived: false,
           order: nextOrder++, updatedAt: now, source: sourceOf(rec, null),
         };
+        // Every imported item starts with a rule-of-thumb time estimate (js/estimate-logic.js).
+        // Unfinished work is split into ~50-minute parts so the daily pacing is in real time.
+        if (global.TPEstimate) item = submitted ? { ...item, estimate: global.TPEstimate.estimateForItem(item) } : global.TPEstimate.withEstimate(item, global.TPEstimate.estimateForItem(item));
         out.push(item);
         byId.set(item.id, out.length - 1);
         stats.added++;
@@ -95,7 +100,7 @@
       }
 
       const prev = out[idx];
-      const next = { ...prev };
+      let next = { ...prev };
       let changed = false;
 
       if (prev.title !== rec.title) { next.title = rec.title; changed = true; }
@@ -108,6 +113,12 @@
       }
       const src = sourceOf(rec, prev.source);
       if (JSON.stringify(src) !== JSON.stringify(prev.source)) { next.source = src; changed = true; }
+      // Re-estimate when Moodle's details changed, or if the item predates estimates.
+      // A number the user set is never overwritten.
+      if (global.TPEstimate && !(prev.estimate && prev.estimate.basis === 'user')) {
+        const est = global.TPEstimate.estimateForItem(next);
+        if (!global.TPEstimate.sameEstimate(prev.estimate, est)) { next = global.TPEstimate.withEstimate(next, est); changed = true; }
+      }
       if (rec.state === 'submitted' && !prev.completed) {
         next.completed = true;
         next.done = next.total || 1;

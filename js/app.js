@@ -121,8 +121,8 @@
   try{ prefs = JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; }catch(e){ prefs = {}; }
   let searchTerm = prefs.searchTerm || ''; // All-tab search text
   let theme = ['dark','light','blue','auto'].includes(prefs.theme) ? prefs.theme : 'dark';
-  const TABS = ['today','all','week','settings','courses','course','manage'];
-  let tab = TABS.includes(prefs.tab) && prefs.tab !== 'course' ? prefs.tab : 'today';
+  const TABS = ['today','all','week','settings','courses','course','manage','item'];
+  let tab = TABS.includes(prefs.tab) && prefs.tab !== 'course' && prefs.tab !== 'item' ? prefs.tab : 'today';
   let addOpen = false;
   let pickerOpen = false;
   let moreOpen = false; // add-sheet "Notes, subtasks, repeat, dependency" disclosure
@@ -206,7 +206,7 @@
   pruneDeletedLog();
 
   function savePrefs(){
-    localStorage.setItem(PREFS_KEY, JSON.stringify({searchTerm,theme,notifyHour,notifyDigest,tab: tab==='course' ? 'courses' : tab,allSortMode}));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({searchTerm,theme,notifyHour,notifyDigest,tab: tab==='course' ? 'courses' : tab==='item' ? itemDetailFrom : tab,allSortMode}));
     syncPush();
   }
 
@@ -244,11 +244,13 @@
         title: it.title, courseId: course ? course.id : null, due: it.due, amount: it.total, unit: it.unit || '',
         notes: it.notes || '', subtasksText: (it.subtasks || []).map(s => s.text).join('\n'),
         recurring: it.recurring || '', dependsOn: it.dependsOn || '',
+        minutes: it.estimate && it.estimate.basis === 'user' ? it.estimate.minutes : '',
+        imported: window.TPMoodle.isImported(it), // imported work edits its estimate on its own detail screen
       };
     } else {
       editIndex = null;
       const preselected = lastAddedCourseId && window.TPCourses.byId(courses, lastAddedCourseId) ? lastAddedCourseId : null;
-      draft = { title: '', courseId: preselected, due: '', amount: 1, unit: '', notes: '', subtasksText: '', recurring: '', dependsOn: '' };
+      draft = { title: '', courseId: preselected, due: '', amount: 1, unit: '', notes: '', subtasksText: '', recurring: '', dependsOn: '', minutes: '', imported: false };
     }
     pickerOpen = false;
     moreOpen = false;
@@ -625,6 +627,63 @@
     reader.readAsText(file);
   }
 
+  /* ---- Assignment detail (js/views/item-detail-html.js) ---- */
+  let itemDetailId = null;
+  let itemDetailFrom = 'today';
+  let itemDescOpen = false;
+  function itemIndexById(id){ return items.findIndex(x=>x && x.id === id); }
+  function openItem(id){
+    if(itemIndexById(id) < 0) return;
+    itemDetailId = id;
+    itemDescOpen = false;
+    if(tab !== 'item') itemDetailFrom = tab;
+    screenJustSwitched = true;
+    tab = 'item';
+    if(typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+    savePrefs();
+    render();
+  }
+  function closeItem(){
+    tab = itemDetailFrom || 'today';
+    savePrefs();
+    render();
+  }
+  // Notes are model-only: typing never re-renders (render-loop rule in AGENTS.md).
+  function setItemNotes(id, value){
+    const i = itemIndexById(id);
+    if(i < 0) return;
+    items[i].notes = value;
+    touchItem(items[i]);
+    persistItems();
+  }
+  function replaceItem(i, next){
+    items[i] = touchItem(next);
+    persistItems();
+    syncPush();
+    render();
+  }
+  function adjustEstimate(id, delta){
+    const i = itemIndexById(id);
+    if(i < 0 || !items[i].estimate) return;
+    const minutes = items[i].estimate.minutes + delta;
+    replaceItem(i, window.TPEstimate.withEstimate(items[i], window.TPEstimate.userEstimate(minutes)));
+  }
+  function resetEstimate(id){
+    const i = itemIndexById(id);
+    if(i < 0) return;
+    replaceItem(i, window.TPEstimate.withEstimate(items[i], window.TPEstimate.estimateForItem(items[i])));
+  }
+  function itemDetailCtx(){
+    const i = itemIndexById(itemDetailId);
+    const item = items[i];
+    return {
+      item, idx: i, escapeHtml: window.TPHtml.escapeHtml, color: item.course ? courseColorFor(item.course) : 'var(--text-faint)',
+      relativeDueLabel, daysToDue: daysBetween(today(), item.due), descOpen: itemDescOpen,
+      weightPct: gradeSettings.weights[item.id] > 0 ? gradeSettings.weights[item.id] : null,
+      fromLabel: ({ today:'Today', week:'Week', all:'All', courses:'Courses' })[itemDetailFrom] || 'Back',
+    };
+  }
+
   /* ---- Moodle import (js/moodle-client.js, src/worker.mjs) ---- */
   // Cached copy of the server's connection status, so Settings can render
   // instantly and offline. The server is the source of truth.
@@ -793,23 +852,43 @@
     if(panel.allDoneToday) logDayComplete();
     const streak = currentStreak();
 
+    if(tab==='item' && itemIndexById(itemDetailId) < 0) tab = itemDetailFrom || 'today';
     let screenHtml = '';
     if(tab==='today'){
       const screen = window.TPTodayLogic.computeTodayScreen(panel);
       const totalLoggedToday = items.reduce((s,it)=> s + (it.today||0), 0);
       const d = window.TP.asDate(today());
+      // Minutes view (js/plan-logic.js): what is left today, and whether a later day stands out as heavy.
+      const todayPlan = window.TPPlan.computeDays({ items, today: today(), daysBetween, isLocked });
+      const heavy = window.TPPlan.heavyDay(todayPlan.days);
+      const plan = {
+        summary: window.TPPlan.todaySummary(screen.targets, items, screen.getAhead),
+        heavy: heavy && heavy.dayIndex > 0
+          ? { label: window.TP.asDate(addDays(today(), heavy.dayIndex)).toLocaleDateString(undefined,{weekday:'long'}), minutes: heavy.minutes }
+          : null,
+      };
       screenHtml = V.todayScreenHtml({
         streak, totalLoggedToday, screen, escapeHtml, itemIndexMap,
         dateLabel: d.toLocaleDateString(undefined,{month:'long',day:'numeric'}),
         weekdayLabel: d.toLocaleDateString(undefined,{weekday:'long'}),
-        courseColorFor, relativeDueLabel, unitLabel, capUnit,
+        courseColorFor, relativeDueLabel, unitLabel, capUnit, plan,
         TPTodayLogic: window.TPTodayLogic,
       });
     } else if(tab==='all'){
       screenHtml = V.allScreenHtml(allCtx());
     } else if(tab==='week'){
       const weekCtx = { items, today, daysBetween };
-      const days = window.TPWeekLogic.computePacedLoad(weekCtx);
+      // Minutes view when any open item has a time estimate; otherwise the original unit view.
+      const planDays = window.TPPlan.computeDays({ items, today: today(), daysBetween, isLocked });
+      const hasEstimates = items.some(it=> !it.completed && !it.archived && window.TPPlan.minutesPerUnit(it) !== null);
+      const days = hasEstimates
+        ? planDays.days.map(d=>({ dayIndex: d.dayIndex, total: d.minutes, byCourse: d.byCourse }))
+        : window.TPWeekLogic.computePacedLoad(weekCtx);
+      const heavyWeek = hasEstimates ? window.TPPlan.heavyDay(planDays.days) : null;
+      const minutesCtx = hasEstimates ? {
+        on: true, entriesFor: (i)=> planDays.days[i].entries, heavyIndex: heavyWeek ? heavyWeek.dayIndex : -1, unestimated: planDays.unestimated,
+        leftMin: items.reduce((s,it)=> (it.completed||it.archived) ? s : s + (window.TPPlan.leftMinutes(it) || 0), 0),
+      } : { on: false };
       const dayLabels = days.map((_,i)=> window.TP.asDate(addDays(today(),i)).toLocaleDateString(undefined,{weekday:'long'}));
       const stats = window.TPWeekLogic.statTiles(weekCtx);
       const heaviestLabel = window.TPWeekLogic.heaviestDayLabel(days, dayLabels);
@@ -823,7 +902,7 @@
       screenHtml = V.weekScreenHtml({
         escapeHtml, days, dayLabels, selDay: weekSelDay, stats, heaviestLabel,
         courseColorFor, courseStats, advice, relativeDueLabel, animateChart,
-        items, today, daysBetween, TPWeekLogic: window.TPWeekLogic,
+        items, today, daysBetween, TPWeekLogic: window.TPWeekLogic, minutes: minutesCtx,
       });
     } else if(tab==='settings'){
       screenHtml = V.settingsScreenHtml({
@@ -839,6 +918,8 @@
       const ctx = courseDetailCtx(courseDetailName);
       ctx.summary = V.gradeSummaryHtml(ctx);
       screenHtml = V.courseDetailHtml(ctx);
+    } else if(tab==='item'){
+      screenHtml = V.itemDetailHtml(itemDetailCtx());
     } else if(tab==='manage'){
       screenHtml = V.coursesScreenHtml({
         escapeHtml, courses, openCountFor: (name)=> window.TPCourses.openCountForCourse(items, name),
@@ -847,7 +928,7 @@
     }
 
     if(screenJustSwitched) screenHtml = `<div class="tp-screen-enter">${screenHtml}</div>`;
-    let html = V.tabBarHtml({ tab }) + screenHtml;
+    let html = V.tabBarHtml({ tab: tab==='item' ? itemDetailFrom : tab }) + screenHtml;
 
     if(addOpen && draft){
       html += V.addSheetHtml({ draft, courses, items, pickerOpen, moreOpen, prereqOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null, sheetJustOpened });
@@ -947,6 +1028,9 @@
       get connectDraft(){ return connectDraft; },
       get connectBusy(){ return connectBusy; },
       openCourse, setWeight, stepCourseSetting, useSuggestedWeights, importGradeSettings, gradeSummaryHtml,
+      openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate,
+      get itemDetailId(){ return itemDetailId; },
+      get itemDescOpen(){ return itemDescOpen; }, set itemDescOpen(v){ itemDescOpen = v; },
       get courseDetailName(){ return courseDetailName; },
     };
   }

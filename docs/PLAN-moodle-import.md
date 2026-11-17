@@ -352,10 +352,10 @@ Each phase ships on its own and leaves the app working.
   Grade items from Moodle, weight entry, targets and credits, the Courses tab and
   Course detail, and a one-time vault import script that emits JSON for you to
   review.
-- **Phase 3 — Minutes-based planning with heuristic estimates.** Estimate
-  field, quiz-limit and heuristic layers, the new planner behind a flag, the
-  heavy-day flag, Today rows with step and estimate, and the plan-first
-  assignment detail screen.
+- **Phase 3 — Minutes-based planning with heuristic estimates. BUILT (see
+  "What Phase 3 shipped").** Rule-of-thumb estimates, work split into parts,
+  the minutes planner, Today with times and a heavy-day nudge, Week in minutes,
+  and the plan-first assignment detail screen.
 - **Phase 4 — LLM estimates and suggested steps.** `/api/estimate`, caching,
   steps with minutes and days, and range width driven by evidence. Calibration
   from logged time is deferred beyond this phase.
@@ -432,6 +432,60 @@ Each phase ships on its own and leaves the app working.
 - **Not verified:** a real Moodle gradebook (response shapes, hidden grades,
   nested categories), and the vault importer against your real vault: it was
   written from the structure the vault survey described.
+
+### What Phase 3 shipped
+
+- **A rule-of-thumb estimator** (`js/estimate-logic.js`): quizzes use Moodle's time
+  limit plus study time; assignments start from points, then adjust for the title
+  (exam, writing/project, or light reading/response), description length, a
+  handout, and any online-text word limit. Results are rounded to 5 minutes and
+  carry a deliberately wide range (about 70% to 150%). **The constants are
+  educated guesses, not measurements**; the detail screen says "a rough guess".
+  They are the placeholder until Phase 4's LLM read of the description.
+- **Parts.** Unfinished imported work is split into roughly 50-minute parts
+  (`round(minutes / 50)`, 1 to 8; a quiz is always one part). This sets the item's
+  `total` and `unit: 'part'`, so the existing pacing (`ceil(left / days left)`,
+  pips, "+1") now runs in real time without being rewritten. Progress is never
+  reinterpreted: an item you have already started keeps its parts when its
+  estimate changes.
+- **Who owns what.** The estimate is recomputed when Moodle's details change,
+  except that a number you set yourself (the +/-15m buttons on the detail screen,
+  or the Time estimate field on the Add sheet) is never overwritten.
+- **The planner** (`js/plan-logic.js`) turns minutes per part into minutes per day
+  using the same pacing rules as `today-logic.js` (work days run up to the day
+  before the due date; a single-part item is planned for the day before it is
+  due; today's share is fixed from the start of the day). This is proven, not
+  assumed: tests compare it with the real `today-logic` over ~600 scenarios.
+  Today's required minutes plus its get-ahead minutes equal what Week shows for
+  today.
+- **Today:** "2h 35m left today . 4 tasks" with a thin bar, a per-row estimate,
+  "Part 2 of 3" on split work, and a one-line nudge when a later day is heavy
+  (a day of at least 90 minutes AND at least 1.5x the week's average).
+- **Week:** switches to minutes whenever any open item has an estimate, with a
+  "Time left" tile, minute labels, a highlighted heavy day, and a note counting
+  items that have no estimate and so are not in the chart.
+- **Assignment detail:** opens from a Today row for imported work. Leads with the
+  estimate, its range and its reason, the parts (tap the next one to finish it,
+  the last finished one to undo), the Moodle description and files, notes, and
+  actions. Manual items keep the quick-action menu.
+
+**Where this differs from the plan:**
+- **No feature flag.** The plan said to ship the planner behind a flag. Splitting
+  work into parts changes the item data, so a flag could not truly turn it off.
+  The escape hatch is per item: set the estimate to 75 minutes or less and it is
+  one part again (if you have not started it).
+- **No named steps yet.** Parts are "Part 1 of 3", not "Read the spec". Suggested,
+  named steps come with the LLM estimator in Phase 4.
+- **Grade weights do not yet influence the plan** (the plan mentioned weighting by
+  grade weight); allocation is by deadline only.
+- **The range is wide on purpose** (see section 5): without evidence a tight
+  range would be false precision. It narrows only with a quiz time limit, your own
+  number, or (later) calibration.
+- **Items without an estimate** (manual items you have not given a time) are left
+  out of every minutes figure and counted, never silently dropped.
+- **Not validated:** the heuristic numbers have not been compared with how long
+  your work actually takes. Expect to adjust some; the +/-15m buttons exist for
+  that.
 
 ## 12. Testing strategy
 

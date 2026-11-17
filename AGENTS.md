@@ -55,6 +55,19 @@ for the one-time Cloudflare setup. What matters when touching code:
   network. For changes to the wiring, the jsdom technique below still applies,
   and the Worker handler can be called directly in that script
   (`handleApi(request, env, {fetchFn})`) so the app and Worker run together.
+- **Estimates and minutes planning (Phase 3).** `js/estimate-logic.js`
+  (`TPEstimate`, a rule-of-thumb estimator; its constants are guesses, see the
+  header) and `js/plan-logic.js` (`TPPlan`, minutes per day, heavy day) are pure
+  and tested. `item.estimate = {minutes, low, high, basis: 'heuristic' |
+  'quiz-limit' | 'user', confidence, factors}`. Imported unfinished work is split
+  into ~50-minute parts by setting `total` (and `unit: 'part'`); never re-split an
+  item that has progress (`TPEstimate.withEstimate` enforces this). A `user` basis
+  estimate must never be overwritten by a sync. **Trap:** `TPPlan.computeDays`
+  takes `today` as a date STRING, whereas `TPWeekLogic` and `TPTodayLogic` take a
+  function; passing the function gives `NaN` days. `test/plan-logic.test.js`
+  cross-checks the planner against `today-logic.js`; keep that test passing if
+  either pacing rule changes. Assignment detail is `tab === 'item'` (never saved
+  as the tab preference); it opens only for imported items that have an estimate.
 - **Grades (Phase 2).** `js/grades-logic.js` (`TPGrades`) is the pure grade
   math, settings and overview, tested in `test/grades-logic.test.js`;
   `js/views/grades-html.js` lays out the Courses tab and Course detail. State

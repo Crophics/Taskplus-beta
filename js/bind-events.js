@@ -63,6 +63,17 @@
       api.save();
     }
 
+    // Undo the last finished part (assignment detail): done and, if it was logged today, today go back by one.
+    function undoOne(idx) {
+      const it = api.items[idx];
+      if (!it || !(it.done > 0)) return;
+      it.done -= 1;
+      if ((it.today || 0) > 0) it.today -= 1;
+      if (it.completed) { it.completed = false; it.completedAt = null; it.archived = false; }
+      api.touchItem(it);
+      api.save();
+    }
+
     root.querySelectorAll('.tp-log').forEach(b => b.onclick = () => logOne(parseInt(b.dataset.i), b));
     root.querySelectorAll('.tp-complete').forEach(b => b.onclick = () => toggleComplete(parseInt(b.dataset.i)));
 
@@ -74,6 +85,8 @@
     });
     const addToggle = document.getElementById('tp-add-toggle');
     if (addToggle) addToggle.onclick = () => { api.openAddSheet(); api.render(); };
+    const heavyLine = document.getElementById('tp-t-heavy');
+    if (heavyLine) heavyLine.onclick = () => { api.tab = 'week'; api.savePrefs(); api.render(); };
     const openSettings = document.getElementById('tp-open-settings');
     if (openSettings) openSettings.onclick = () => { api.tab = 'settings'; api.savePrefs(); api.render(); };
     const openAll = document.getElementById('tp-open-all');
@@ -86,9 +99,34 @@
       row.onclick = (e) => {
         if (e.target.closest('.tp-t-action') || e.target.closest('.tp-t-ahead-more')) return;
         const idx = Number(row.dataset.itemI);
-        if (!Number.isNaN(idx)) { api.menuFor = idx; api.render(); }
+        if (Number.isNaN(idx)) return;
+        const it = api.items[idx];
+        // Imported work opens its plan-first detail screen; manual items keep the quick-action menu.
+        if (it && it.source && it.source.type === 'moodle' && it.estimate) api.openItem(it.id);
+        else { api.menuFor = idx; api.render(); }
       };
     });
+
+    /* ---- Assignment detail ---- */
+    const itemBack = document.getElementById('tp-i-back');
+    if (itemBack) itemBack.onclick = () => api.closeItem();
+    root.querySelectorAll('.tp-i-part').forEach(b => b.onclick = () => {
+      const idx = parseInt(b.dataset.i);
+      const part = parseInt(b.dataset.part);
+      const it = api.items[idx];
+      if (!it) return;
+      if (part === (it.done || 0) && !it.completed) logOne(idx, b);
+      else if (part === (it.done || 0) - 1) undoOne(idx);
+    });
+    root.querySelectorAll('.tp-i-step[data-delta]').forEach(b => b.onclick = () => api.adjustEstimate(api.itemDetailId, Number(b.dataset.delta)));
+    const itemReset = document.getElementById('tp-i-reset');
+    if (itemReset) itemReset.onclick = () => api.resetEstimate(api.itemDetailId);
+    const itemDescToggle = document.getElementById('tp-i-desc-toggle');
+    if (itemDescToggle) itemDescToggle.onclick = () => { api.itemDescOpen = !api.itemDescOpen; api.render(); };
+    const itemNotes = document.getElementById('tp-i-notes');
+    if (itemNotes) itemNotes.oninput = (e) => api.setItemNotes(api.itemDetailId, e.target.value);
+    const itemMore = document.getElementById('tp-i-more');
+    if (itemMore) itemMore.onclick = () => { api.menuFor = Number(itemMore.dataset.i); api.render(); };
 
     /* ---- All screen ----
        The header (search input, sort/course chips) lives outside
@@ -430,6 +468,8 @@
     // input is never touched, so it can't lose focus or its caret position.
     const addTitle = document.getElementById('tp-add-title');
     if (addTitle) addTitle.oninput = (e) => { api.draft.title = e.target.value; };
+    const addMinutes = document.getElementById('tp-add-minutes');
+    if (addMinutes) addMinutes.oninput = (e) => { api.draft.minutes = e.target.value; };
     const addNotes = document.getElementById('tp-add-notes');
     if (addNotes) addNotes.oninput = (e) => { api.draft.notes = e.target.value; };
 
@@ -527,6 +567,7 @@
         .map(t => ({ text: t, done: false }));
       const recurring = api.draft.recurring || '';
       const dependsOn = api.draft.dependsOn || '';
+      const minutes = Number(api.draft.minutes) || 0;
       if (api.editIndex !== null) {
         const it = api.items[api.editIndex];
         const oldTitle = it.title;
@@ -544,16 +585,23 @@
         if (oldTitle !== title) {
           api.items.forEach(x => { if (x.dependsOn === oldTitle) x.dependsOn = title; });
         }
+        if (!api.draft.imported) {
+          // A time estimate typed here is the user's own; clearing the field removes it.
+          if (minutes > 0) it.estimate = window.TPEstimate.userEstimate(minutes);
+          else if (it.estimate && it.estimate.basis === 'user') delete it.estimate;
+        }
         api.touchItem(it);
         if (api.isDevModeTrigger(it.title, it.total)) api.activateDevMode();
       } else {
         const maxOrder = api.items.reduce((m, x) => Math.max(m, x.order ?? -1), -1);
-        api.items.push({
+        const created = {
           id: api.newItemId(), title, course: courseName, due, total: amount, unit,
           notes, done: 0, today: 0, completed: false, dependsOn, recurring,
           subtasks, completedAt: null, createdAt: api.today(), archived: false,
           order: maxOrder + 1, updatedAt: Date.now(),
-        });
+        };
+        if (minutes > 0) created.estimate = window.TPEstimate.userEstimate(minutes);
+        api.items.push(created);
         if (api.isDevModeTrigger(title, amount)) api.activateDevMode();
         api.tab = 'today';
         api.savePrefs();

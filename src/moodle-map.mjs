@@ -65,6 +65,25 @@ function fileList(...lists) {
 }
 
 /**
+ * mod_assign_get_assignments `configs` -> how the work is handed in.
+ * Returns {submissionTypes: ['file','onlinetext',...], wordLimit}. Both are
+ * inputs to the time estimate (a 1,500-word online essay vs. a PDF problem set).
+ */
+export function submissionInfo(configs) {
+  const types = [];
+  let wordLimit = null;
+  const wordLimitOn = {};
+  (Array.isArray(configs) ? configs : []).forEach((c) => {
+    if (!c || c.subtype !== 'assignsubmission') return;
+    if (c.name === 'enabled' && String(c.value) === '1' && c.plugin && !types.includes(c.plugin)) types.push(c.plugin);
+    if (c.plugin === 'onlinetext' && c.name === 'wordlimitenabled') wordLimitOn.v = String(c.value) === '1';
+    if (c.plugin === 'onlinetext' && c.name === 'wordlimit' && Number(c.value) > 0) wordLimit = Number(c.value);
+  });
+  if (wordLimitOn.v === false) wordLimit = null;
+  return { submissionTypes: types, wordLimit };
+}
+
+/**
  * mod_assign_get_assignments response -> records. `course` is {id, fullname}.
  * Items with no due date are skipped (the app can't place them) and counted.
  */
@@ -76,6 +95,7 @@ export function mapAssignments(course, resp, base) {
       const dueTs = positiveTs(a.duedate);
       if (!dueTs) { skippedNoDue++; return; }
       const cmid = a.cmid != null ? a.cmid : a.coursemodule;
+      const sub = submissionInfo(a.configs);
       records.push({
         id: 'moodle:' + cmid,
         cmid: Number(cmid),
@@ -90,6 +110,8 @@ export function mapAssignments(course, resp, base) {
         points: Number(a.grade) > 0 ? Number(a.grade) : null,
         description: htmlToText(a.intro),
         files: fileList(a.introattachments, a.introfiles),
+        submissionTypes: sub.submissionTypes,
+        wordLimit: sub.wordLimit,
         timeLimitMin: null,
         link: base + '/mod/assign/view.php?id=' + cmid,
         state: null,
@@ -122,6 +144,8 @@ export function mapQuizzes(course, resp, base) {
       points: Number(q.grade) > 0 ? Number(q.grade) : null,
       description: htmlToText(q.intro),
       files: fileList(q.introfiles),
+      submissionTypes: [],
+      wordLimit: null,
       timeLimitMin: limit > 0 ? Math.round(limit / 60) : null,
       link: base + '/mod/quiz/view.php?id=' + cmid,
       state: null,

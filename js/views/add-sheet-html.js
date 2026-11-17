@@ -38,7 +38,7 @@
   }
 
   function moreSectionHtml(ctx, draft, selectedCourse, escapeHtml) {
-    const hasExtras = !!(draft.notes || (draft.subtasksText || '').trim() || draft.recurring || draft.dependsOn);
+    const hasExtras = !!(draft.notes || (draft.subtasksText || '').trim() || draft.recurring || draft.dependsOn || draft.minutes);
     const moreOpen = ctx.moreOpen || (ctx.isEdit && hasExtras);
     const subCount = (draft.subtasksText || '').split('\n').map(s => s.trim()).filter(Boolean).length;
 
@@ -51,7 +51,13 @@
     const repeatOpt = (label, val) =>
       `<button type="button" class="tp-add-seg-opt" data-repeat="${val}" aria-pressed="${(draft.recurring || '') === val}">${label}</button>`;
 
-    const moreBody = moreOpen ? `
+    const minutesField = draft.imported ? '' : `
+      <div class="tp-sheet-label" id="tp-lbl-minutes">Time estimate</div>
+      <input class="tp-add-input" id="tp-add-minutes" type="number" inputmode="numeric" min="5" step="5"
+        aria-labelledby="tp-lbl-minutes" placeholder="Minutes in total, e.g. 90" value="${draft.minutes || ''}">
+      <div class="tp-add-sublabel">Optional. Lets this count toward Today's time and the Week chart.</div>`;
+
+    const moreBody = moreOpen ? `${minutesField}
       <div class="tp-sheet-label" id="tp-lbl-notes">Notes</div>
       <textarea class="tp-add-textarea" id="tp-add-notes" rows="2"
         aria-labelledby="tp-lbl-notes"
@@ -89,7 +95,7 @@
 
     return `<button type="button" class="tp-sheet-more" id="tp-add-more" aria-expanded="${moreOpen}">
       ${window.TPIcons.svg('chevron_down')}
-      ${moreOpen ? 'Fewer options' : 'Notes, subtasks, repeat, dependency'}
+      ${moreOpen ? 'Fewer options' : 'Time, notes, subtasks, repeat, dependency'}
     </button>
     ${moreBody}`;
   }

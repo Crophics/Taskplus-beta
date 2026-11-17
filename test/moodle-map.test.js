@@ -173,3 +173,38 @@ test('mapGradeItems copes with an empty or missing response', () => {
   assert.strictEqual(M.mapGradeItems(course, null).total, null);
   assert.deepStrictEqual(M.mapGradeItems(course, { usergrades: [] }).items, []);
 });
+
+test('submissionInfo reads enabled submission types and an enabled word limit', () => {
+  const cfg = [
+    { plugin: 'file', subtype: 'assignsubmission', name: 'enabled', value: '1' },
+    { plugin: 'file', subtype: 'assignsubmission', name: 'maxfilesubmissions', value: '1' },
+    { plugin: 'onlinetext', subtype: 'assignsubmission', name: 'enabled', value: '1' },
+    { plugin: 'onlinetext', subtype: 'assignsubmission', name: 'wordlimitenabled', value: '1' },
+    { plugin: 'onlinetext', subtype: 'assignsubmission', name: 'wordlimit', value: '1500' },
+    { plugin: 'comments', subtype: 'assignsubmission', name: 'enabled', value: '0' },
+    { plugin: 'comments', subtype: 'assignfeedback', name: 'enabled', value: '1' },
+  ];
+  assert.deepStrictEqual(M.submissionInfo(cfg), { submissionTypes: ['file', 'onlinetext'], wordLimit: 1500 });
+});
+
+test('submissionInfo ignores a word limit that is switched off, and bad input', () => {
+  const cfg = [
+    { plugin: 'onlinetext', subtype: 'assignsubmission', name: 'enabled', value: '1' },
+    { plugin: 'onlinetext', subtype: 'assignsubmission', name: 'wordlimitenabled', value: '0' },
+    { plugin: 'onlinetext', subtype: 'assignsubmission', name: 'wordlimit', value: '500' },
+  ];
+  assert.deepStrictEqual(M.submissionInfo(cfg), { submissionTypes: ['onlinetext'], wordLimit: null });
+  assert.deepStrictEqual(M.submissionInfo(undefined), { submissionTypes: [], wordLimit: null });
+  assert.deepStrictEqual(M.submissionInfo([null, 5, {}]), { submissionTypes: [], wordLimit: null });
+});
+
+test('mapAssignments carries submission types and word limit onto the record', () => {
+  const resp = { courses: [{ id: 7, assignments: [{ id: 1, cmid: 5001, name: 'Essay', duedate: 1_795_000_000, grade: 50, intro: '', configs: [
+    { plugin: 'onlinetext', subtype: 'assignsubmission', name: 'enabled', value: '1' },
+    { plugin: 'onlinetext', subtype: 'assignsubmission', name: 'wordlimitenabled', value: '1' },
+    { plugin: 'onlinetext', subtype: 'assignsubmission', name: 'wordlimit', value: '800' }] }] }] };
+  const r = M.mapAssignments(course, resp, BASE).records[0];
+  assert.deepStrictEqual(r.submissionTypes, ['onlinetext']);
+  assert.strictEqual(r.wordLimit, 800);
+  assert.deepStrictEqual(M.mapQuizzes(course, { quizzes: [{ id: 5, coursemodule: 9, name: 'Q', timeclose: 1_795_000_000 }] }, BASE).records[0].submissionTypes, []);
+});
