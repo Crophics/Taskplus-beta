@@ -16,9 +16,9 @@ not_found_handling = "single-page-application"
 #   1. npx wrangler kv namespace create MOODLE_KV   -> paste the id below and uncomment
 #   2. npx wrangler secret put TOKEN_ENC_KEY        -> 32 random bytes, base64
 #
-# [[kv_namespaces]]
-# binding = "MOODLE_KV"
-# id = "PASTE_NAMESPACE_ID_HERE"
+[[kv_namespaces]]
+binding = "MOODLE_KV"
+id = "4ba00133dd96402cad394aed4d4d2bcf"
 
 # Background sync + alerts (see docs/SETUP-moodle-worker.md). Does nothing until KV and
 # FCM_SERVICE_ACCOUNT exist and a device has registered.
