@@ -12,7 +12,7 @@
     try{ prefsNow = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); }catch(e){}
     const { theme: _theme, tab: _tab, ...syncPrefs } = prefsNow;
     window.tpSync.push({
-      items,
+      items: items.filter(it=>!window.TPMoodle.isImported(it)),
       courseColors,
       courses,
       dayCompleteLog,
@@ -27,13 +27,29 @@
   const DAY_COMPLETE_LOG_KEY='tp-day-complete-log';
   const DELETED_LOG_KEY='tp-deleted-log';
   const TOMBSTONE_MAX_AGE_MS = 120*24*60*60*1000; // keep in sync with firebase-sync.js
+  // Imported (Moodle) items are stored apart from manual ones so they never
+  // reach the shared Firestore doc that firebase-sync.js merges - Moodle is
+  // their source of truth and each device syncs from it directly.
+  const MOODLE_ITEMS_KEY='tp-moodle-items';
+  const MOODLE_STATE_KEY='tp-moodle';
+  const MOODLE_EVENTS_KEY='tp-moodle-events';
+  const MOODLE_SITE_KEY='tp-moodle-last-site';
   const DEV_MODE_KEY='tp-dev-mode';
   const DEV_PANEL_KEY='tp-dev-panel-open';
   const DAY_OFFSET_KEY='tp-day-offset';
   const ARCHIVE_AFTER_DAYS=14;
 
   /* ---- State ---- */
-  let items = JSON.parse(localStorage.getItem(KEY) || '[]');
+  function readJsonArray(key){
+    try{ const v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; }catch(e){ return []; }
+  }
+  function loadItems(){ return readJsonArray(KEY).concat(readJsonArray(MOODLE_ITEMS_KEY)); }
+  function persistItems(){
+    const isImp = window.TPMoodle.isImported;
+    localStorage.setItem(KEY, JSON.stringify(items.filter(it=>!isImp(it))));
+    localStorage.setItem(MOODLE_ITEMS_KEY, JSON.stringify(items.filter(isImp)));
+  }
+  let items = loadItems();
   function newItemId(){
     if(window.tpSync && window.tpSync.newId) return window.tpSync.newId();
     if(typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -49,7 +65,7 @@
     if(!it.id){ it.id = newItemId(); idsMigrated = true; }
     if(it.updatedAt==null){ it.updatedAt = Date.now(); idsMigrated = true; }
   });
-  if(idsMigrated) localStorage.setItem(KEY, JSON.stringify(items));
+  if(idsMigrated) persistItems();
 
   // Day rollover: the `today` pacing counter (js/today-logic.js) only means
   // anything for the calendar day it was logged on, so reset it the first
@@ -58,7 +74,7 @@
     const storedActiveDate = localStorage.getItem(LAST_ACTIVE_DATE_KEY);
     const nowDate = window.TP.today();
     if(window.TPTodayLogic.resetTodayCounters(items, storedActiveDate, nowDate)){
-      localStorage.setItem(KEY, JSON.stringify(items));
+      persistItems();
     }
     localStorage.setItem(LAST_ACTIVE_DATE_KEY, nowDate);
   }
@@ -76,7 +92,7 @@
   function saveCourses(){ localStorage.setItem(COURSES_KEY, JSON.stringify(courses)); syncPush(); }
 
   document.addEventListener('tp-remote-data', function(){
-    items = JSON.parse(localStorage.getItem(KEY) || '[]');
+    items = loadItems();
     try{ courseColors = JSON.parse(localStorage.getItem(COURSE_COLORS_KEY)) || {}; }catch(e){ courseColors = {}; }
     try{ courses = JSON.parse(localStorage.getItem(COURSES_KEY)) || []; }catch(e){ courses = []; }
     try{ dayCompleteLog = JSON.parse(localStorage.getItem(DAY_COMPLETE_LOG_KEY)) || []; }catch(e){ dayCompleteLog = []; }
@@ -204,6 +220,7 @@
 
   document.addEventListener('keydown', (e)=>{
     if(e.key === 'Escape'){
+      if(connectOpen && !connectBusy){ closeConnectSheet(); render(); return; }
       if(menuFor!==null){ menuFor = null; render(); return; }
       if(addOpen){ closeAddSheet(); render(); return; }
     }
@@ -252,7 +269,7 @@
   const burstConfetti = window.TP.burstConfetti;
   function save(){
     items.forEach(it=>{ if(!it.id) it.id = newItemId(); });
-    localStorage.setItem(KEY, JSON.stringify(items));
+    persistItems();
     render();
     syncPush();
   }
@@ -334,7 +351,7 @@
         it.archived = true; changed=true;
       }
     });
-    if(changed) localStorage.setItem(KEY, JSON.stringify(items));
+    if(changed) persistItems();
   }
   autoArchive();
 
@@ -343,7 +360,7 @@
     items.forEach((it,idx)=>{
       if(it.order===undefined){ it.order = idx; changed=true; }
     });
-    if(changed) localStorage.setItem(KEY, JSON.stringify(items));
+    if(changed) persistItems();
   }
   ensureOrder();
 
@@ -511,7 +528,7 @@
   /* ---- Today's targets (js/today-logic.js) ---- */
   function todayLogicCtx(){
     return {
-      items, storageKey: KEY, isLocked, unlockedToday, today, daysBetween
+      items, storageKey: KEY, persist: persistItems, isLocked, unlockedToday, today, daysBetween
     };
   }
   function computeTodayPanel(){
@@ -527,6 +544,159 @@
       isLocked, today, daysBetween,
     });
   }
+
+  /* ---- Moodle import (js/moodle-client.js, src/worker.mjs) ---- */
+  // Cached copy of the server's connection status, so Settings can render
+  // instantly and offline. The server is the source of truth.
+  function readMoodleState(){
+    try{ const v = JSON.parse(localStorage.getItem(MOODLE_STATE_KEY)); return v && typeof v === 'object' ? v : {connected:false}; }catch(e){ return {connected:false}; }
+  }
+  let moodleState = readMoodleState();
+  function saveMoodleState(){ localStorage.setItem(MOODLE_STATE_KEY, JSON.stringify(moodleState)); }
+  let moodleBusy = false;
+  let connectOpen = false;
+  let connectBusy = false;
+  let connectError = '';
+  let connectJustOpened = false;
+  // The draft lives in memory only. The password is never written to storage
+  // and is cleared as soon as the attempt finishes, successful or not.
+  let connectDraft = { site: '', username: '', password: '' };
+
+  function moodleSignedIn(){ return !!(window.tpSync && window.tpSync.getUser && window.tpSync.getUser()); }
+  function appendMoodleEvents(events){
+    if(!events || !events.length) return;
+    let log = readJsonArray(MOODLE_EVENTS_KEY);
+    const ts = Date.now();
+    log = log.concat(events.map(e=>({ts, ...e}))).slice(-100);
+    localStorage.setItem(MOODLE_EVENTS_KEY, JSON.stringify(log));
+  }
+  // A background sync must never rebuild the DOM under someone who is typing.
+  function userIsTyping(){
+    const a = document.activeElement;
+    return addOpen || connectOpen || !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  }
+  function openConnectSheet(){
+    connectDraft = { site: localStorage.getItem(MOODLE_SITE_KEY) || '', username: '', password: '' };
+    connectError = '';
+    connectBusy = false;
+    connectOpen = true;
+    connectJustOpened = true;
+  }
+  function closeConnectSheet(){
+    if(document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
+    connectOpen = false;
+    connectBusy = false;
+    connectError = '';
+    connectJustOpened = false;
+    connectDraft = { site: '', username: '', password: '' };
+  }
+  async function moodleConnect(){
+    if(connectBusy) return;
+    const d = connectDraft;
+    if(!d.site.trim() || !d.username.trim() || !d.password){
+      connectError = 'Fill in the address, username and password.';
+      render();
+      return;
+    }
+    connectBusy = true;
+    connectError = '';
+    render();
+    try{
+      const status = await window.TPMoodle.api.connect(d.site, d.username.trim(), d.password);
+      localStorage.setItem(MOODLE_SITE_KEY, d.site.trim());
+      moodleState = status;
+      saveMoodleState();
+      closeConnectSheet();
+      render();
+      moodleSync({silent:false});
+    }catch(e){
+      connectBusy = false;
+      connectError = (e && e.message) || 'Could not connect. Try again.';
+      d.password = '';
+      pendingFocus = {id:'tp-connect-pass'};
+      render();
+    }
+  }
+  // Pulls the latest assignments/quizzes through the Worker and merges them in.
+  async function moodleSync(opts){
+    const silent = !!(opts && opts.silent);
+    if(moodleBusy) return;
+    moodleBusy = true;
+    if(!silent && tab === 'settings' && !userIsTyping()) render();
+    try{
+      const res = await window.TPMoodle.api.sync();
+      const merged = window.TPMoodle.mergeImported(items, res.records, { today: today(), deletedLog, now: Date.now() });
+      items = merged.items;
+      if(window.TPMoodle.ensureCourses(courses, res.records)) saveCourses();
+      appendMoodleEvents(merged.events);
+      moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt };
+      saveMoodleState();
+      persistItems();
+      if(!silent || merged.stats.added || merged.stats.moved) showToast(window.TPMoodle.summarize(merged.stats));
+    }catch(e){
+      const code = e && e.code;
+      if(code === 'moodle_auth'){
+        moodleState = { connected: false };
+        saveMoodleState();
+        showToast('Moodle sign-in expired. Connect again in Settings.');
+      } else if(!silent && code !== 'too_soon'){
+        showToast((e && e.message) || 'Could not sync Moodle');
+      }
+    } finally {
+      moodleBusy = false;
+      if(!userIsTyping()) render();
+    }
+  }
+  async function moodleDisconnect(){
+    if(!window.confirm('Disconnect Moodle? Assignments already imported stay, but stop updating.')) return;
+    try{
+      await window.TPMoodle.api.disconnect();
+      moodleState = { connected: false };
+      saveMoodleState();
+      showToast('Moodle disconnected');
+    }catch(e){
+      showToast((e && e.message) || 'Could not disconnect. Try again.');
+    }
+    render();
+  }
+  async function moodleSetCourse(id, on){
+    const prev = moodleState.courses || [];
+    moodleState = { ...moodleState, courses: prev.map(c=> c.id === id ? { ...c, selected: on } : c) };
+    saveMoodleState();
+    render();
+    try{
+      const status = await window.TPMoodle.api.saveCourses(moodleState.courses.filter(c=>c.selected).map(c=>c.id));
+      moodleState = status;
+      saveMoodleState();
+    }catch(e){
+      moodleState = { ...moodleState, courses: prev };
+      saveMoodleState();
+      showToast('Could not save that change');
+    }
+    render();
+  }
+  function moodleMaybeAutoSync(){
+    if(!moodleSignedIn()) return;
+    if(window.TPMoodle.shouldAutoSync(moodleState, Date.now())) moodleSync({silent:true});
+  }
+  async function moodleBoot(){
+    try{
+      const status = await window.TPMoodle.api.status();
+      moodleState = status.connected ? status : { connected: false };
+      saveMoodleState();
+    }catch(e){
+      return; // not configured, offline, or signed out: keep the cached state
+    }
+    if(tab === 'settings' && !userIsTyping()) render();
+    moodleMaybeAutoSync();
+  }
+  document.addEventListener('tp-auth-changed', function(e){
+    if(e.detail && e.detail.user) moodleBoot();
+    else if(tab === 'settings' && !userIsTyping()) render();
+  });
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'visible') moodleMaybeAutoSync();
+  });
 
   /* ---- Render ---- */
   function render(){
@@ -576,6 +746,7 @@
         theme, notifyHour, notifyDigest, courses, escapeHtml,
         completedCount: items.filter(i=>i.completed).length,
         syncLabel: window.tpSyncLabel || 'Sign in to sync',
+        moodle: { state: moodleState, busy: moodleBusy, signedIn: moodleSignedIn() },
       }) + V.devToolbarHtml({ devMode, devPanelOpen });
     } else if(tab==='courses'){
       screenHtml = V.coursesScreenHtml({
@@ -589,6 +760,10 @@
 
     if(addOpen && draft){
       html += V.addSheetHtml({ draft, courses, items, pickerOpen, moreOpen, prereqOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null, sheetJustOpened });
+    }
+    if(connectOpen){
+      html += V.connectSheetHtml({ draft: connectDraft, error: connectError, busy: connectBusy, escapeHtml, sheetJustOpened: connectJustOpened });
+      connectJustOpened = false;
     }
     if(menuFor!=null && items[menuFor]){
       const it = items[menuFor];
@@ -677,6 +852,9 @@
       get newCourseColor(){ return newCourseColor; }, set newCourseColor(v){ newCourseColor = v; },
       get lastAddedCourseId(){ return lastAddedCourseId; }, set lastAddedCourseId(v){ lastAddedCourseId = v; },
       touchItem, newItemId,
+      openConnectSheet, closeConnectSheet, moodleConnect, moodleSync, moodleDisconnect, moodleSetCourse,
+      get connectDraft(){ return connectDraft; },
+      get connectBusy(){ return connectBusy; },
     };
   }
   render();

@@ -227,6 +227,9 @@ body::-webkit-scrollbar{display:none;}
 .tp-s-toggle-on .tp-s-toggle-knob{left:21px;background:var(--accent-bright);}
 .tp-s-link{background:none;border:none;color:var(--accent-bright);font-family:inherit;font-size:13px;cursor:pointer;padding:0;transition:opacity .15s ease;}
 .tp-s-link:active{opacity:.6;}
+.tp-s-link:disabled{opacity:.4;cursor:default;}
+.tp-connect-error{font-size:13px;line-height:1.4;color:var(--danger);margin-top:14px;}
+.tp-connect-error:empty{margin:0;}
 #tp-app .tp-s-hour-select{background:none;border:none;color:var(--accent-bright);font-family:inherit;font-size:13px;cursor:pointer;padding:0;text-align:right;-webkit-appearance:none;appearance:none;}
 .tp-s-status-ok{font-size:12px;color:var(--text-dim);}
 .tp-s-status-dim{font-size:12px;color:var(--text-dim);}

@@ -437,6 +437,9 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     signIn: () => signInWithPopup(auth, provider),
     signOut: () => signOut(auth),
     getUser: () => currentUser,
+    // Firebase ID token for authenticating calls to this app's own Worker
+    // (js/moodle-client.js). Refreshed automatically by the SDK when stale.
+    getIdToken: async () => (currentUser ? currentUser.getIdToken() : null),
     ensureItemMeta,
     newId,
     enablePush,

@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v39'; // bumped: full revert to the original position:fixed tab bar - nothing tonight fixed it
+const CACHE_NAME = 'taskplus-cache-v40'; // bumped: Moodle import (js/moodle-client.js, connect sheet, settings group)
 const urlsToCache = [
   './',
   './index.html',
@@ -69,6 +69,7 @@ const urlsToCache = [
   './js/utils.js',
   './js/item-logic.js',
   './js/courses.js',
+  './js/moodle-client.js',
   './js/all-logic.js',
   './js/week-logic.js',
   './js/html.js',
@@ -84,6 +85,7 @@ const urlsToCache = [
   './js/views/settings-html.js',
   './js/views/courses-html.js',
   './js/views/add-sheet-html.js',
+  './js/views/connect-sheet-html.js',
   './js/views/quick-menu-html.js',
   './js/today-logic.js',
   './js/bind-events.js',

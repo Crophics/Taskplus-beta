@@ -276,6 +276,33 @@
     const clearCompletedBtn = document.getElementById('tp-clear-completed');
     if (clearCompletedBtn) clearCompletedBtn.onclick = api.clearCompleted;
 
+    /* ---- Moodle (Settings group + Connect sheet) ---- */
+    const moodleConnectBtn = document.getElementById('tp-moodle-connect');
+    if (moodleConnectBtn) moodleConnectBtn.onclick = () => { api.openConnectSheet(); api.render(); };
+    const moodleSyncBtn = document.getElementById('tp-moodle-sync');
+    if (moodleSyncBtn) moodleSyncBtn.onclick = () => api.moodleSync({ silent: false });
+    const moodleDisconnectBtn = document.getElementById('tp-moodle-disconnect');
+    if (moodleDisconnectBtn) moodleDisconnectBtn.onclick = api.moodleDisconnect;
+    root.querySelectorAll('[data-moodle-course]').forEach(b => b.onclick = () => {
+      api.moodleSetCourse(Number(b.dataset.moodleCourse), b.getAttribute('aria-checked') !== 'true');
+    });
+
+    const connectBackdrop = document.getElementById('tp-connect-backdrop');
+    if (connectBackdrop) connectBackdrop.addEventListener('click', (e) => {
+      if (e.target === connectBackdrop && !api.connectBusy) { api.closeConnectSheet(); api.render(); }
+    });
+    const connectCancel = document.getElementById('tp-connect-cancel');
+    if (connectCancel) connectCancel.onclick = () => { api.closeConnectSheet(); api.render(); };
+    // Model-only fields (same rule as the Add sheet): typing never re-renders.
+    [['tp-connect-site', 'site'], ['tp-connect-user', 'username'], ['tp-connect-pass', 'password']].forEach(([id, key]) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.oninput = (e) => { api.connectDraft[key] = e.target.value; };
+      el.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); api.moodleConnect(); } };
+    });
+    const connectSubmit = document.getElementById('tp-connect-submit');
+    if (connectSubmit) connectSubmit.onclick = () => api.moodleConnect();
+
     /* ---- Dev toolbar (unchanged from the desktop app) ---- */
     const devToolbarBtn = document.getElementById('tp-dev-toolbar-btn');
     if (devToolbarBtn) devToolbarBtn.onclick = () => { api.devPanelOpen = !api.devPanelOpen; api.saveDevPanelOpen(); api.render(); };

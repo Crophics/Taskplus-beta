@@ -29,6 +29,43 @@
     return `<div class="tp-section-heading"><span>${title}</span><span class="tp-section-rule"></span></div><div class="tp-s-group">${rows}</div>`;
   }
 
+  function lastSyncedLabel(ts) {
+    if (!ts) return 'Not synced yet';
+    return 'Last synced ' + new Date(ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
+  // Moodle connection. Not connected -> one Connect row. Connected -> account
+  // line, one switch per enrolled course, Sync now and Disconnect. This is the
+  // only place the last-sync time is shown on purpose.
+  function moodleGroupHtml(ctx) {
+    const { moodle, escapeHtml } = ctx;
+    const st = (moodle && moodle.state) || { connected: false };
+    if (!st.connected) {
+      const sub = moodle && moodle.signedIn
+        ? 'Import assignments and quizzes automatically.'
+        : 'Sign in to Taskplus first (Sync, below), then connect Moodle.';
+      return groupHtml('Moodle', `<div class="tp-s-row">
+        <div class="tp-s-row-main"><span class="tp-s-row-label">Moodle</span>
+          <button type="button" class="tp-s-link" id="tp-moodle-connect"${moodle && moodle.signedIn ? '' : ' disabled'}>Connect</button></div>
+        <div class="tp-s-row-sub">${sub}</div>
+      </div>`);
+    }
+    const courseRows = (st.courses || []).map(c => `<div class="tp-s-row"><div class="tp-s-row-main">
+        <span class="tp-s-row-label">${escapeHtml(c.code || c.name)}</span>
+        <button type="button" class="tp-s-toggle${c.selected ? ' tp-s-toggle-on' : ''}" data-moodle-course="${c.id}" role="switch" aria-checked="${!!c.selected}" aria-label="Sync ${escapeHtml(c.code || c.name)}"><span class="tp-s-toggle-knob"></span></button>
+      </div></div>`).join('');
+    const busy = moodle.busy;
+    return groupHtml('Moodle',
+      `<div class="tp-s-row"><div class="tp-s-row-main"><span class="tp-s-row-label">${escapeHtml(st.site || 'Connected')}</span>
+        <button type="button" class="tp-s-link" id="tp-moodle-sync"${busy ? ' disabled' : ''}>${busy ? 'Syncing…' : 'Sync now'}</button></div>
+        <div class="tp-s-row-sub">${escapeHtml(lastSyncedLabel(st.lastSyncAt))}</div></div>` +
+      courseRows +
+      `<div class="tp-s-row"><div class="tp-s-row-sub">Course changes apply on the next sync.</div></div>
+       <div class="tp-s-row"><div class="tp-s-row-main"><button type="button" class="tp-s-danger" id="tp-moodle-disconnect">Disconnect Moodle</button></div>
+        <div class="tp-s-row-sub">Assignments already imported stay, but stop updating.</div></div>`
+    );
+  }
+
   function settingsScreenHtml(ctx) {
     const { theme, notifyHour, notifyDigest, courses, escapeHtml, completedCount, syncLabel } = ctx;
 
@@ -62,7 +99,7 @@
 
     return `<div class="tp-screen tp-screen-settings">
       <div class="tp-a-header-top"><span class="tp-a-title-heading">Settings</span></div>
-      ${appearance}${reminders}${account}${clear}
+      ${appearance}${reminders}${moodleGroupHtml(ctx)}${account}${clear}
     </div>`;
   }
 
