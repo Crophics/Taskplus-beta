@@ -8,12 +8,21 @@
     return new Date(dateStr + 'T00:00:00');
   }
 
+  // Format a Date's *local* calendar day as YYYY-MM-DD (toISOString is UTC and
+  // yields the previous day for local midnight in zones ahead of UTC).
+  function fmtLocal(d) {
+    const y = String(d.getFullYear()).padStart(4, '0');
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
   function today() {
     const d = new Date();
     const offset = Number(localStorage.getItem(DAY_OFFSET_KEY) || 0);
     if (Number.isFinite(offset)) d.setDate(d.getDate() + offset);
     d.setHours(0, 0, 0, 0);
-    return d.toISOString().slice(0, 10);
+    return fmtLocal(d);
   }
 
   function daysBetween(a, b) {
@@ -23,13 +32,13 @@
   function addDays(dateStr, n) {
     const d = asDate(dateStr);
     d.setDate(d.getDate() + n);
-    return d.toISOString().slice(0, 10);
+    return fmtLocal(d);
   }
 
   function addMonths(dateStr, n) {
     const d = asDate(dateStr);
     d.setMonth(d.getMonth() + n);
-    return d.toISOString().slice(0, 10);
+    return fmtLocal(d);
   }
 
   function nextDueDate(due, recurring) {
