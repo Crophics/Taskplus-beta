@@ -38,6 +38,8 @@ test('a new record becomes a normal one-unit item with Moodle details on `source
   assert.strictEqual(it.course, 'MATH 2400');
   assert.strictEqual(it.due, '2026-11-19');
   assert.strictEqual(it.total, 1);
+  assert.strictEqual(it.unit, 'assignment');
+  assert.strictEqual(M.mergeImported([], [rec({ id: 'moodle:9', cmid: 9, kind: 'quiz' })], ctx()).items[0].unit, 'quiz');
   assert.strictEqual(it.done, 0);
   assert.strictEqual(it.completed, false);
   assert.strictEqual(it.createdAt, TODAY);

@@ -22,6 +22,42 @@ but don't bring `wrangler.toml`'s `[[routes]]` block or any beta-specific
 naming across, or production will start claiming the beta subdomain/Worker
 name.
 
+## Moodle import (Phase 1, added after the original build)
+
+Read `docs/PLAN-moodle-import.md` for the plan and `docs/SETUP-moodle-worker.md`
+for the one-time Cloudflare setup. What matters when touching code:
+
+- **There is now a Worker.** `src/worker.mjs` (ES modules, `.mjs`) serves
+  `/api/moodle/*` and passes everything else to the static assets via the
+  `ASSETS` binding (`wrangler.toml`). It verifies the caller's Firebase ID token,
+  exchanges Moodle credentials for a token (password never stored), keeps the
+  token AES-GCM encrypted in KV, and returns mapped records. Until the
+  `MOODLE_KV` binding and `TOKEN_ENC_KEY` secret exist it answers 503 and the
+  rest of the site is unaffected. The `[[kv_namespaces]]` block in
+  `wrangler.toml` is **commented out on purpose**: CI uses wrangler 3.x, which
+  fails a deploy on a KV binding with no id.
+- **Imported items are a second storage key.** `js/app.js` `loadItems()` /
+  `persistItems()` split `items` between `tp-assignments` (manual, synced) and
+  `tp-moodle-items` (imported, device-only). **Never write
+  `localStorage.setItem('tp-assignments', ...)` from app code directly; call
+  `persistItems()`**, or imported items leak into the shared Firestore doc.
+  `today-logic.js` takes a `persist` callback for the same reason. Imported items
+  are identified by `item.source.type === 'moodle'`; ids are `moodle:<cmid>`.
+- **`js/moodle-client.js` (`TPMoodle`)** holds the pure merge (`mergeImported`,
+  tested in `test/moodle-import.test.js`) and the API wrapper. It loads right
+  after `courses.js`. Moodle owns title/course/due/`source`; the user owns the
+  rest.
+- **Navigation is three tabs** (Today, Week, Courses). Settings is the gear on
+  Today, All is a drill-down from Week, Add is the + on Week. `TABS` in `app.js`
+  still lists every screen so an old saved tab preference keeps working.
+- **Tests for the Worker** (`test/moodle-worker.test.js`) use a fake Moodle
+  `fetch`, a fake KV and real RSA-signed Firebase tokens; nothing touches the
+  network. For changes to the wiring, the jsdom technique below still applies,
+  and the Worker handler can be called directly in that script
+  (`handleApi(request, env, {fetchFn})`) so the app and Worker run together.
+- **`.assetsignore` already hid repo internals** (`*.md`, `test/`, etc.); `src/`
+  was added to it. Don't rewrite that file wholesale.
+
 ## Orientation
 
 Buildless, no bundler, no framework. Every `js/*.js` and `js/views/*.js`

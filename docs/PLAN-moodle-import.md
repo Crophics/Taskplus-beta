@@ -101,10 +101,12 @@ collections (`users/{uid}/notes/*`, `users/{uid}/cards/*`), never `data`.
 
 Production's desktop app reads the same `data` doc. New item fields
 (`source`, `estimate`, `weight`, ...) must be proven harmless to production's
-merge code before they are written there. **Resolved (section 10):** imported
-items and the new fields live in beta-only Firestore documents
-(`users/{uid}/taskplus-beta/*`), and the client merges them for display.
-Production's `data` doc is not touched. Revisit when merging back.
+merge code before they are written there. **Resolved (section 10), as
+built in Phase 1:** imported items are kept on the device under their own storage
+key and are excluded from what is pushed to the shared `data` doc, so production
+never sees them. A beta-only Firestore document (planned as
+`users/{uid}/taskplus-beta/*`) is deferred until progress on imported items needs
+to sync across devices. Revisit when merging back.
 
 ## 4. Data model changes
 
@@ -340,12 +342,12 @@ Each phase ships on its own and leaves the app working.
 - **Phase 0 — Decisions + safety.** Decisions are in section 10. Confirm the
   beta-only document layout and that the client merges it without touching
   production's `data` doc. Add the redacted Moodle JSON fixtures.
-- **Phase 1 — Moodle read-only import.** Worker skeleton (auth check, per-user
-  token store), username/password token exchange, `mapMoodleToItems()` pure
-  module + tests, inbox doc, client merge, cron. Assignments, quizzes and
-  submission state only. The Connect and Settings screens with course
-  selection, and the three-tab layout (Today, Week, Courses) with Add moved to
-  Week. Bump `CACHE_NAME` on every precached change.
+- **Phase 1 — Moodle read-only import. BUILT (see "What Phase 1 shipped").**
+  Worker (Firebase sign-in check, encrypted per-user token store,
+  username/password token exchange), the Moodle mapping module and client merge,
+  the Connect sheet and Settings group with course selection, and the
+  three-tab layout (Today, Week, Courses) with Add moved to Week.
+  Assignments, quizzes and submission state only.
 - **Phase 2 — Weights, grades, status.** Grade items, weight entry, per-course
   scale, the Courses tab and Course detail. One-time import of existing
   `weight`/`target` from the vault via a local Node script that emits JSON for
@@ -362,6 +364,36 @@ Each phase ships on its own and leaves the app working.
 - **Phase 6 — Vault content.** Schedule, CSCI, lectures, flashcards, backup.
 - **Phase 7 — Cutover.** Run both in parallel for a couple of weeks, compare, then
   retire the Windows scheduled tasks.
+
+### What Phase 1 shipped, and where it differs from the plan above
+
+- **Sync is client-triggered, not cron.** The app calls `POST /api/moodle/sync`
+  when you tap Sync now, when you sign in, and when it returns to the foreground
+  more than 3 hours after the last sync. The Worker returns the records and the
+  client merges them. A Worker cron needs a service account to write to
+  Firestore, so it moves to Phase 5 with notifications.
+- **No inbox document.** For the same reason, the Worker never writes to
+  Firestore. Imported items are merged on the device.
+- **Imported items stay on the device.** They live under their own localStorage
+  key (`tp-moodle-items`) and are filtered out of what `syncPush()` sends, so
+  they never reach the shared `data` doc (this is how "beta only" was
+  implemented). Consequence: progress on an imported item (checked off, notes,
+  steps) is **not** synced between devices yet; each device re-imports from
+  Moodle and keeps its own progress. A beta-only Firestore document for imported
+  items' progress is the follow-up.
+- **Moodle owns** title, course, due date and the `source` details object;
+  **the user owns** everything else. The merge never deletes, never un-completes,
+  and does not re-add an item the user deleted.
+- **`/api/moodle/*`** needs a one-time Cloudflare setup (KV namespace and an
+  encryption secret) and answers 503 until then: `docs/SETUP-moodle-worker.md`.
+- **Still the old UI under the new nav:** Today and Week are unit-based
+  (Phase 3 makes them minutes-based). The All list was kept as a drill-down from
+  Week (search, filters, reorder still work) instead of being deleted. The
+  Courses tab shows the existing course manager until Phase 2 adds grades.
+  The Courses tab reuses the list icon because the icon set has no book icon.
+- **Not verified against real services:** a real Moodle site, a real Firebase ID
+  token, and a deploy with the KV binding enabled. Everything else is covered by
+  unit tests and a jsdom end-to-end run (fake Moodle, real Worker code).
 
 ## 12. Testing strategy
 

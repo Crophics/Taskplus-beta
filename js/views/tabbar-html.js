@@ -1,9 +1,12 @@
-/* views/tabbar-html.js — Fixed bottom tab bar (Today/Week/[Add]/All/Settings) */
+/* views/tabbar-html.js — Fixed bottom tab bar (Today / Week / Courses).
+   Settings is reached from the gear on Today; the All list from the Week
+   screen; adding an assignment by hand from the + on Week (imported Moodle
+   work is the main source now, so manual adds are deliberately tucked away). */
 (function (global) {
   function tabBarHtml({ tab }) {
-    // The Courses screen is reached from Settings, so Settings stays
-    // highlighted while it's open rather than showing no active tab.
-    const effectiveTab = tab === 'courses' ? 'settings' : tab;
+    // Drill-down screens keep their parent's tab lit: All hangs off Week.
+    // Settings is not a tab, so nothing is highlighted while it is open.
+    const effectiveTab = tab === 'all' ? 'week' : tab;
     function item(id, icon, label) {
       const active = effectiveTab === id;
       return `<button type="button" class="tp-tab${active ? ' tp-tab-active' : ''}" data-tab="${id}" aria-current="${active ? 'page' : 'false'}">
@@ -15,9 +18,7 @@
       <div class="tp-tabbar-inner">
         ${item('today', 'calendar_today', 'Today')}
         ${item('week', 'chart_bar', 'Week')}
-        <button type="button" class="tp-tab-add" id="tp-add-toggle" aria-label="Add assignment">${window.TPIcons.svg('plus')}</button>
-        ${item('all', 'format_list_bulleted', 'All')}
-        ${item('settings', 'cog_outline', 'Settings')}
+        ${item('courses', 'format_list_bulleted', 'Courses')}
       </div>
     </nav>`;
   }

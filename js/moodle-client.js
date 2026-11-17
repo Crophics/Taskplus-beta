@@ -80,7 +80,8 @@
         if (submitted && daysBetween(due, today) > RECENT_SUBMITTED_DAYS) { stats.skippedOld++; return; }
         const item = {
           id: rec.id, title: rec.title, course: rec.course, due,
-          total: 1, unit: '', notes: '', done: submitted ? 1 : 0, today: 0,
+          // `unit` is what Today's pill shows for one-sitting work; empty would read "Reading".
+          total: 1, unit: rec.kind === 'quiz' ? 'quiz' : 'assignment', notes: '', done: submitted ? 1 : 0, today: 0,
           completed: submitted, dependsOn: '', recurring: '', subtasks: [],
           completedAt: submitted ? today : null, createdAt: today, archived: false,
           order: nextOrder++, updatedAt: now, source: sourceOf(rec, null),

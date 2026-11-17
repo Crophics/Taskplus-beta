@@ -74,6 +74,12 @@
     });
     const addToggle = document.getElementById('tp-add-toggle');
     if (addToggle) addToggle.onclick = () => { api.openAddSheet(); api.render(); };
+    const openSettings = document.getElementById('tp-open-settings');
+    if (openSettings) openSettings.onclick = () => { api.tab = 'settings'; api.savePrefs(); api.render(); };
+    const openAll = document.getElementById('tp-open-all');
+    if (openAll) openAll.onclick = () => { api.tab = 'all'; api.savePrefs(); api.render(); };
+    const allBack = document.getElementById('tp-all-back');
+    if (allBack) allBack.onclick = () => { api.tab = 'week'; api.savePrefs(); api.render(); };
 
     /* ---- Today screen: tap a row body to open the quick-action menu ---- */
     root.querySelectorAll('.tp-t-row, .tp-t-ahead-row').forEach(row => {

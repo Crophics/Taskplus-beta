@@ -102,7 +102,7 @@
       </div>
     </div>`;
 
-    return `<div class="tp-screen tp-screen-all">${header}<div id="tp-a-results">${resultsHtml(ctx)}</div></div>`;
+    return `<div class="tp-screen tp-screen-all"><button type="button" class="tp-c-back" id="tp-all-back">${window.TPIcons.svg('chevron_left')} Week</button>${header}<div id="tp-a-results">${resultsHtml(ctx)}</div></div>`;
   }
 
   global.TPViews = global.TPViews || {};

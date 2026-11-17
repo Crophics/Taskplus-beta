@@ -83,7 +83,10 @@
         <div class="tp-t-weekday">${escapeHtml(weekdayLabel)}</div>
         <div class="tp-t-date">${escapeHtml(dateLabel)}</div>
       </div>
-      ${streak > 0 ? `<div class="tp-t-streak">${streak}-day streak</div>` : ''}
+      <div class="tp-t-header-right">
+        ${streak > 0 ? `<div class="tp-t-streak">${streak}-day streak</div>` : ''}
+        <button type="button" class="tp-icon-btn" id="tp-open-settings" aria-label="Settings">${window.TPIcons.svg('cog_outline')}</button>
+      </div>
     </div>`;
 
     const targetsHeading = `<div class="tp-section-heading">
