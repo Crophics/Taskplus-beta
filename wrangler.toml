@@ -1,9 +1,24 @@
 name = "taskplus-beta"
+main = "src/worker.mjs"
 compatibility_date = "2026-08-31"
 
+# Static app. Requests the assets layer can't answer (all /api/* calls, which
+# are POST or non-navigation) fall through to src/worker.mjs; the Worker hands
+# anything else back via the ASSETS binding.
 [assets]
 directory = "."
+binding = "ASSETS"
 not_found_handling = "single-page-application"
+
+# Moodle import. The Worker answers /api/moodle/* with 503 "not configured"
+# until BOTH of these exist, so the site keeps working without them.
+# One-time setup (see docs/SETUP-moodle-worker.md):
+#   1. npx wrangler kv namespace create MOODLE_KV   -> paste the id below and uncomment
+#   2. npx wrangler secret put TOKEN_ENC_KEY        -> 32 random bytes, base64
+#
+# [[kv_namespaces]]
+# binding = "MOODLE_KV"
+# id = "PASTE_NAMESPACE_ID_HERE"
 
 [[routes]]
 pattern = "beta.taskplus.cc"
