@@ -34,6 +34,10 @@
   const MOODLE_STATE_KEY='tp-moodle';
   const MOODLE_EVENTS_KEY='tp-moodle-events';
   const MOODLE_SITE_KEY='tp-moodle-last-site';
+  // Grades: what Moodle reported (replaced each sync) and what the user owns
+  // (weights, targets, credits). Device-local, like imported items.
+  const GRADES_KEY='tp-moodle-grades';
+  const GRADE_SETTINGS_KEY='tp-grade-settings';
   const DEV_MODE_KEY='tp-dev-mode';
   const DEV_PANEL_KEY='tp-dev-panel-open';
   const DAY_OFFSET_KEY='tp-day-offset';
@@ -117,8 +121,8 @@
   try{ prefs = JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; }catch(e){ prefs = {}; }
   let searchTerm = prefs.searchTerm || ''; // All-tab search text
   let theme = ['dark','light','blue','auto'].includes(prefs.theme) ? prefs.theme : 'dark';
-  const TABS = ['today','all','week','settings','courses'];
-  let tab = TABS.includes(prefs.tab) ? prefs.tab : 'today';
+  const TABS = ['today','all','week','settings','courses','course','manage'];
+  let tab = TABS.includes(prefs.tab) && prefs.tab !== 'course' ? prefs.tab : 'today';
   let addOpen = false;
   let pickerOpen = false;
   let moreOpen = false; // add-sheet "Notes, subtasks, repeat, dependency" disclosure
@@ -202,7 +206,7 @@
   pruneDeletedLog();
 
   function savePrefs(){
-    localStorage.setItem(PREFS_KEY, JSON.stringify({searchTerm,theme,notifyHour,notifyDigest,tab,allSortMode}));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({searchTerm,theme,notifyHour,notifyDigest,tab: tab==='course' ? 'courses' : tab,allSortMode}));
     syncPush();
   }
 
@@ -545,6 +549,82 @@
     });
   }
 
+  /* ---- Grades (js/grades-logic.js, js/views/grades-html.js) ---- */
+  function readJsonObject(key, fallback){
+    try{ const v = JSON.parse(localStorage.getItem(key)); return v && typeof v === 'object' && !Array.isArray(v) ? v : fallback; }catch(e){ return fallback; }
+  }
+  let gradesStore = readJsonObject(GRADES_KEY, { syncedAt: null, courses: {} });
+  let gradeSettings = readJsonObject(GRADE_SETTINGS_KEY, window.TPGrades.emptySettings());
+  if(!gradeSettings.weights) gradeSettings.weights = {};
+  if(!gradeSettings.courses) gradeSettings.courses = {};
+  let courseDetailName = null;
+  function saveGradeSettings(){ localStorage.setItem(GRADE_SETTINGS_KEY, JSON.stringify(gradeSettings)); }
+  function saveGradesStore(){ localStorage.setItem(GRADES_KEY, JSON.stringify(gradesStore)); }
+
+  function courseDetailCtx(name){
+    const G = window.TPGrades;
+    const gc = gradesStore.courses[name] || null;
+    const entries = G.buildEntries(name, items, gc);
+    const cs = G.courseSettings(gradeSettings, name);
+    const calc = G.computeCourse(entries.graded.concat(entries.coming), gradeSettings.weights, {
+      target: cs.target, moodleTotal: gc && gc.total !== undefined ? gc.total : null,
+    });
+    return {
+      escapeHtml: window.TPHtml.escapeHtml, name, color: courseColorFor(name), relativeDueLabel,
+      settingsForCourse: cs, entries, weights: gradeSettings.weights, calc, target: cs.target,
+      letter: G.letterFor(calc.currentPct, cs.scale), summary: '',
+    };
+  }
+  function gradeSummaryHtml(){
+    return courseDetailName ? window.TPViews.gradeSummaryHtml(courseDetailCtx(courseDetailName)) : '';
+  }
+  function openCourse(name){
+    courseDetailName = name;
+    if(tab !== 'course') screenJustSwitched = true;
+    tab = 'course';
+    if(typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+    savePrefs();
+    render();
+  }
+  // Weight typing is model-only: the caller patches #tp-g-summary, nothing re-renders.
+  function setWeight(id, value){
+    gradeSettings = window.TPGrades.setWeight(gradeSettings, id, value);
+    saveGradeSettings();
+  }
+  function stepCourseSetting(name, which, dir){
+    const cs = window.TPGrades.courseSettings(gradeSettings, name);
+    const patch = which === 'target' ? { target: cs.target + dir } : { credits: cs.credits + dir * 0.5 };
+    gradeSettings = window.TPGrades.setCourseSetting(gradeSettings, name, patch);
+    saveGradeSettings();
+    render();
+  }
+  function useSuggestedWeights(name){
+    const e = window.TPGrades.buildEntries(name, items, gradesStore.courses[name] || null);
+    let n = 0;
+    e.coming.concat(e.graded).forEach(x=>{
+      if(x.weightSuggested && !(gradeSettings.weights[x.id] > 0)){ gradeSettings = window.TPGrades.setWeight(gradeSettings, x.id, x.weightSuggested); n++; }
+    });
+    saveGradeSettings();
+    showToast(n ? `Filled ${n} weight${n===1?'':'s'} from Moodle` : 'No weights to fill in');
+    render();
+  }
+  function importGradeSettings(file){
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const out = window.TPGrades.importSettings(gradeSettings, JSON.parse(reader.result));
+        if(!out.stats.weights && !out.stats.courses){ showToast('Nothing to import in that file'); return; }
+        gradeSettings = out.settings;
+        saveGradeSettings();
+        showToast(`Imported ${out.stats.weights} weight${out.stats.weights===1?'':'s'} and settings for ${out.stats.courses} course${out.stats.courses===1?'':'s'}`);
+        render();
+      }catch(e){
+        showToast('That is not a grade settings file');
+      }
+    };
+    reader.readAsText(file);
+  }
+
   /* ---- Moodle import (js/moodle-client.js, src/worker.mjs) ---- */
   // Cached copy of the server's connection status, so Settings can render
   // instantly and offline. The server is the source of truth.
@@ -631,6 +711,10 @@
       appendMoodleEvents(merged.events);
       moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt };
       saveMoodleState();
+      if(Array.isArray(res.grades)){
+        gradesStore = window.TPGrades.mergeGrades(gradesStore, res.grades, res.syncedAt);
+        saveGradesStore();
+      }
       persistItems();
       if(!silent || merged.stats.added || merged.stats.moved) showToast(window.TPMoodle.summarize(merged.stats));
     }catch(e){
@@ -749,6 +833,13 @@
         moodle: { state: moodleState, busy: moodleBusy, signedIn: moodleSignedIn() },
       }) + V.devToolbarHtml({ devMode, devPanelOpen });
     } else if(tab==='courses'){
+      const ov = window.TPGrades.overview({ courses, items, store: gradesStore, settings: gradeSettings, colorFor: courseColorFor, today: today() });
+      screenHtml = V.coursesOverviewHtml({ escapeHtml, rows: ov.rows, gpa: ov.gpa, connected: !!moodleState.connected, relativeDueLabel });
+    } else if(tab==='course' && courseDetailName){
+      const ctx = courseDetailCtx(courseDetailName);
+      ctx.summary = V.gradeSummaryHtml(ctx);
+      screenHtml = V.courseDetailHtml(ctx);
+    } else if(tab==='manage'){
       screenHtml = V.coursesScreenHtml({
         escapeHtml, courses, openCountFor: (name)=> window.TPCourses.openCountForCourse(items, name),
         draftName: newCourseName, draftColor: newCourseColor,
@@ -855,6 +946,8 @@
       openConnectSheet, closeConnectSheet, moodleConnect, moodleSync, moodleDisconnect, moodleSetCourse,
       get connectDraft(){ return connectDraft; },
       get connectBusy(){ return connectBusy; },
+      openCourse, setWeight, stepCourseSetting, useSuggestedWeights, importGradeSettings, gradeSummaryHtml,
+      get courseDetailName(){ return courseDetailName; },
     };
   }
   render();

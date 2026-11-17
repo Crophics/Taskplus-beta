@@ -131,7 +131,7 @@ export async function handleApi(request, env, deps = {}) {
       }
       rec.courses = result.courses.map((c) => ({ id: c.id, fullname: c.fullname }));
       await saveRecord(env, uid, rec);
-      return json({ records: result.records, warnings: result.warnings, syncedAt: now, courses: courseView(rec.courses, rec.selected) });
+      return json({ records: result.records, grades: result.grades, warnings: result.warnings, syncedAt: now, courses: courseView(rec.courses, rec.selected) });
     }
 
     return fail('not_found', 'Unknown endpoint', 404);

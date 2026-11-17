@@ -73,7 +73,20 @@ function makeFetch(opts = {}) {
       const f = body.get('wsfunction');
       calls.push(f);
       if (opts.expireToken || body.get('wstoken') !== goodToken) return reply({ exception: 'moodle_exception', errorcode: 'invalidtoken', message: 'Invalid token' });
+      if (opts.forbid && opts.forbid.includes(f)) return reply({ exception: 'webservice_access_exception', errorcode: 'accessexception', message: 'Access control exception' });
       switch (f) {
+        case 'gradereport_user_get_grade_items': {
+          const cid = Number(body.get('courseid'));
+          if (cid === 7) {
+            return reply({ usergrades: [{ courseid: 7, maxdepth: 2, gradeitems: [
+              { id: 1, itemtype: 'course', graderaw: 87.4, grademax: 100, cmid: null },
+              { id: 2, itemtype: 'mod', itemmodule: 'assign', iteminstance: 102, cmid: 5002, itemname: 'Assignment 5', graderaw: 88, grademax: 100, weightformatted: '10.00 %', feedback: '<p>Nice work</p>', gradedategraded: 1_799_000_000 },
+              { id: 3, itemtype: 'mod', itemmodule: 'assign', iteminstance: 101, cmid: 5001, itemname: 'Assignment 6', graderaw: null, grademax: 100, weightformatted: '10.00 %' },
+              { id: 4, itemtype: 'manual', itemname: 'Attendance', cmid: null, graderaw: 9, grademax: 10, weightformatted: '5.00 %' },
+            ] }] });
+          }
+          return reply({ usergrades: [{ courseid: cid, maxdepth: 2, gradeitems: [] }] });
+        }
         case 'core_webservice_get_site_info': return reply({ userid: 42, fullname: 'Test Student', sitename: 'Example U' });
         case 'core_enrol_get_users_courses': return reply(COURSES);
         case 'mod_assign_get_assignments':
@@ -285,7 +298,7 @@ test('sync is rate limited per user', async () => {
 });
 
 test('sync respects the Moodle call budget and says what was skipped', async () => {
-  const env = { ...newEnv(), SUBREQUEST_BUDGET: '4' }; // 3 base calls + 1 state check
+  const env = { ...newEnv(), SUBREQUEST_BUDGET: '6' }; // 3 base calls + 2 grade reports + 1 state check
   const f = makeFetch();
   await connected(env, f);
   const { json } = await api('/api/moodle/sync', { env, fetchFn: f, now: NOW + 60_000 });
@@ -319,6 +332,53 @@ test('disconnect deletes the stored connection', async () => {
   const r = await api('/api/moodle/disconnect', { env, fetchFn: f });
   assert.deepStrictEqual(r.json, { ok: true });
   assert.strictEqual(env.MOODLE_KV.m.size, 0);
+});
+
+test('sync returns grade entries per course, keyed like the import records', async () => {
+  const env = newEnv();
+  const f = makeFetch();
+  await connected(env, f);
+  const { json } = await api('/api/moodle/sync', { env, fetchFn: f, now: NOW + 60_000 });
+  const math = json.grades.find((g) => g.courseId === 7);
+  assert.strictEqual(math.course, 'MATH 2400');
+  assert.strictEqual(math.total, 87.4);
+  assert.deepStrictEqual(math.items.map((i) => [i.id, i.pct, i.weightSuggested]), [['moodle:5002', 88, 10], ['moodle:5001', null, 10], ['gi:4', 90, 5]]);
+  assert.strictEqual(math.items[0].feedback, 'Nice work');
+  assert.strictEqual(json.grades.find((g) => g.courseId === 8).items.length, 0);
+});
+
+test('a school that blocks the grade report does not fail the sync or disconnect the user', async () => {
+  const env = newEnv();
+  await connected(env, makeFetch());
+  const f = makeFetch({ forbid: ['gradereport_user_get_grade_items'] });
+  const { res, json } = await api('/api/moodle/sync', { env, fetchFn: f, now: NOW + 60_000 });
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(json.records.length, 4, 'assignments and quizzes still arrive');
+  assert.deepStrictEqual(json.grades, []);
+  assert.ok(json.warnings.includes('grades_failed:7') && json.warnings.includes('grades_failed:8'));
+  const st = await api('/api/moodle/status', { method: 'GET', env, fetchFn: f });
+  assert.strictEqual(st.json.connected, true, 'still connected');
+});
+
+test('accessexception on a core call is "forbidden", and keeps the stored connection', async () => {
+  const env = newEnv();
+  await connected(env, makeFetch());
+  const f = makeFetch({ forbid: ['mod_assign_get_assignments'] });
+  const { res, json } = await api('/api/moodle/sync', { env, fetchFn: f, now: NOW + 60_000 });
+  assert.strictEqual(res.status, 403);
+  assert.strictEqual(json.error, 'moodle_forbidden');
+  const st = await api('/api/moodle/status', { method: 'GET', env, fetchFn: f });
+  assert.strictEqual(st.json.connected, true, 'a restricted function is not an expired sign-in');
+});
+
+test('grade reports are skipped, with a warning, when the call budget is spent', async () => {
+  const env = { ...newEnv(), SUBREQUEST_BUDGET: '4' }; // 3 base calls + room for one grade report
+  const f = makeFetch();
+  await connected(env, f);
+  const { json } = await api('/api/moodle/sync', { env, fetchFn: f, now: NOW + 60_000 });
+  assert.strictEqual(json.grades.length, 1);
+  assert.ok(json.warnings.some((w) => w.startsWith('grades_skipped:')));
+  assert.ok(json.warnings.some((w) => w.startsWith('state_skipped:')), 'state checks get what is left, which is nothing');
 });
 
 test('non-API requests fall through to static assets', async () => {

@@ -272,15 +272,34 @@
       api.render();
     };
     const manageBtn = document.getElementById('tp-manage-courses');
-    if (manageBtn) manageBtn.onclick = () => { api.tab = 'courses'; api.savePrefs(); api.render(); };
+    if (manageBtn) manageBtn.onclick = () => { api.tab = 'manage'; api.savePrefs(); api.render(); };
     const exportBtn = document.getElementById('tp-export');
     if (exportBtn) exportBtn.onclick = api.exportData;
     const exportIcsBtn = document.getElementById('tp-export-ics');
     if (exportIcsBtn) exportIcsBtn.onclick = api.exportIcs;
+    const importGradesEl = document.getElementById('tp-import-grades');
+    if (importGradesEl) importGradesEl.onchange = (e) => { if (e.target.files[0]) api.importGradeSettings(e.target.files[0]); };
     const importEl = document.getElementById('tp-import');
     if (importEl) importEl.onchange = (e) => { if (e.target.files[0]) api.importData(e.target.files[0]); };
     const clearCompletedBtn = document.getElementById('tp-clear-completed');
     if (clearCompletedBtn) clearCompletedBtn.onclick = api.clearCompleted;
+
+    /* ---- Courses tab + Course detail ---- */
+    root.querySelectorAll('.tp-g-card[data-course]').forEach(b => b.onclick = () => api.openCourse(b.dataset.course));
+    const gToSettings = document.getElementById('tp-g-to-settings');
+    if (gToSettings) gToSettings.onclick = () => { api.tab = 'settings'; api.savePrefs(); api.render(); };
+    const gBack = document.getElementById('tp-g-back');
+    if (gBack) gBack.onclick = () => { api.tab = 'courses'; api.savePrefs(); api.render(); };
+    // Weights: model only + patch the one summary node (never rebuild the focused input).
+    root.querySelectorAll('.tp-g-weight[data-weight-id]').forEach(inp => inp.oninput = (e) => {
+      api.setWeight(inp.dataset.weightId, e.target.value);
+      api.patch('tp-g-summary', api.gradeSummaryHtml());
+    });
+    root.querySelectorAll('.tp-g-step[data-g-step]').forEach(b => b.onclick = () => {
+      api.stepCourseSetting(api.courseDetailName, b.dataset.gStep, Number(b.dataset.dir));
+    });
+    const gUseSuggested = document.getElementById('tp-g-use-suggested');
+    if (gUseSuggested) gUseSuggested.onclick = () => api.useSuggestedWeights(api.courseDetailName);
 
     /* ---- Moodle (Settings group + Connect sheet) ---- */
     const moodleConnectBtn = document.getElementById('tp-moodle-connect');
@@ -454,7 +473,7 @@
     const manageFromSheet = document.getElementById('tp-add-manage-courses');
     if (manageFromSheet) manageFromSheet.onclick = () => {
       api.closeAddSheet();
-      api.tab = 'courses';
+      api.tab = 'manage';
       api.savePrefs();
       api.render();
     };

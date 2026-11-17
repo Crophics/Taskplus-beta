@@ -55,6 +55,19 @@ for the one-time Cloudflare setup. What matters when touching code:
   network. For changes to the wiring, the jsdom technique below still applies,
   and the Worker handler can be called directly in that script
   (`handleApi(request, env, {fetchFn})`) so the app and Worker run together.
+- **Grades (Phase 2).** `js/grades-logic.js` (`TPGrades`) is the pure grade
+  math, settings and overview, tested in `test/grades-logic.test.js`;
+  `js/views/grades-html.js` lays out the Courses tab and Course detail. State
+  lives in `app.js`: `gradesStore` (`tp-moodle-grades`, replaced each sync) and
+  `gradeSettings` (`tp-grade-settings`: weights by entry id, targets, credits),
+  both device-local. Entry ids are `moodle:<cmid>` for activities and
+  `gi:<gradeitem id>` for manual items. Tabs: `courses` = overview, `course` =
+  detail (never persisted as the saved tab), `manage` = the course manager.
+  Weight inputs follow the render-loop rule: model update + patch of
+  `#tp-g-summary` only.
+- **Moodle `accessexception` is not an auth failure** (`src/moodle-client.mjs`):
+  it means the school has not enabled a function for the mobile service. Only
+  `invalidtoken` disconnects a user.
 - **`.assetsignore` already hid repo internals** (`*.md`, `test/`, etc.); `src/`
   was added to it. Don't rewrite that file wholesale.
 

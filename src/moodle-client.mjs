@@ -1,7 +1,7 @@
 // moodle-client.mjs — talks to a Moodle site's web-service API.
 // Every network call takes an injectable fetch so tests never hit a real site.
 
-import { mapAssignments, mapQuizzes, submissionState } from './moodle-map.mjs';
+import { mapAssignments, mapQuizzes, mapGradeItems, submissionState } from './moodle-map.mjs';
 
 export class MoodleError extends Error {
   constructor(code, message, status = 400) {
@@ -84,8 +84,14 @@ export async function wsCall(base, token, fn, params = {}, fetchFn = fetch) {
   const body = flatten({ ...params, wstoken: token, wsfunction: fn, moodlewsrestformat: 'json' });
   const out = await postForm(base + '/webservice/rest/server.php', body, fetchFn);
   if (out && typeof out === 'object' && !Array.isArray(out) && out.exception) {
-    if (out.errorcode === 'invalidtoken' || out.errorcode === 'accessexception') {
+    if (out.errorcode === 'invalidtoken') {
       throw new MoodleError('moodle_auth', 'Moodle sign-in expired. Connect again.', 401);
+    }
+    // accessexception is what Moodle returns when the school has not enabled this
+    // function for the mobile service. That is a restriction, not a bad sign-in:
+    // treating it as one would disconnect the user for no reason.
+    if (out.errorcode === 'accessexception' || out.errorcode === 'nopermissions' || out.errorcode === 'requireloginerror') {
+      throw new MoodleError('moodle_forbidden', 'Moodle does not allow that request for this account', 403);
     }
     throw new MoodleError('moodle_error', 'Moodle returned an error (' + (out.errorcode || 'unknown') + ')', 502);
   }
@@ -128,7 +134,7 @@ export async function syncCourses(base, token, userid, courseIds, opts = {}) {
 
   const courses = await getCourses(base, token, userid, fetchFn); used++;
   const wanted = courses.filter((c) => courseIds.includes(c.id));
-  if (!wanted.length) return { records: [], warnings: ['no_courses_selected'], courses };
+  if (!wanted.length) return { records: [], grades: [], warnings: ['no_courses_selected'], courses };
 
   const ids = wanted.map((c) => c.id);
   const assignResp = await wsCall(base, token, 'mod_assign_get_assignments', { courseids: ids }, fetchFn); used++;
@@ -143,6 +149,22 @@ export async function syncCourses(base, token, userid, courseIds, opts = {}) {
     skippedNoDue += a.skippedNoDue + q.skippedNoDue;
   });
   if (skippedNoDue) warnings.push('skipped_no_due_date:' + skippedNoDue);
+
+  // Grades: one call per course. Optional, since many schools restrict the grade
+  // report; a refusal for one course is a warning, never a failed sync.
+  const grades = [];
+  await pool(wanted, STATE_CONCURRENCY, async (c) => {
+    if (used >= budget) { warnings.push('grades_skipped:' + c.id); return; }
+    used++;
+    try {
+      const resp = await wsCall(base, token, 'gradereport_user_get_grade_items', { courseid: c.id, userid }, fetchFn);
+      grades.push(mapGradeItems(c, resp));
+    } catch (e) {
+      if (e instanceof MoodleError && e.code === 'moodle_auth') throw e;
+      warnings.push('grades_failed:' + c.id);
+    }
+  });
+  grades.sort((a, b) => a.courseId - b.courseId);
 
   const candidates = records
     .filter((r) => r.dueTs >= nowSec - STATE_WINDOW_SEC)
@@ -163,5 +185,5 @@ export async function syncCourses(base, token, userid, courseIds, opts = {}) {
     }
   });
 
-  return { records, warnings, courses };
+  return { records, grades, warnings, courses };
 }

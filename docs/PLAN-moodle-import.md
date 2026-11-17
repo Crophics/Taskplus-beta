@@ -348,10 +348,10 @@ Each phase ships on its own and leaves the app working.
   the Connect sheet and Settings group with course selection, and the
   three-tab layout (Today, Week, Courses) with Add moved to Week.
   Assignments, quizzes and submission state only.
-- **Phase 2 — Weights, grades, status.** Grade items, weight entry, per-course
-  scale, the Courses tab and Course detail. One-time import of existing
-  `weight`/`target` from the vault via a local Node script that emits JSON for
-  you to review.
+- **Phase 2 — Weights, grades, status. BUILT (see "What Phase 2 shipped").**
+  Grade items from Moodle, weight entry, targets and credits, the Courses tab and
+  Course detail, and a one-time vault import script that emits JSON for you to
+  review.
 - **Phase 3 — Minutes-based planning with heuristic estimates.** Estimate
   field, quiz-limit and heuristic layers, the new planner behind a flag, the
   heavy-day flag, Today rows with step and estimate, and the plan-first
@@ -394,6 +394,44 @@ Each phase ships on its own and leaves the app working.
 - **Not verified against real services:** a real Moodle site, a real Firebase ID
   token, and a deploy with the KV binding enabled. Everything else is covered by
   unit tests and a jsdom end-to-end run (fake Moodle, real Worker code).
+
+### What Phase 2 shipped
+
+- **Grades come from Moodle's gradebook**, one `gradereport_user_get_grade_items`
+  call per selected course (counted in the call budget; they run before the
+  per-assignment submission checks). A school that blocks the grade report is a
+  warning, not a failed sync: assignments and quizzes still import.
+- **A Phase 1 bug fixed on the way:** Moodle's `accessexception` ("this function
+  is not enabled for the mobile service") was being treated as an expired
+  sign-in, which would have disconnected the user. Only `invalidtoken` does that
+  now.
+- **The grade math** (`js/grades-logic.js`): current grade = weighted average of
+  graded work that has a weight; the part of the 100% with no graded weight is
+  "the rest"; needed average on the rest = (target - points earned) / remaining
+  weight. If no weights are entered yet it shows Moodle's own course total and
+  says so. GPA is credit-weighted on a standard 4.0 table (A 4.0 ... F 0).
+- **Weights are entered by the user** per item as a share of the whole course.
+  When Moodle's gradebook is flat it also reports its own weights; the detail
+  screen offers "Use Moodle's weights" (nested gradebooks are not suggested,
+  because there a weight is relative to its category).
+- **Targets and credits** default to 90% and 3 credits and are edited with
+  steppers on the course screen. A per-course letter scale is supported in the
+  data and by the importer, but there is **no editor for it yet**.
+- **Everything the user enters is device-local** (`tp-grade-settings`), like
+  imported items; Moodle's grades are re-fetched each sync (`tp-moodle-grades`).
+- **Navigation:** Courses tab = grades overview; tapping a course opens its
+  detail; the old course manager (names, colours) moved to Settings > Manage
+  courses.
+- **One-time vault import:** `node tools/import-vault-grades.mjs "<vault>" >
+  grade-settings.json` (add `--fractions` if weights are written as 0.08). It only
+  reads the vault, matches notes to Moodle by the `id=` in their `link:`, and
+  prints a report. Review the JSON, then Settings > Import grade settings. Weighted
+  notes with no Moodle link (the CSCI course site, manual grade items such as
+  attendance) are listed under `report.unlinked` and need their weights entered by
+  hand.
+- **Not verified:** a real Moodle gradebook (response shapes, hidden grades,
+  nested categories), and the vault importer against your real vault: it was
+  written from the structure the vault survey described.
 
 ## 12. Testing strategy
 

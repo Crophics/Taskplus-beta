@@ -22,6 +22,7 @@
     const rows = courses.map(c => courseRowHtml(c, openCountFor(c.name), escapeHtml)).join('');
     const addDisabled = !draftName || !draftName.trim();
     return `<div class="tp-screen tp-screen-courses">
+      <button type="button" class="tp-c-back" id="tp-c-back">${window.TPIcons.svg('chevron_left')} Settings</button>
       <div class="tp-a-header-top"><span class="tp-a-title-heading">Courses</span></div>
       <div class="tp-c-subhead">${courses.length} course${courses.length === 1 ? '' : 's'} · the assignment form offers these</div>
       ${rows}

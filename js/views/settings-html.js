@@ -89,6 +89,7 @@
       rowHtml('Sync', `<button type="button" class="tp-s-link" id="tp-sync-btn">${escapeHtml(syncLabel)}</button>`) +
       rowHtml('Manage courses', `<span class="tp-s-course-dots">${courseDots}</span><button type="button" class="tp-s-chevron" id="tp-manage-courses" aria-label="Open Courses">${window.TPIcons.svg('chevron_right')}</button>`) +
       rowHtml('Export', `<span class="tp-s-io-buttons"><button type="button" class="tp-s-link" id="tp-export">Backup</button><button type="button" class="tp-s-link" id="tp-export-ics">Calendar</button></span>`) +
+      rowHtml('Import grade settings', `<label class="tp-s-link" style="cursor:pointer;">Choose file<input type="file" id="tp-import-grades" accept="application/json" style="display:none;"></label>`, 'Weights, targets and credits from tools/import-vault-grades.mjs') +
       rowHtml('Import backup', `<label class="tp-s-link" style="cursor:pointer;">Choose file<input type="file" id="tp-import" accept="application/json" style="display:none;"></label>`)
     );
 

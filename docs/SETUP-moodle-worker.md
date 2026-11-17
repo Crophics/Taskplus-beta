@@ -43,7 +43,8 @@ npx wrangler deploy
 ## Optional
 
 - `SUBREQUEST_BUDGET` (a Worker variable, default 40): the most Moodle calls one
-  sync may make. Cloudflare's free plan allows 50 outgoing requests per Worker
+  sync may make. A sync uses 3 fixed calls, plus one grade report per selected
+  course, plus one submission check per assignment/quiz (soonest due first). Cloudflare's free plan allows 50 outgoing requests per Worker
   invocation, so 40 leaves headroom. On a paid plan you can raise it so every
   assignment's submission status is checked on every sync; on the free plan,
   items beyond the budget are checked on the next sync instead.

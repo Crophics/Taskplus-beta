@@ -143,3 +143,52 @@ export function submissionState(kind, resp) {
   if (states.some((s) => s === 'inprogress' || s === 'overdue')) return 'draft';
   return 'none';
 }
+
+/** "12.50 %" -> 12.5; anything without a percent sign -> null. */
+export function parsePercent(str) {
+  const m = /(-?\d+(?:\.\d+)?)\s*%/.exec(String(str == null ? '' : str));
+  return m ? Number(m[1]) : null;
+}
+
+function percentOf(g) {
+  if (g.gradeishidden) return null;
+  if (g.graderaw === null || g.graderaw === undefined) return null;
+  const raw = Number(g.graderaw);
+  const max = Number(g.grademax);
+  if (!Number.isFinite(raw) || !(max > 0)) return null;
+  return Math.round((raw / max) * 10000) / 100;
+}
+
+/**
+ * gradereport_user_get_grade_items response -> one course's grade entries.
+ * `id` matches the import records ('moodle:<cmid>') for activities, and is
+ * 'gi:<gradeitem id>' for manual items (attendance, MyLab totals...) that have
+ * no activity. `weightSuggested` is Moodle's own weight, offered only for flat
+ * gradebooks: with nested categories a weight is relative to its category, so
+ * it would be wrong as a share of the whole course.
+ */
+export function mapGradeItems(course, resp) {
+  const ug = resp && Array.isArray(resp.usergrades) ? resp.usergrades[0] : null;
+  const rows = (ug && ug.gradeitems) || [];
+  const flat = !(ug && Number(ug.maxdepth) > 2);
+  let total = null;
+  const items = [];
+  rows.forEach((g) => {
+    if (g.itemtype === 'course') { total = percentOf(g); return; }
+    if (g.itemtype === 'category') return;
+    const cmid = g.cmid !== null && g.cmid !== undefined && Number(g.cmid) > 0 ? Number(g.cmid) : null;
+    const suggested = flat ? parsePercent(g.weightformatted) : null;
+    items.push({
+      id: cmid ? 'moodle:' + cmid : 'gi:' + g.id,
+      cmid,
+      name: String(g.itemname || '').trim() || 'Grade item',
+      kind: g.itemmodule || g.itemtype || 'other',
+      pct: percentOf(g),
+      max: Number(g.grademax) > 0 ? Number(g.grademax) : null,
+      feedback: htmlToText(g.feedback, 1000),
+      gradedTs: positiveTs(g.gradedategraded),
+      weightSuggested: suggested !== null && suggested > 0 ? suggested : null,
+    });
+  });
+  return { courseId: Number(course.id), course: courseCode(course.fullname), total, items };
+}

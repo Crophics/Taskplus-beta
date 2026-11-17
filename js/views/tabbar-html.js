@@ -4,9 +4,10 @@
    work is the main source now, so manual adds are deliberately tucked away). */
 (function (global) {
   function tabBarHtml({ tab }) {
-    // Drill-down screens keep their parent's tab lit: All hangs off Week.
-    // Settings is not a tab, so nothing is highlighted while it is open.
-    const effectiveTab = tab === 'all' ? 'week' : tab;
+    // Drill-down screens keep their parent's tab lit: All hangs off Week, a
+    // course off Courses. Settings and the course manager are not tabs, so
+    // nothing is highlighted while they are open.
+    const effectiveTab = tab === 'all' ? 'week' : tab === 'course' ? 'courses' : tab === 'manage' ? null : tab;
     function item(id, icon, label) {
       const active = effectiveTab === id;
       return `<button type="button" class="tp-tab${active ? ' tp-tab-active' : ''}" data-tab="${id}" aria-current="${active ? 'page' : 'false'}">
