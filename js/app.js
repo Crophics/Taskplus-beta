@@ -36,6 +36,7 @@
   const MOODLE_SITE_KEY='tp-moodle-last-site';
   // Grades: what Moodle reported (replaced each sync) and what the user owns
   // (weights, targets, credits). Device-local, like imported items.
+  const LLM_KEY='tp-llm-on';
   const GRADES_KEY='tp-moodle-grades';
   const GRADE_SETTINGS_KEY='tp-grade-settings';
   const DEV_MODE_KEY='tp-dev-mode';
@@ -627,6 +628,67 @@
     reader.readAsText(file);
   }
 
+  /* ---- Claude estimates (src/estimate.mjs via /api/estimate) ---- */
+  // Opt-out switch in Settings. On by default: the assignment's title, points and description go to
+  // Anthropic so Claude can estimate it and name the steps. Device-local.
+  let llmOn = localStorage.getItem(LLM_KEY) !== '0';
+  let modelBusy = false;
+  let llmUnavailable = false; // the server said it is not set up / not allowed: stop asking this session
+  function setLlmOn(on){
+    llmOn = !!on;
+    localStorage.setItem(LLM_KEY, llmOn ? '1' : '0');
+    if(llmOn) llmUnavailable = false;
+    render();
+    if(llmOn) requestModelEstimates().catch(()=>{});
+  }
+  // Asks Claude about items that still have the rule-of-thumb estimate (a few at a time), or, with
+  // `force`, about the given items regardless. Quiet by default: a failure leaves the rule-of-thumb
+  // estimate in place and nothing else changes.
+  async function requestModelEstimates(opts){
+    const force = !!(opts && opts.force);
+    const only = opts && opts.ids;
+    if(!llmOn || !moodleSignedIn() || modelBusy || (llmUnavailable && !force)) return;
+    const t = today();
+    const cand = items.filter(it=> (!only || only.includes(it.id)) && window.TPMoodle.needsModel(it, t, force)).slice(0, 15);
+    if(!cand.length){ if(force) showToast('Nothing to estimate'); return; }
+    modelBusy = true;
+    if(force) render();
+    let applied = 0, limited = false, errorMessage = '';
+    try{
+      for(let i = 0; i < cand.length; i += 5){
+        const chunk = cand.slice(i, i + 5);
+        const keys = {};
+        chunk.forEach(it=>{ keys[it.id] = window.TPEstimate.inputsKey(it); });
+        let res;
+        try{
+          res = await window.TPMoodle.api.estimate(chunk.map(it=> window.TPMoodle.modelInput(it, daysBetween(t, it.due))), force);
+        }catch(e){
+          if(e && (e.code === 'not_configured' || e.code === 'not_allowed')) llmUnavailable = true;
+          errorMessage = (e && e.message) || '';
+          break;
+        }
+        const out = window.TPMoodle.applyModelResults(items, res.results, { today: t, keys, force });
+        items = out.items;
+        applied += out.stats.applied;
+        if(out.stats.limited) limited = true;
+        if(out.stats.unavailable) llmUnavailable = true;
+        persistItems();
+        if(out.stats.limited || out.stats.unavailable) break;
+      }
+    } finally {
+      modelBusy = false;
+    }
+    if(force){
+      showToast(applied ? 'Updated with Claude\'s estimate'
+        : limited ? 'Today\'s limit for Claude estimates is used up'
+        : (errorMessage || 'Claude could not estimate that. Keeping the current estimate.'));
+    } else if(applied){
+      showToast(`Claude improved ${applied} estimate${applied === 1 ? '' : 's'}`);
+    }
+    if(!userIsTyping()) render();
+  }
+  function askClaude(id){ return requestModelEstimates({ force: true, ids: [id] }); }
+
   /* ---- Assignment detail (js/views/item-detail-html.js) ---- */
   let itemDetailId = null;
   let itemDetailFrom = 'today';
@@ -666,7 +728,7 @@
     const i = itemIndexById(id);
     if(i < 0 || !items[i].estimate) return;
     const minutes = items[i].estimate.minutes + delta;
-    replaceItem(i, window.TPEstimate.withEstimate(items[i], window.TPEstimate.userEstimate(minutes)));
+    replaceItem(i, window.TPEstimate.withEstimate(items[i], window.TPEstimate.userEstimate(minutes, items[i].estimate.steps)));
   }
   function resetEstimate(id){
     const i = itemIndexById(id);
@@ -681,6 +743,7 @@
       relativeDueLabel, daysToDue: daysBetween(today(), item.due), descOpen: itemDescOpen,
       weightPct: gradeSettings.weights[item.id] > 0 ? gradeSettings.weights[item.id] : null,
       fromLabel: ({ today:'Today', week:'Week', all:'All', courses:'Courses' })[itemDetailFrom] || 'Back',
+      llm: { available: llmOn && moodleSignedIn() && !llmUnavailable, busy: modelBusy },
     };
   }
 
@@ -776,6 +839,7 @@
       }
       persistItems();
       if(!silent || merged.stats.added || merged.stats.moved) showToast(window.TPMoodle.summarize(merged.stats));
+      requestModelEstimates().catch(()=>{});
     }catch(e){
       const code = e && e.code;
       if(code === 'moodle_auth'){
@@ -821,6 +885,7 @@
   function moodleMaybeAutoSync(){
     if(!moodleSignedIn()) return;
     if(window.TPMoodle.shouldAutoSync(moodleState, Date.now())) moodleSync({silent:true});
+    else requestModelEstimates().catch(()=>{}); // nothing to sync yet, but older items may still need Claude's estimate
   }
   async function moodleBoot(){
     try{
@@ -909,7 +974,7 @@
         theme, notifyHour, notifyDigest, courses, escapeHtml,
         completedCount: items.filter(i=>i.completed).length,
         syncLabel: window.tpSyncLabel || 'Sign in to sync',
-        moodle: { state: moodleState, busy: moodleBusy, signedIn: moodleSignedIn() },
+        moodle: { state: moodleState, busy: moodleBusy, signedIn: moodleSignedIn() }, llmOn,
       }) + V.devToolbarHtml({ devMode, devPanelOpen });
     } else if(tab==='courses'){
       const ov = window.TPGrades.overview({ courses, items, store: gradesStore, settings: gradeSettings, colorFor: courseColorFor, today: today() });
@@ -1028,7 +1093,8 @@
       get connectDraft(){ return connectDraft; },
       get connectBusy(){ return connectBusy; },
       openCourse, setWeight, stepCourseSetting, useSuggestedWeights, importGradeSettings, gradeSummaryHtml,
-      openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate,
+      openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate, askClaude, setLlmOn,
+      get llmOn(){ return llmOn; },
       get itemDetailId(){ return itemDetailId; },
       get itemDescOpen(){ return itemDescOpen; }, set itemDescOpen(v){ itemDescOpen = v; },
       get courseDetailName(){ return courseDetailName; },

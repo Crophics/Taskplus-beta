@@ -55,6 +55,18 @@ for the one-time Cloudflare setup. What matters when touching code:
   network. For changes to the wiring, the jsdom technique below still applies,
   and the Worker handler can be called directly in that script
   (`handleApi(request, env, {fetchFn})`) so the app and Worker run together.
+- **Claude estimates (Phase 4).** `src/estimate.mjs` builds the prompt, sanitises the input, calls Claude
+  and validates the answer; `/api/estimate` in `src/worker.mjs` adds the per-user cache and daily caps.
+  The Anthropic SDK is imported lazily inside the Worker (`defaultMakeClient`) so tests and the rest of the
+  Worker never need it; tests inject a fake client. CI now runs `npm ci` (the Worker bundles the SDK).
+  **Never send notes, grades, account ids or credentials in a request** (`TPMoodle.modelInput` is the only
+  place the payload is built; a test checks it). SDK 1.x authenticates with `Authorization: Bearer` under
+  API version `2026-10-21`, which rejects `temperature`/`top_p`/`top_k`: don't add them. Claude Opus 5.5
+  always thinks, so the `thinking` parameter is omitted, and forced `tool_choice` is a 400 (we use
+  structured output instead). `estimate.basis` is now `'heuristic' | 'quiz-limit' | 'model' | 'user'`;
+  `estimate.key` fingerprints the assignment text (`TPEstimate.inputsKey`); `item.modelTry` remembers a
+  failed ask for the day; `estimate.steps` are trusted only while `steps.length === item.total`
+  (`TPEstimate.stepsUsable`).
 - **Estimates and minutes planning (Phase 3).** `js/estimate-logic.js`
   (`TPEstimate`, a rule-of-thumb estimator; its constants are guesses, see the
   header) and `js/plan-logic.js` (`TPPlan`, minutes per day, heavy day) are pure

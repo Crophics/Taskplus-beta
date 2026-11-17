@@ -12,6 +12,7 @@
    Layers (docs/PLAN-moodle-import.md, section 5):
      quiz with a Moodle time limit -> 'quiz-limit'  (limit is known; study time is a guess)
      everything else               -> 'heuristic'
+     Claude's read of the description -> 'model'    (src/estimate.mjs; replaces 'heuristic', adds named steps)
      the user's own number         -> 'user'        (always wins; see userEstimate)
 */
 (function (global) {
@@ -81,30 +82,92 @@
     return { minutes, low: clampMin(minutes * 0.7), high: clampMin(minutes * 1.5), basis: 'heuristic', confidence: 'low', factors };
   }
 
+  // A short, stable fingerprint of everything an estimate depends on. It is stored on the estimate
+  // so a sync can tell "Moodle changed this assignment" (ask again) from "same assignment" (keep).
+  function hash32(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    return (h >>> 0).toString(36);
+  }
+
+  function inputsKey(item) {
+    const s = (item && item.source) || {};
+    return hash32(JSON.stringify([
+      item && item.title, s.kind, s.points, s.description, (s.files || []).map((f) => f.name),
+      s.timeLimitMin, s.wordLimit, s.submissionTypes || [],
+    ]));
+  }
+
   /** Estimate for an imported item: title lives on the item, Moodle details on `source`. */
   function estimateForItem(item) {
     const s = (item && item.source) || {};
-    return estimateRecord({
+    const est = estimateRecord({
       kind: s.kind, title: item && item.title, points: s.points, description: s.description, files: s.files,
       timeLimitMin: s.timeLimitMin, wordLimit: s.wordLimit,
     });
+    est.key = inputsKey(item);
+    return est;
   }
 
-  /** The user's own number. No range: they decided. */
-  function userEstimate(minutes) {
+  /**
+   * Scales named steps to a new total, keeping the names and the count (so an item's parts
+   * stay valid). Returns [] if the steps cannot fit (each needs at least 5 minutes).
+   */
+  function scaleSteps(steps, minutes) {
+    if (!Array.isArray(steps) || !steps.length || steps.length * 5 > minutes) return [];
+    const total = steps.reduce((s, x) => s + x.minutes, 0);
+    if (!(total > 0)) return [];
+    const out = steps.map((x) => ({ name: x.name, minutes: Math.max(5, round5((x.minutes / total) * minutes)) }));
+    const diff = minutes - out.reduce((s, x) => s + x.minutes, 0);
+    const big = out.reduce((a, b) => (b.minutes > a.minutes ? b : a));
+    big.minutes = Math.max(5, big.minutes + diff);
+    return out;
+  }
+
+  /** The user's own number. No range: they decided. Named steps (if any) are rescaled, not lost. */
+  function userEstimate(minutes, steps) {
     const m = clamp(Math.round(Number(minutes) / 5) * 5, MIN_MIN, MAX_MIN);
-    return { minutes: m, low: m, high: m, basis: 'user', confidence: 'high', factors: ['set by you'] };
+    return { minutes: m, low: m, high: m, basis: 'user', confidence: 'high', factors: ['set by you'], steps: scaleSteps(steps, m) };
   }
 
-  /** How many parts a piece of work is split into for daily pacing. A quiz is one sitting. */
-  function partsFor(minutes, kind) {
+  /**
+   * Claude's answer (already validated by the server) as an estimate. A quiz is one sitting,
+   * so it keeps the minutes but not the steps.
+   */
+  function fromModel(result, key, kind) {
+    return {
+      minutes: result.minutes, low: result.low, high: result.high, basis: 'model',
+      confidence: result.confidence || 'low', factors: result.rationale ? [result.rationale] : [],
+      steps: kind === 'quiz' ? [] : (result.steps || []).map((s) => ({ name: s.name, minutes: s.minutes })), key,
+    };
+  }
+
+  /** Named steps are only trusted while there is exactly one per part. */
+  function stepsUsable(item) {
+    const st = item && item.estimate && item.estimate.steps;
+    return Array.isArray(st) && st.length > 0 && st.length === (item.total || 1);
+  }
+
+  function stepName(item, index) {
+    return stepsUsable(item) && item.estimate.steps[index] ? item.estimate.steps[index].name : null;
+  }
+
+  /**
+   * How many parts a piece of work is split into for daily pacing. A quiz is one sitting. When
+   * Claude named the steps, each step is a part; otherwise parts are ~50 minutes each.
+   */
+  function partsFor(minutes, kind, steps) {
     if (kind === 'quiz') return 1;
+    if (Array.isArray(steps) && steps.length) return clamp(steps.length, 1, MAX_PARTS);
     return clamp(Math.round(minutes / PART_MIN), 1, MAX_PARTS);
   }
 
   function sameEstimate(a, b) {
     if (!a || !b) return false;
-    return a.minutes === b.minutes && a.low === b.low && a.high === b.high && a.basis === b.basis;
+    return a.minutes === b.minutes && a.low === b.low && a.high === b.high && a.basis === b.basis && a.key === b.key;
   }
 
   /**
@@ -117,12 +180,12 @@
     const imported = item.source && item.source.type === 'moodle';
     const untouched = !(item.done > 0) && !(item.today > 0) && !item.completed;
     if (imported && untouched) {
-      const n = partsFor(est.minutes, item.source.kind);
+      const n = partsFor(est.minutes, item.source.kind, est.steps);
       next.total = n;
       next.unit = n > 1 ? 'part' : (item.source.kind === 'quiz' ? 'quiz' : 'assignment');
     }
     return next;
   }
 
-  global.TPEstimate = { PART_MIN, MAX_PARTS, MIN_MIN, MAX_MIN, countWords, estimateRecord, estimateForItem, userEstimate, partsFor, sameEstimate, withEstimate };
+  global.TPEstimate = { PART_MIN, MAX_PARTS, MIN_MIN, MAX_MIN, countWords, estimateRecord, estimateForItem, inputsKey, scaleSteps, userEstimate, fromModel, stepsUsable, stepName, partsFor, sameEstimate, withEstimate };
 })(typeof window !== 'undefined' ? window : globalThis);

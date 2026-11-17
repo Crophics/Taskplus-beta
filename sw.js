@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v42'; // bumped: time estimates, minutes planning, assignment detail
+const CACHE_NAME = 'taskplus-cache-v43'; // bumped: Claude estimates, named steps
 const urlsToCache = [
   './',
   './index.html',

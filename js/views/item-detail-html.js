@@ -6,9 +6,12 @@
   const P = () => global.TPPlan;
   const fmt = (m) => P().fmtMinutes(P().roundDisplay(m));
 
+  const SURE = { low: 'not very sure', medium: 'fairly sure', high: 'quite sure' };
+
   function basisCaption(est) {
     if (est.basis === 'user') return 'You set this';
     if (est.basis === 'quiz-limit') return 'From the quiz time limit';
+    if (est.basis === 'model') return `Claude's estimate · ${SURE[est.confidence] || 'not very sure'}`;
     return 'A rough guess';
   }
 
@@ -22,13 +25,18 @@
       : `<div class="tp-i-est-range">Likely ${escapeHtml(fmt(est.low))} to ${escapeHtml(fmt(est.high))}</div>`;
     const why = est.basis === 'user'
       ? ''
-      : `<div class="tp-i-est-why">Based on: ${escapeHtml((est.factors || []).join(', ') || 'the details from Moodle')}. ${est.basis === 'heuristic' ? 'It is a rule of thumb, so change it if you know better.' : 'Study time is a guess; change it if you know better.'}</div>`;
+      : est.basis === 'model'
+        ? `<div class="tp-i-est-why">${escapeHtml((est.factors || [])[0] || 'Claude read the assignment description.')} Change it if you know better.</div>`
+        : `<div class="tp-i-est-why">Based on: ${escapeHtml((est.factors || []).join(', ') || 'the details from Moodle')}. ${est.basis === 'heuristic' ? 'It is a rule of thumb, so change it if you know better.' : 'Study time is a guess; change it if you know better.'}</div>`;
+    const ask = ctx.llm && ctx.llm.available
+      ? `<button type="button" class="tp-i-ask" id="tp-i-ask"${ctx.llm.busy ? ' disabled' : ''}>${ctx.llm.busy ? 'Asking Claude…' : (est.basis === 'model' ? 'Ask Claude again' : 'Ask Claude to estimate')}</button>`
+      : '';
     return `<section class="tp-i-card" id="tp-i-estimate">
       <div class="tp-i-card-label"><span>Time estimate</span><span class="tp-i-basis">${escapeHtml(basisCaption(est))}</span></div>
       <div class="tp-i-est-main">About ${escapeHtml(fmt(est.minutes))}</div>
       ${range}${why}
       <div class="tp-i-stepper">${minus}${plus}</div>
-      ${reset}
+      ${ask}${reset}
     </section>`;
   }
 
@@ -41,15 +49,18 @@
       const done = i < (item.done || 0);
       const current = i === (item.done || 0) && !item.completed;
       const tappable = current || i === (item.done || 0) - 1;
-      rows += `<button type="button" class="tp-i-part${done ? ' tp-i-part-done' : ''}${current ? ' tp-i-part-current' : ''}" data-i="${idx}" data-part="${i}" ${tappable ? '' : 'disabled'} aria-label="${escapeHtml(`Part ${i + 1} of ${item.total}${done ? ', done' : current ? ', next' : ''}`)}">
+      const named = global.TPEstimate ? global.TPEstimate.stepName(item, i) : null;
+      const label = named || `Part ${i + 1} of ${item.total}`;
+      const minutes = P().stepsUsable(item) ? P().unitMinutes(item, i, 1) : per;
+      rows += `<button type="button" class="tp-i-part${done ? ' tp-i-part-done' : ''}${current ? ' tp-i-part-current' : ''}" data-i="${idx}" data-part="${i}" ${tappable ? '' : 'disabled'} aria-label="${escapeHtml(`${label}${done ? ', done' : current ? ', next' : ''}`)}">
         <span class="tp-i-part-circle">${done ? global.TPIcons.svg('check') : ''}</span>
-        <span class="tp-i-part-name">Part ${i + 1} of ${item.total}${current ? '<span class="tp-i-part-next">next up</span>' : ''}</span>
-        <span class="tp-i-part-min">~${per === null ? '' : escapeHtml(fmt(per))}</span>
+        <span class="tp-i-part-name">${escapeHtml(label)}${current ? '<span class="tp-i-part-next">next up</span>' : ''}</span>
+        <span class="tp-i-part-min">~${minutes === null ? '' : escapeHtml(fmt(minutes))}</span>
       </button>`;
     }
-    return `<div class="tp-section-heading"><span>Plan</span><span class="tp-section-rule"></span><span class="tp-section-count">${item.total} parts</span></div>
+    return `<div class="tp-section-heading"><span>Plan</span><span class="tp-section-rule"></span><span class="tp-section-count">${item.total} ${P().stepsUsable(item) ? 'steps' : 'parts'}</span></div>
       <div class="tp-i-parts">${rows}</div>
-      <div class="tp-i-hint">Tap the next part when you finish it. Tap the last finished part to undo it. Taskplus spreads the parts over the days before it is due.</div>`;
+      <div class="tp-i-hint">Tap the next one when you finish it. Tap the last finished one to undo it. Taskplus spreads them over the days before it is due.</div>`;
   }
 
   function descriptionHtml(ctx) {

@@ -36,7 +36,15 @@
     const isMulti = it.total > 1;
     const color = it.course ? courseColorFor(it.course) : 'var(--text-faint)';
     const metaBits = [it.course, relativeDueLabel(it.due)];
-    if (isPartsItem(it)) metaBits.push(`Part ${Math.min((it.done || 0) + 1, it.total)} of ${it.total}`);
+    let stepLine = '';
+    if (isPartsItem(it)) {
+      const idxPart = Math.min((it.done || 0), it.total - 1);
+      const stepName = window.TPEstimate ? window.TPEstimate.stepName(it, idxPart) : null;
+      // Claude named the steps: the one to do now gets its own line under the title (a long name would
+      // otherwise push the time estimate off the end of the meta line); else a short "Part 2 of 4".
+      if (stepName) stepLine = `<div class="tp-t-step">${escapeHtml(stepName)} · step ${idxPart + 1} of ${it.total}</div>`;
+      else metaBits.push(`Part ${idxPart + 1} of ${it.total}`);
+    }
     else if (isMulti) metaBits.push(`${todayCount} of ${target} today`);
     return `<div class="tp-t-row" data-item-i="${idx}">
       <div class="tp-t-bar" style="background:${color}"></div>
@@ -45,6 +53,7 @@
           <span class="tp-t-dot ${urgencyDotClass(entry)}"></span>
           <span class="tp-t-title">${escapeHtml(it.title)}</span>
         </div>
+        ${stepLine}
         <div class="tp-t-meta">${metaBits.filter(Boolean).map(escapeHtml).join(' · ')}${estPillHtml(entry)}</div>
         ${isMulti ? pipRowHtml(target, todayCount) : ''}
       </div>

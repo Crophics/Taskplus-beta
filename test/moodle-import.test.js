@@ -213,3 +213,129 @@ test('submission types and word limit reach the item and the estimate', () => {
   assert.strictEqual(out.items[0].source.wordLimit, 1500);
   assert.strictEqual(out.items[0].estimate.minutes, 170);
 });
+
+/* ---------- Phase 4: Claude's estimates ---------- */
+
+const claude = (over = {}) => ({ minutes: 150, low: 110, high: 210, confidence: 'medium', rationale: 'Seven problems and a proof.', steps: [{ name: 'Read', minutes: 25 }, { name: 'Problems 4-7', minutes: 75 }, { name: 'Write up', minutes: 50 }], ...over });
+
+function withClaude(over = {}) {
+  const first = M.mergeImported([], [rec()], ctx()).items[0];
+  return global.TPEstimate.withEstimate(first, global.TPEstimate.fromModel(claude(over), global.TPEstimate.inputsKey(first), 'assign'));
+}
+
+test('a Claude estimate survives a sync while the assignment is unchanged', () => {
+  const it0 = withClaude();
+  assert.strictEqual(it0.estimate.basis, 'model');
+  assert.strictEqual(it0.total, 3);
+  const out = M.mergeImported([it0], [rec()], ctx({ now: NOW + 5000 }));
+  assert.strictEqual(out.items[0], it0, 'untouched: same object, no update');
+  assert.strictEqual(out.stats.updated, 0);
+});
+
+test('when Moodle changes the description, the old Claude answer is dropped for the rule of thumb', () => {
+  const it0 = withClaude();
+  const out = M.mergeImported([it0], [rec({ description: 'Completely different instructions. '.repeat(30) })], ctx({ now: NOW + 5000 }));
+  assert.strictEqual(out.items[0].estimate.basis, 'heuristic');
+  assert.strictEqual(out.items[0].source.description.startsWith('Completely different'), true);
+  // 90 words -> x1; 120 base for 100 points + 15 for the handout = 135 minutes -> round(135/50) = 3 parts
+  assert.strictEqual(out.items[0].estimate.minutes, 135);
+  assert.strictEqual(out.items[0].total, 3);
+  assert.strictEqual(global.TPEstimate.stepsUsable(out.items[0]), false, 'the old step names are gone with the old answer');
+  assert.notStrictEqual(out.items[0].estimate.key, it0.estimate.key);
+});
+
+test('needsModel: only unfinished imported work with the rule-of-thumb estimate', () => {
+  const base = M.mergeImported([], [rec()], ctx()).items[0];
+  assert.strictEqual(M.needsModel(base, TODAY), true);
+  assert.strictEqual(M.needsModel(withClaude(), TODAY), false, 'already has Claude\'s answer');
+  assert.strictEqual(M.needsModel({ ...base, estimate: global.TPEstimate.userEstimate(60) }, TODAY), false, 'your number');
+  assert.strictEqual(M.needsModel({ ...base, completed: true }, TODAY), false);
+  assert.strictEqual(M.needsModel({ ...base, archived: true }, TODAY), false);
+  assert.strictEqual(M.needsModel({ ...base, estimate: undefined }, TODAY), false);
+  assert.strictEqual(M.needsModel({ id: 'm', title: 'manual', estimate: global.TPEstimate.userEstimate(60) }, TODAY), false, 'manual items never go to Claude');
+  const quiz = M.mergeImported([], [rec({ id: 'moodle:9', cmid: 9, kind: 'quiz', timeLimitMin: 20 })], ctx()).items[0];
+  assert.strictEqual(M.needsModel(quiz, TODAY), false, 'a known quiz time limit needs no asking');
+  const quizNoLimit = M.mergeImported([], [rec({ id: 'moodle:8', cmid: 8, kind: 'quiz', timeLimitMin: null })], ctx()).items[0];
+  assert.strictEqual(M.needsModel(quizNoLimit, TODAY), true, 'but a quiz with no limit does');
+});
+
+test('needsModel: an item that failed today is not retried today, but is tomorrow or after it changes', () => {
+  const base = M.mergeImported([], [rec()], ctx()).items[0];
+  const key = global.TPEstimate.inputsKey(base);
+  const failed = { ...base, modelTry: { key, day: TODAY } };
+  assert.strictEqual(M.needsModel(failed, TODAY), false);
+  assert.strictEqual(M.needsModel(failed, '2026-11-18'), true);
+  const changed = { ...failed, source: { ...failed.source, description: 'new text' } };
+  assert.strictEqual(M.needsModel(changed, TODAY), true);
+  assert.strictEqual(M.needsModel(withClaude(), TODAY, true), true, 'force asks again even with an answer');
+  assert.strictEqual(M.needsModel({ ...base, estimate: global.TPEstimate.userEstimate(60) }, TODAY, true), true, 'force overrides your own number (you pressed the button)');
+});
+
+test('modelInput sends the assignment details only', () => {
+  const it0 = { ...M.mergeImported([], [rec({ submissionTypes: ['file'], wordLimit: 500 })], ctx()).items[0], notes: 'my private note', completed: false };
+  const inp = M.modelInput(it0, 2);
+  assert.deepStrictEqual(Object.keys(inp).sort(), ['course', 'description', 'dueInDays', 'files', 'id', 'kind', 'points', 'submissionTypes', 'timeLimitMin', 'title', 'wordLimit']);
+  assert.strictEqual(inp.dueInDays, 2);
+  assert.deepStrictEqual(inp.files, ['a.pdf']);
+  assert.strictEqual(inp.wordLimit, 500);
+  assert.ok(!JSON.stringify(inp).includes('private'), 'notes never leave the device');
+});
+
+test('applyModelResults applies answers: parts follow the steps, the key is stamped, input is not mutated', () => {
+  const base = M.mergeImported([], [rec()], ctx()).items[0];
+  const keys = { [base.id]: global.TPEstimate.inputsKey(base) };
+  const snapshot = JSON.stringify(base);
+  const out = M.applyModelResults([base], [{ id: base.id, ok: true, estimate: claude() }], { today: TODAY, keys });
+  assert.strictEqual(out.stats.applied, 1);
+  const it1 = out.items[0];
+  assert.strictEqual(it1.estimate.basis, 'model');
+  assert.strictEqual(it1.estimate.key, keys[base.id]);
+  assert.strictEqual(it1.total, 3);
+  assert.strictEqual(global.TPEstimate.stepName(it1, 1), 'Problems 4-7');
+  assert.strictEqual(JSON.stringify(base), snapshot);
+});
+
+test('applyModelResults drops stale answers and never overwrites your number unless forced', () => {
+  const base = M.mergeImported([], [rec()], ctx()).items[0];
+  const stale = M.applyModelResults([base], [{ id: base.id, ok: true, estimate: claude() }], { today: TODAY, keys: { [base.id]: 'an-old-key' } });
+  assert.strictEqual(stale.stats.stale, 1);
+  assert.strictEqual(stale.stats.applied, 0);
+  assert.strictEqual(stale.items[0].estimate.basis, 'heuristic');
+  const mine = { ...base, estimate: global.TPEstimate.userEstimate(40) };
+  const kept = M.applyModelResults([mine], [{ id: mine.id, ok: true, estimate: claude() }], { today: TODAY });
+  assert.strictEqual(kept.items[0].estimate.basis, 'user');
+  const forced = M.applyModelResults([mine], [{ id: mine.id, ok: true, estimate: claude() }], { today: TODAY, force: true });
+  assert.strictEqual(forced.items[0].estimate.basis, 'model');
+});
+
+test('applyModelResults protects progress: a started item keeps its parts', () => {
+  const base = { ...M.mergeImported([], [rec()], ctx()).items[0], done: 1, today: 1 };
+  const out = M.applyModelResults([base], [{ id: base.id, ok: true, estimate: claude() }], { today: TODAY });
+  assert.strictEqual(out.items[0].estimate.basis, 'model');
+  assert.strictEqual(out.items[0].total, base.total, 'parts unchanged');
+  assert.strictEqual(out.items[0].done, 1);
+});
+
+test('applyModelResults records failures and reports the cases that should stop further asking', () => {
+  const base = M.mergeImported([], [rec()], ctx()).items[0];
+  const key = global.TPEstimate.inputsKey(base);
+  const refused = M.applyModelResults([base], [{ id: base.id, ok: false, error: 'refused' }], { today: TODAY });
+  assert.deepStrictEqual(refused.items[0].modelTry, { key, day: TODAY });
+  assert.strictEqual(refused.stats.failed, 1);
+  const busy = M.applyModelResults([base], [{ id: base.id, ok: false, error: 'busy' }], { today: TODAY });
+  assert.strictEqual(busy.items[0].modelTry, undefined, 'a busy server is not the item\'s fault; retry soon');
+  const limited = M.applyModelResults([base], [{ id: base.id, ok: false, error: 'daily_limit' }], { today: TODAY });
+  assert.strictEqual(limited.stats.limited, true);
+  assert.strictEqual(limited.items[0].modelTry, undefined);
+  const down = M.applyModelResults([base], [{ id: base.id, ok: false, error: 'server_misconfigured' }], { today: TODAY });
+  assert.strictEqual(down.stats.unavailable, true);
+  const unknown = M.applyModelResults([base], [{ id: 'nope', ok: true, estimate: claude() }], { today: TODAY });
+  assert.strictEqual(unknown.items[0], base);
+});
+
+test('a successful answer clears an earlier failure mark', () => {
+  const base = M.mergeImported([], [rec()], ctx()).items[0];
+  const failed = { ...base, modelTry: { key: global.TPEstimate.inputsKey(base), day: TODAY } };
+  const out = M.applyModelResults([failed], [{ id: failed.id, ok: true, estimate: claude() }], { today: TODAY });
+  assert.strictEqual(out.items[0].modelTry, undefined);
+});

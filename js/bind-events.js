@@ -119,6 +119,10 @@
       else if (part === (it.done || 0) - 1) undoOne(idx);
     });
     root.querySelectorAll('.tp-i-step[data-delta]').forEach(b => b.onclick = () => api.adjustEstimate(api.itemDetailId, Number(b.dataset.delta)));
+    const itemAsk = document.getElementById('tp-i-ask');
+    if (itemAsk) itemAsk.onclick = () => api.askClaude(api.itemDetailId);
+    const llmToggle = document.getElementById('tp-llm-toggle');
+    if (llmToggle) llmToggle.onclick = () => api.setLlmOn(!api.llmOn);
     const itemReset = document.getElementById('tp-i-reset');
     if (itemReset) itemReset.onclick = () => api.resetEstimate(api.itemDetailId);
     const itemDescToggle = document.getElementById('tp-i-desc-toggle');

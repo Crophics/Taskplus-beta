@@ -16,6 +16,10 @@
      - today's share is fixed from the state at the START of the day (done minus
        what was logged today), so logging work makes "left" shrink instead of the
        plan re-spreading.
+   When Claude named the steps (item.estimate.steps), each step is a part with its own minutes and
+   a day's units are the NEXT steps in order, so the 25-minute "read" and the 100-minute "solve" are
+   not averaged together.
+
    Items with no estimate are not in any minutes figure; they are counted so the
    UI can say so rather than silently ignoring them.
 */
@@ -44,17 +48,35 @@
     return est / Math.max(it.total || 1, 1);
   }
 
-  function leftMinutes(it) {
+  // Claude names the steps with their own minutes ([25, 100, 25]); they are trusted only while there
+  // is exactly one per part. Then "the next 2 parts" means those two steps' minutes, not 2 x the average.
+  function stepsUsable(it) {
+    const st = it && it.estimate && it.estimate.steps;
+    return Array.isArray(st) && st.length > 0 && st.length === Math.max((it && it.total) || 1, 1);
+  }
+
+  /** Minutes of `count` units starting at unit index `from` (the units are done in order). */
+  function unitMinutes(it, from, count) {
+    if (!(count > 0)) return 0;
+    if (stepsUsable(it)) {
+      let m = 0;
+      for (let i = from; i < from + count && i < it.estimate.steps.length; i++) m += it.estimate.steps[i].minutes;
+      return m;
+    }
     const mpu = minutesPerUnit(it);
-    if (mpu === null) return null;
-    return Math.max((it.total || 1) - (it.done || 0), 0) * mpu;
+    return mpu === null ? 0 : count * mpu;
+  }
+
+  function leftMinutes(it) {
+    if (minutesPerUnit(it) === null) return null;
+    const total = Math.max(it.total || 1, 1);
+    return unitMinutes(it, it.done || 0, Math.max(total - (it.done || 0), 0));
   }
 
   /** Minutes still to do TODAY for an entry of computeTodayScreen's `targets`. */
   function entryMinutes(entry) {
-    const mpu = minutesPerUnit(entry.it);
-    if (mpu === null) return null;
-    return (entry.amt > 0 ? entry.amt : 1) * mpu;
+    if (minutesPerUnit(entry.it) === null) return null;
+    return unitMinutes(entry.it, entry.it.done || 0, entry.amt > 0 ? entry.amt : 1);
   }
 
   /**
@@ -73,8 +95,7 @@
     let doneMin = 0;
     items.forEach((it) => {
       if (it.archived) return;
-      const mpu = minutesPerUnit(it);
-      if (mpu !== null && it.today > 0) doneMin += it.today * mpu;
+      if (minutesPerUnit(it) !== null && it.today > 0) doneMin += unitMinutes(it, Math.max((it.done || 0) - it.today, 0), it.today);
     });
     // Optional work the plan ALSO puts on today: a multi-part item with slack still has a share
     // today (it shows in Get ahead, and in Week's bar for today). Single-part get-ahead items are
@@ -137,8 +158,10 @@
       const mpu = minutesPerUnit(it);
       if (mpu === null) { unestimated++; return; }
       const course = (it.course || '').trim() || 'Other';
+      let next = it.done || 0; // the units are done in order, so each day's units start where the last day's ended
       allocateItem(it, today, daysBetween).forEach(({ dayIndex, units }) => {
-        const m = units * mpu;
+        const m = unitMinutes(it, next, units);
+        next += units;
         const d = days[dayIndex];
         d.minutes += m;
         d.byCourse[course] = (d.byCourse[course] || 0) + m;
@@ -163,5 +186,5 @@
     return best.minutes >= minMinutes && best.minutes >= ratio * mean ? { dayIndex: best.dayIndex, minutes: best.minutes } : null;
   }
 
-  global.TPPlan = { HORIZON, fmtMinutes, roundDisplay, minutesPerUnit, leftMinutes, entryMinutes, todaySummary, spread, allocateItem, computeDays, heavyDay };
+  global.TPPlan = { HORIZON, fmtMinutes, roundDisplay, minutesPerUnit, stepsUsable, unitMinutes, leftMinutes, entryMinutes, todaySummary, spread, allocateItem, computeDays, heavyDay };
 })(typeof window !== 'undefined' ? window : globalThis);

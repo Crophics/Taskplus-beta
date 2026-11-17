@@ -85,6 +85,11 @@
     );
 
     const courseDots = courses.slice(0, 5).map(c => `<span class="tp-s-course-dot" style="background:${c.color}"></span>`).join('');
+    const estimates = groupHtml('Time estimates',
+      rowHtml('Use Claude to estimate', pillToggleHtml('tp-llm-toggle', ctx.llmOn !== false),
+        'Sends an assignment\'s title, points and description to Anthropic so Claude can estimate it and suggest steps. Never your grades, notes or login.')
+    );
+
     const account = groupHtml('Account & data',
       rowHtml('Sync', `<button type="button" class="tp-s-link" id="tp-sync-btn">${escapeHtml(syncLabel)}</button>`) +
       rowHtml('Manage courses', `<span class="tp-s-course-dots">${courseDots}</span><button type="button" class="tp-s-chevron" id="tp-manage-courses" aria-label="Open Courses">${window.TPIcons.svg('chevron_right')}</button>`) +
@@ -100,7 +105,7 @@
 
     return `<div class="tp-screen tp-screen-settings">
       <div class="tp-a-header-top"><span class="tp-a-title-heading">Settings</span></div>
-      ${appearance}${reminders}${moodleGroupHtml(ctx)}${account}${clear}
+      ${appearance}${reminders}${moodleGroupHtml(ctx)}${estimates}${account}${clear}
     </div>`;
   }
 

@@ -113,11 +113,16 @@
       }
       const src = sourceOf(rec, prev.source);
       if (JSON.stringify(src) !== JSON.stringify(prev.source)) { next.source = src; changed = true; }
-      // Re-estimate when Moodle's details changed, or if the item predates estimates.
-      // A number the user set is never overwritten.
+      // Re-estimate when Moodle's details changed, or if the item predates estimates. A number the
+      // user set is never overwritten, and neither is Claude's answer while the assignment is
+      // unchanged (when it HAS changed the old answer no longer applies, so the rule-of-thumb
+      // estimate takes over until Claude is asked again).
       if (global.TPEstimate && !(prev.estimate && prev.estimate.basis === 'user')) {
-        const est = global.TPEstimate.estimateForItem(next);
-        if (!global.TPEstimate.sameEstimate(prev.estimate, est)) { next = global.TPEstimate.withEstimate(next, est); changed = true; }
+        const keepClaude = prev.estimate && prev.estimate.basis === 'model' && prev.estimate.key === global.TPEstimate.inputsKey(next);
+        if (!keepClaude) {
+          const est = global.TPEstimate.estimateForItem(next);
+          if (!global.TPEstimate.sameEstimate(prev.estimate, est)) { next = global.TPEstimate.withEstimate(next, est); changed = true; }
+        }
       }
       if (rec.state === 'submitted' && !prev.completed) {
         next.completed = true;
@@ -144,6 +149,64 @@
       if (rec.course && !lib.byName(courses, rec.course) && lib.addCourse(courses, rec.course)) added++;
     });
     return added;
+  }
+
+  /**
+   * Should Claude be asked about this item? Only unfinished imported work that still has the
+   * rule-of-thumb estimate (a quiz with a known time limit, your own number, and a Claude answer
+   * for the current text all stay as they are), and not one we already asked about today
+   * without success. `force` is the "ask Claude" button on the detail screen.
+   */
+  function needsModel(item, today, force) {
+    if (!isImported(item) || item.completed || item.archived || !item.estimate || !global.TPEstimate) return false;
+    if (force) return true;
+    if (item.estimate.basis !== 'heuristic') return false;
+    const tried = item.modelTry;
+    return !(tried && tried.key === global.TPEstimate.inputsKey(item) && tried.day === today);
+  }
+
+  /** What is sent to /api/estimate: the assignment's own details, never grades, notes or identity. */
+  function modelInput(item, dueInDays) {
+    const s = item.source || {};
+    return {
+      id: item.id, course: item.course, title: item.title, kind: s.kind === 'quiz' ? 'quiz' : 'assign',
+      points: s.points == null ? null : s.points, description: s.description || '', files: (s.files || []).map((f) => f.name),
+      timeLimitMin: s.timeLimitMin == null ? null : s.timeLimitMin, wordLimit: s.wordLimit == null ? null : s.wordLimit,
+      submissionTypes: s.submissionTypes || [], dueInDays,
+    };
+  }
+
+  /**
+   * Applies /api/estimate results to the item list. Returns a NEW list plus stats; nothing is mutated.
+   * ctx: {today, keys: {id: inputsKey at request time}, force}. An answer for text that changed
+   * while the request was in flight is dropped (stale), and your own number is only replaced when
+   * you asked for it (`force`). A failed item is remembered for the day so each sync does not retry it.
+   */
+  function applyModelResults(items, results, ctx) {
+    const E = global.TPEstimate;
+    const out = items.map((it) => it);
+    const index = new Map(out.map((it, i) => [it && it.id, i]));
+    const stats = { applied: 0, failed: 0, stale: 0, limited: false, unavailable: false };
+    (results || []).forEach((r) => {
+      const i = index.get(r.id);
+      if (i === undefined) return;
+      const item = out[i];
+      const key = E.inputsKey(item);
+      if (ctx.keys && ctx.keys[r.id] !== undefined && ctx.keys[r.id] !== key) { stats.stale++; return; }
+      if (r.ok && r.estimate) {
+        if (item.estimate && item.estimate.basis === 'user' && !ctx.force) return;
+        const next = E.withEstimate(item, E.fromModel(r.estimate, key, item.source && item.source.kind));
+        delete next.modelTry;
+        out[i] = next;
+        stats.applied++;
+        return;
+      }
+      stats.failed++;
+      if (r.error === 'daily_limit') stats.limited = true;
+      if (r.error === 'server_misconfigured' || r.error === 'not_configured') stats.unavailable = true;
+      if (r.error !== 'busy' && r.error !== 'daily_limit') out[i] = { ...item, modelTry: { key, day: ctx.today } };
+    });
+    return { items: out, stats };
   }
 
   /** Whether the app should quietly sync on load / when it comes back to the foreground. */
@@ -199,8 +262,9 @@
     connect: (site, username, password) => call('/api/moodle/connect', 'POST', { site, username, password }),
     saveCourses: (selected) => call('/api/moodle/courses', 'POST', { selected }),
     sync: () => call('/api/moodle/sync', 'POST', {}),
+    estimate: (items, fresh) => call('/api/estimate', 'POST', { items, fresh: !!fresh }),
     disconnect: () => call('/api/moodle/disconnect', 'POST', {}),
   };
 
-  global.TPMoodle = { localDate, isImported, mergeImported, ensureCourses, shouldAutoSync, summarize, MoodleClientError, api, AUTO_SYNC_MIN_HOURS };
+  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, shouldAutoSync, summarize, MoodleClientError, api, AUTO_SYNC_MIN_HOURS };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -108,7 +108,7 @@ test('estimateForItem reads the Moodle details from item.source', () => {
 /* ---------- user override, parts, applying ---------- */
 
 test('userEstimate is exact, rounded to 5 and clamped', () => {
-  assert.deepStrictEqual(E.userEstimate(92), { minutes: 90, low: 90, high: 90, basis: 'user', confidence: 'high', factors: ['set by you'] });
+  assert.deepStrictEqual(E.userEstimate(92), { minutes: 90, low: 90, high: 90, basis: 'user', confidence: 'high', factors: ['set by you'], steps: [] });
   assert.strictEqual(E.userEstimate(1).minutes, 15);
   assert.strictEqual(E.userEstimate(99999).minutes, 600);
 });
@@ -165,4 +165,97 @@ test('sameEstimate compares the numbers and basis', () => {
   assert.strictEqual(E.sameEstimate(a, { ...a }), true);
   assert.strictEqual(E.sameEstimate(a, E.userEstimate(65)), false);
   assert.strictEqual(E.sameEstimate(a, null), false);
+});
+
+/* ---------- Phase 4: Claude's estimates and named steps ---------- */
+
+const modelResult = (over = {}) => ({ minutes: 100, low: 70, high: 140, confidence: 'medium', rationale: 'Seven problems.', steps: [{ name: 'Problems 4-7', minutes: 50 }, { name: 'Problems 8-10', minutes: 50 }], ...over });
+
+test('inputsKey changes with anything the estimate depends on, and only that', () => {
+  const base = imported({ title: 'A6', source: { type: 'moodle', kind: 'assign', points: 100, description: 'Do it', files: [{ name: 'a.pdf', size: 1 }], timeLimitMin: null, wordLimit: null, submissionTypes: ['file'] } });
+  const k = E.inputsKey(base);
+  assert.match(k, /^[0-9a-z]+$/);
+  assert.strictEqual(E.inputsKey({ ...base }), k);
+  const withSource = (over) => ({ ...base, source: { ...base.source, ...over } });
+  assert.notStrictEqual(E.inputsKey({ ...base, title: 'A7' }), k);
+  assert.notStrictEqual(E.inputsKey(withSource({ description: 'Do it differently' })), k);
+  assert.notStrictEqual(E.inputsKey(withSource({ points: 50 })), k);
+  assert.notStrictEqual(E.inputsKey(withSource({ files: [] })), k);
+  assert.notStrictEqual(E.inputsKey(withSource({ wordLimit: 500 })), k);
+  assert.strictEqual(E.inputsKey(withSource({ state: 'submitted', link: 'x' })), k, 'state and link do not change the estimate');
+  assert.strictEqual(E.inputsKey({ ...base, done: 2, notes: 'mine', due: '2030-01-01' }), k, 'user progress and due dates do not either');
+});
+
+test('estimateForItem stamps the key and sameEstimate respects it', () => {
+  const it1 = imported({ title: 'Quiz', source: { type: 'moodle', kind: 'quiz', timeLimitMin: 20 } });
+  const a = E.estimateForItem(it1);
+  assert.strictEqual(a.key, E.inputsKey(it1));
+  assert.strictEqual(E.sameEstimate(a, { ...a }), true);
+  assert.strictEqual(E.sameEstimate(a, { ...a, key: 'different' }), false);
+});
+
+test('fromModel builds a model-basis estimate, drops steps for a quiz, and tolerates missing fields', () => {
+  const e = E.fromModel(modelResult(), 'k1', 'assign');
+  assert.deepStrictEqual([e.minutes, e.low, e.high, e.basis, e.confidence, e.key], [100, 70, 140, 'model', 'medium', 'k1']);
+  assert.deepStrictEqual(e.factors, ['Seven problems.']);
+  assert.strictEqual(e.steps.length, 2);
+  assert.deepStrictEqual(E.fromModel(modelResult(), 'k', 'quiz').steps, []);
+  const bare = E.fromModel({ minutes: 60, low: 40, high: 90 }, 'k', 'assign');
+  assert.deepStrictEqual([bare.confidence, bare.factors, bare.steps], ['low', [], []]);
+});
+
+test('partsFor uses the number of named steps when there are some', () => {
+  assert.strictEqual(E.partsFor(300, 'assign', [{ name: 'a', minutes: 150 }, { name: 'b', minutes: 150 }]), 2);
+  assert.strictEqual(E.partsFor(300, 'assign', []), 6, 'no steps: ~50 minutes each');
+  assert.strictEqual(E.partsFor(300, 'assign'), 6);
+  assert.strictEqual(E.partsFor(300, 'quiz', [{ name: 'a', minutes: 1 }, { name: 'b', minutes: 1 }]), 1);
+  assert.strictEqual(E.partsFor(60, 'assign', Array.from({ length: 12 }, (_, i) => ({ name: 's' + i, minutes: 5 }))), 8, 'capped at 8');
+});
+
+test('withEstimate splits an untouched item into one part per named step', () => {
+  const next = E.withEstimate(imported(), E.fromModel(modelResult({ minutes: 150, steps: [{ name: 'Read', minutes: 25 }, { name: 'Solve', minutes: 100 }, { name: 'Write up', minutes: 25 }] }), 'k', 'assign'));
+  assert.strictEqual(next.total, 3);
+  assert.strictEqual(next.unit, 'part');
+  assert.strictEqual(E.stepName(next, 1), 'Solve');
+  assert.strictEqual(E.stepName(next, 5), null);
+});
+
+test('a started item keeps its parts, so mismatched steps are not trusted', () => {
+  const started = imported({ total: 3, unit: 'part', done: 1, today: 1 });
+  const next = E.withEstimate(started, E.fromModel(modelResult(), 'k', 'assign')); // 2 steps, 3 parts
+  assert.strictEqual(next.total, 3);
+  assert.strictEqual(E.stepsUsable(next), false);
+  assert.strictEqual(E.stepName(next, 0), null);
+});
+
+test('stepsUsable needs exactly one step per part', () => {
+  const steps = [{ name: 'a', minutes: 50 }, { name: 'b', minutes: 50 }];
+  assert.strictEqual(E.stepsUsable({ total: 2, estimate: { steps } }), true);
+  assert.strictEqual(E.stepsUsable({ total: 3, estimate: { steps } }), false);
+  assert.strictEqual(E.stepsUsable({ total: 2, estimate: { steps: [] } }), false);
+  assert.strictEqual(E.stepsUsable({ total: 2 }), false);
+  assert.strictEqual(E.stepsUsable({ total: 1, estimate: { steps: [{ name: 'only', minutes: 20 }] } }), true);
+});
+
+test('scaleSteps keeps names and count and makes the minutes add up', () => {
+  const steps = [{ name: 'A', minutes: 25 }, { name: 'B', minutes: 50 }, { name: 'C', minutes: 25 }];
+  const s = E.scaleSteps(steps, 200);
+  assert.deepStrictEqual(s.map((x) => x.name), ['A', 'B', 'C']);
+  assert.strictEqual(s.reduce((a, x) => a + x.minutes, 0), 200);
+  s.forEach((x) => assert.strictEqual(x.minutes % 5, 0));
+  assert.deepStrictEqual(E.scaleSteps(steps, 10), [], 'cannot fit 3 steps in 10 minutes');
+  assert.deepStrictEqual(E.scaleSteps([], 100), []);
+  assert.deepStrictEqual(E.scaleSteps(null, 100), []);
+  assert.deepStrictEqual(E.scaleSteps([{ name: 'z', minutes: 0 }], 100), []);
+});
+
+test('adjusting a Claude estimate by hand keeps its step names', () => {
+  const claude = E.fromModel(modelResult({ minutes: 100, steps: [{ name: 'Read', minutes: 25 }, { name: 'Solve', minutes: 75 }] }), 'k', 'assign');
+  const mine = E.userEstimate(130, claude.steps);
+  assert.strictEqual(mine.basis, 'user');
+  assert.deepStrictEqual(mine.steps.map((x) => x.name), ['Read', 'Solve']);
+  assert.strictEqual(mine.steps.reduce((a, x) => a + x.minutes, 0), 130);
+  const next = E.withEstimate(E.withEstimate(imported(), claude), mine);
+  assert.strictEqual(next.total, 2);
+  assert.strictEqual(E.stepName(next, 1), 'Solve');
 });

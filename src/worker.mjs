@@ -9,10 +9,23 @@ import { verifyFirebaseIdToken, AuthError } from './auth.mjs';
 import { MoodleError, normalizeSite, requestToken, getSiteInfo, getCourses, syncCourses } from './moodle-client.mjs';
 import { pickDefaultCourses, courseCode } from './moodle-map.mjs';
 import { loadRecord, saveRecord, deleteRecord } from './store.mjs';
+import { DEFAULT_MODEL, sanitizeInput, cacheMaterial, sha256Hex, callModel } from './estimate.mjs';
 
 const FIREBASE_PROJECT_ID = 'planner-88ab8';
 const MIN_SYNC_INTERVAL_MS = 30 * 1000;
 const MAX_BODY_BYTES = 8 * 1024;
+const ESTIMATE_MAX_ITEMS = 5;
+const ESTIMATE_BODY_BYTES = 64 * 1024; // descriptions are up to 3,000 characters each
+const ESTIMATE_CACHE_TTL = 180 * 86400;
+const ESTIMATE_USER_DAILY = 60;
+const ESTIMATE_GLOBAL_DAILY = 300;
+
+// The Anthropic SDK is imported only when a request actually needs it, so the rest of the
+// Worker (and its tests) never loads it. Tests pass their own fake client via deps.makeClient.
+async function defaultMakeClient(env) {
+  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  return new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+}
 
 function json(body, status = 200, extra = {}) {
   return new Response(JSON.stringify(body), {
@@ -25,9 +38,9 @@ function fail(code, message, status) {
   return json({ error: code, message }, status);
 }
 
-async function readJson(request) {
+async function readJson(request, maxBytes = MAX_BODY_BYTES) {
   const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) throw new MoodleError('too_large', 'Request too large', 413);
+  if (text.length > maxBytes) throw new MoodleError('too_large', 'Request too large', 413);
   try { return text ? JSON.parse(text) : {}; } catch (e) { throw new MoodleError('bad_request', 'Invalid JSON', 400); }
 }
 
@@ -52,12 +65,13 @@ export async function handleApi(request, env, deps = {}) {
   const url = new URL(request.url);
   const route = url.pathname.replace(/\/+$/, '');
 
-  const known = ['/api/moodle/status', '/api/moodle/connect', '/api/moodle/courses', '/api/moodle/sync', '/api/moodle/disconnect'];
+  const known = ['/api/moodle/status', '/api/moodle/connect', '/api/moodle/courses', '/api/moodle/sync', '/api/moodle/disconnect', '/api/estimate'];
   if (!known.includes(route)) return fail('not_found', 'Unknown endpoint', 404);
   const wantMethod = route === '/api/moodle/status' ? 'GET' : 'POST';
   if (request.method !== wantMethod) return fail('method_not_allowed', 'Use ' + wantMethod, 405);
 
   if (!env.MOODLE_KV || !env.TOKEN_ENC_KEY) return fail('not_configured', 'The server is not set up for Moodle yet', 503);
+  if (route === '/api/estimate' && !env.ANTHROPIC_API_KEY) return fail('not_configured', 'Claude estimates are not set up on the server yet', 503);
 
   let uid;
   try {
@@ -69,7 +83,22 @@ export async function handleApi(request, env, deps = {}) {
     throw e;
   }
 
+  // Optional allowlist: ALLOWED_UIDS="uid1,uid2" limits who can spend the API budget.
+  if (route === '/api/estimate' && env.ALLOWED_UIDS) {
+    const allowed = String(env.ALLOWED_UIDS).split(',').map((s) => s.trim()).filter(Boolean);
+    if (!allowed.includes(uid)) return fail('not_allowed', 'This account cannot use Claude estimates', 403);
+  }
+
   try {
+    if (route === '/api/estimate') {
+      // Tied to a real Moodle connection, so a stray Google sign-in cannot spend the budget.
+      if (!(await loadRecord(env, uid))) return fail('not_connected', 'Connect Moodle first', 409);
+      const body = await readJson(request, ESTIMATE_BODY_BYTES);
+      const list = Array.isArray(body.items) ? body.items.slice(0, ESTIMATE_MAX_ITEMS) : null;
+      if (!list || !list.length) throw new MoodleError('bad_request', 'items must be a non-empty list', 400);
+      return json(await estimateItems(env, uid, list, { fresh: body.fresh === true, now, deps }));
+    }
+
     if (route === '/api/moodle/status') {
       const rec = await loadRecord(env, uid);
       return json(rec ? statusView(rec) : { connected: false });
@@ -139,6 +168,59 @@ export async function handleApi(request, env, deps = {}) {
     if (e instanceof MoodleError) return fail(e.code, e.message, e.status);
     return fail('server_error', 'Something went wrong', 500);
   }
+}
+
+/**
+ * One estimate per item: from this user's cache if the inputs are unchanged (a re-sync never
+ * re-bills), otherwise one model call, counted against a per-user and an overall daily limit.
+ * A failure for one item never fails the others.
+ */
+async function estimateItems(env, uid, list, { fresh, now, deps }) {
+  const model = env.ESTIMATE_MODEL || DEFAULT_MODEL;
+  const fallbacks = String(env.ESTIMATE_FALLBACKS || 'on').toLowerCase() !== 'off';
+  const day = new Date(now).toISOString().slice(0, 10);
+  const userLimit = Number(env.ESTIMATE_DAILY_LIMIT) > 0 ? Number(env.ESTIMATE_DAILY_LIMIT) : ESTIMATE_USER_DAILY;
+  const globalLimit = Number(env.ESTIMATE_GLOBAL_DAILY_LIMIT) > 0 ? Number(env.ESTIMATE_GLOBAL_DAILY_LIMIT) : ESTIMATE_GLOBAL_DAILY;
+  const userKey = `estn:${uid}:${day}`;
+  const globalKey = `estn:all:${day}`;
+  const results = [];
+  let client = null;
+
+  for (const raw of list) {
+    const input = sanitizeInput(raw);
+    if (!input) { results.push({ id: String((raw && raw.id) || ''), ok: false, error: 'bad_input' }); continue; }
+    const cacheKey = `est:${uid}:${await sha256Hex(cacheMaterial(input, model))}`;
+
+    if (!fresh) {
+      const hit = await env.MOODLE_KV.get(cacheKey);
+      if (hit) {
+        try { results.push({ id: input.id, ok: true, estimate: JSON.parse(hit), cached: true }); continue; } catch (e) { /* fall through and re-ask */ }
+      }
+    }
+
+    const userCount = Number(await env.MOODLE_KV.get(userKey)) || 0;
+    const globalCount = Number(await env.MOODLE_KV.get(globalKey)) || 0;
+    if (userCount >= userLimit || globalCount >= globalLimit) { results.push({ id: input.id, ok: false, error: 'daily_limit' }); continue; }
+    await env.MOODLE_KV.put(userKey, String(userCount + 1), { expirationTtl: 172800 });
+    await env.MOODLE_KV.put(globalKey, String(globalCount + 1), { expirationTtl: 172800 });
+
+    try {
+      client = client || await (deps.makeClient || defaultMakeClient)(env);
+    } catch (e) {
+      console.error('estimate: could not create the model client');
+      results.push({ id: input.id, ok: false, error: 'server_misconfigured' });
+      break;
+    }
+    const r = await callModel(client, input, { model, fallbacks });
+    if (!r.ok) {
+      results.push({ id: input.id, ok: false, error: r.error });
+      if (r.error === 'server_misconfigured') break; // the key is wrong: every other item would fail too
+      continue;
+    }
+    await env.MOODLE_KV.put(cacheKey, JSON.stringify(r.estimate), { expirationTtl: ESTIMATE_CACHE_TTL });
+    results.push({ id: input.id, ok: true, estimate: r.estimate, cached: false });
+  }
+  return { results, model };
 }
 
 export default {

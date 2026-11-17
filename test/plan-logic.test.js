@@ -246,3 +246,45 @@ test('Today\'s required + get-ahead minutes add up to the planner\'s minutes for
   assert.strictEqual(Math.round(s.leftMin + s.aheadMin), Math.round(week));
   assert.strictEqual(Math.round(week), 50 + 35 + 40);
 });
+
+/* ---------- named steps with their own minutes ---------- */
+
+const stepped = (over = {}) => it({ total: 3, estimate: { minutes: 150, steps: [{ name: 'Read', minutes: 25 }, { name: 'Solve', minutes: 100 }, { name: 'Write up', minutes: 25 }] }, ...over });
+
+test('with named steps, a day gets the NEXT steps\' minutes, not an average', () => {
+  // 3 steps over 2 days -> 2 steps today (25 + 100), 1 tomorrow (25)
+  assert.deepStrictEqual(mins(stepped()), [125, 25, 0, 0, 0, 0, 0]);
+  // after the first step is done today, today's remaining share is 1 step: the 100-minute one
+  assert.deepStrictEqual(mins(stepped({ done: 1, today: 1 })), [100, 25, 0, 0, 0, 0, 0]);
+  assert.deepStrictEqual(mins(stepped({ done: 2, today: 2 })), [0, 25, 0, 0, 0, 0, 0]);
+});
+
+test('with named steps, minutes left and a day\'s entry minutes follow the steps', () => {
+  assert.strictEqual(P.leftMinutes(stepped()), 150);
+  assert.strictEqual(P.leftMinutes(stepped({ done: 1 })), 125);
+  assert.strictEqual(P.entryMinutes({ it: stepped(), amt: 2 }), 125);
+  assert.strictEqual(P.entryMinutes({ it: stepped({ done: 1, today: 1 }), amt: 1 }), 100);
+  assert.strictEqual(P.unitMinutes(stepped(), 1, 5), 125, 'asking for more than exist stops at the end');
+});
+
+test('with named steps, done-today minutes are the steps actually finished today', () => {
+  const targets = [];
+  const s = P.todaySummary(targets, [stepped({ done: 2, today: 2 })]);
+  assert.strictEqual(s.doneMin, 125);
+  assert.strictEqual(P.todaySummary([], [stepped({ done: 2, today: 1 })]).doneMin, 100, 'step 2 (index 1) was today\'s; step 1 was yesterday\'s');
+});
+
+test('steps that do not match the parts are ignored and the average is used', () => {
+  const mismatched = stepped({ total: 4, estimate: { minutes: 200, steps: [{ name: 'a', minutes: 150 }, { name: 'b', minutes: 50 }] } });
+  assert.strictEqual(P.stepsUsable(mismatched), false);
+  assert.strictEqual(P.leftMinutes(mismatched), 200);
+  assert.strictEqual(P.unitMinutes(mismatched, 0, 2), 100);
+});
+
+test('named-step minutes planned across the week still add up to minutes left', () => {
+  [stepped(), stepped({ done: 1 }), stepped({ due: addDays(TODAY, 3) }), stepped({ due: addDays(TODAY, 20) })].forEach((c) => {
+    const planned = mins(c).reduce((a, b) => a + b, 0);
+    const horizonLimited = c.due === addDays(TODAY, 20);
+    if (!horizonLimited) assert.strictEqual(planned, Math.round(P.leftMinutes(c)), JSON.stringify(c.estimate.steps) + ' done=' + c.done);
+  });
+});

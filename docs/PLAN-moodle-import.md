@@ -356,9 +356,9 @@ Each phase ships on its own and leaves the app working.
   "What Phase 3 shipped").** Rule-of-thumb estimates, work split into parts,
   the minutes planner, Today with times and a heavy-day nudge, Week in minutes,
   and the plan-first assignment detail screen.
-- **Phase 4 — LLM estimates and suggested steps.** `/api/estimate`, caching,
-  steps with minutes and days, and range width driven by evidence. Calibration
-  from logged time is deferred beyond this phase.
+- **Phase 4 — LLM estimates and suggested steps. BUILT (see "What Phase 4
+  shipped").** Claude reads the description, estimates the time and names the
+  steps. Calibration from logged time is still deferred.
 - **Phase 5 — Notifications.** Event detection in sync, FCM delivery, daily
   plan digest.
 - **Phase 6 — Vault content.** Schedule, CSCI, lectures, flashcards, backup.
@@ -486,6 +486,37 @@ Each phase ships on its own and leaves the app working.
 - **Not validated:** the heuristic numbers have not been compared with how long
   your work actually takes. Expect to adjust some; the +/-15m buttons exist for
   that.
+
+### What Phase 4 shipped
+
+- **`POST /api/estimate`** on the Worker (`src/estimate.mjs`, `src/worker.mjs`), using the official Anthropic
+  SDK (imported lazily, so the rest of the Worker never loads it). Default model `claude-opus-5-5` with
+  `effort: medium`, **structured output** (a closed JSON schema), and the server-side refusal fallback on
+  (`fallbacks: "default"`). `ESTIMATE_MODEL` swaps the model.
+- **The assignment text is treated as untrusted data:** fenced in `<assignment>` tags with angle brackets
+  and control characters stripped, a system prompt that says to ignore instructions inside it, a schema-
+  constrained output, and nothing returned is ever used except as numbers and short labels.
+- **Everything the model says is validated:** minutes rounded to 5 and clamped to 15-600; the range is forced
+  to bracket the estimate (at least +/-15%, at most 2x), so a model that claims false precision is widened;
+  step minutes are rescaled to add up to the estimate exactly; at most 8 steps; names cleaned and capped; a
+  quiz is never split. An unusable answer is an error and the rule-of-thumb estimate stays.
+- **Cost control:** per-user cache keyed on a hash of the inputs (180 days; an unchanged assignment is never
+  re-billed), 60 requests per user and 300 overall per day, an optional `ALLOWED_UIDS` allowlist, and a
+  required Moodle connection. The Anthropic workspace's own spend limit is the final backstop.
+- **Parts follow the steps.** When Claude names the steps, each step is one part and carries its own minutes;
+  the planner and Today use the NEXT steps' minutes, not an average. Steps are trusted only while there is
+  exactly one per part, so a started item (whose parts cannot change) falls back to the average.
+- **Who wins:** your own number always beats Claude. Claude's answer survives a sync until Moodle changes the
+  assignment's text, then the rule of thumb takes over until Claude is asked again. Adjusting a Claude
+  estimate by hand keeps its step names. "Ask Claude" on the detail screen is the explicit override.
+- **Settings > Use Claude to estimate** switches it off (device-local; on by default, per the approval to
+  send assignment text).
+- **Not verified:** a real call to the live Anthropic API (no key here). What was verified: the real SDK
+  puts the intended request on the wire (checked against a local fake server), it bundles and runs inside the
+  real Workers runtime, and everything around the call (prompt, validation, cache, limits, errors) is tested
+  with a fake client. The quality of the estimates is unmeasured.
+- **Still deferred:** calibration from logged time, reading PDF attachments, and sending a course's past
+  actual times as context.
 
 ## 12. Testing strategy
 

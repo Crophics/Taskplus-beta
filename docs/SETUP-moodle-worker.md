@@ -40,6 +40,38 @@ Pushing to `main` deploys through GitHub Actions as before. Or:
 npx wrangler deploy
 ```
 
+## 3b. Claude estimates (optional, recommended)
+
+Without this the app still works: it keeps its rule-of-thumb time estimates. With it, Claude reads each
+assignment's description, estimates the time and names the steps.
+
+```bash
+npx wrangler secret put ANTHROPIC_API_KEY
+```
+
+Create the key at console.anthropic.com. **Put it in its own workspace with a monthly spend limit** so a
+bug or a stranger can never run up a bill; that limit is the real safety net.
+
+**What it costs (a rough estimate, not measured):** each estimate is one request of roughly 1,000 to 2,000
+input tokens and a few hundred output tokens plus some thinking. The default model, Claude Opus 5.5, is
+$4 per million input tokens and $20 per million output, so on the order of a cent or two per assignment.
+An assignment is only sent once: the answer is cached for 180 days and re-used until Moodle changes the
+assignment's text. Built-in limits: 60 requests per user per day and 300 per day across everyone.
+
+Optional Worker variables (set in `wrangler.toml` under `[vars]` or in the dashboard):
+
+| Variable | Effect |
+|---|---|
+| `ESTIMATE_MODEL` | Use another model, e.g. `claude-sonnet-5-5` or `claude-haiku-5-5` (cheaper, probably a little less careful). Default `claude-opus-5-5`. |
+| `ESTIMATE_FALLBACKS` | `off` turns off the server-side refusal fallback (on by default). |
+| `ESTIMATE_DAILY_LIMIT` / `ESTIMATE_GLOBAL_DAILY_LIMIT` | Change the 60 / 300 daily caps. |
+| `ALLOWED_UIDS` | Comma-separated Firebase user ids allowed to use Claude estimates. Leave unset to allow every connected user. |
+
+Only the assignment's title, points, description, file names and submission type go to Anthropic. Never
+grades, notes, your Moodle login or your account id. Each user can switch it off in Settings.
+
+The Worker now imports the Anthropic SDK, so the GitHub workflow runs `npm ci` before deploying.
+
 ## Optional
 
 - `SUBREQUEST_BUDGET` (a Worker variable, default 40): the most Moodle calls one
