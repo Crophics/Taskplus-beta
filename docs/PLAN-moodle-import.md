@@ -574,3 +574,10 @@ Each phase ships on its own and leaves the app working.
   `Q::A` cards and where they sync), lecture/topic notes (new Firestore collections, per section 3.3), the CSCI
   course-site adapter (needs that site's address, login style and page structure), and scheduled backups (Firestore
   export is a Google Cloud setting, not app code). The manual Backup button still exports items only.
+
+## What Phase 7 shipped
+
+- `docs/CUTOVER.md`: the parallel-run checklist, exit criteria and rollback.
+- `tools/compare-vault.mjs` (tested): lists items only in the vault, only in Taskplus, and due-date or status
+  differences, matched on the Moodle cmid.
+- The two-week overlap and switching off the Windows tasks are yours to do; they cannot be done from code.

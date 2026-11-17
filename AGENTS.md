@@ -113,6 +113,9 @@ for the one-time Cloudflare setup. What matters when touching code:
   Stored device-local in `tp-schedule` as `{courseName: text}`; edited on Course detail (`#tp-cls-input`, saves on
   `change`, never renders while typing); shown on Today ("Classes today") and in Week's selected-day card.
   Keyed by course name string, so renaming a course orphans its entry (same as other course-keyed stores).
+- **Cutover (Phase 7).** `docs/CUTOVER.md` is the checklist; `tools/compare-vault.mjs` compares the vault's
+  Coursework notes (`link: ...id=<cmid>`, `due`, `status`) with a Backup export, matching on cmid. Read-only.
+  It reuses `parseFrontmatter` from `tools/import-vault-grades.mjs`.
 - **`.assetsignore` already hid repo internals** (`*.md`, `test/`, etc.); `src/`
   was added to it. Don't rewrite that file wholesale.
 
