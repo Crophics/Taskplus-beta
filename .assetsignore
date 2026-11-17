@@ -1,16 +1,11 @@
-# Files in this repo that must not be published as static assets.
-# (wrangler uploads the whole repo root, so anything not listed here is public.)
-src
-test
-docs
-functions
-.github
-.git
-node_modules
-.wrangler
-AGENTS.md
+node_modules/
+functions/
+test/
+.git/
+.github/
+.wrangler/
 package.json
 package-lock.json
-eslint.config.js
 wrangler.toml
-firebase.json
+*.md
+src/
