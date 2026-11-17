@@ -8,7 +8,7 @@
 import { processSync, loadEvents, loadPush, savePush, pushStatus, registerToken, unregisterToken, cleanPrefs, cleanTimeZone, sendTest, runCron } from './push.mjs';
 import { parseServiceAccount } from './fcm.mjs';
 import { verifyFirebaseIdToken, AuthError } from './auth.mjs';
-import { MoodleError, normalizeSite, requestToken, getSiteInfo, getCourses, syncCourses } from './moodle-client.mjs';
+import { MoodleError, normalizeSite, requestToken, getSiteInfo, getCourses, syncCourses, gradeReportShape } from './moodle-client.mjs';
 import { pickDefaultCourses, courseCode } from './moodle-map.mjs';
 import { loadRecord, saveRecord, deleteRecord } from './store.mjs';
 import { DEFAULT_MODEL, sanitizeInput, cacheMaterial, sha256Hex, callModel } from './estimate.mjs';
@@ -72,7 +72,7 @@ export async function handleApi(request, env, deps = {}) {
 
   const methods = {
     '/api/moodle/status': 'GET', '/api/moodle/connect': 'POST', '/api/moodle/courses': 'POST', '/api/moodle/sync': 'POST',
-    '/api/moodle/disconnect': 'POST', '/api/estimate': 'POST',
+    '/api/moodle/disconnect': 'POST', '/api/moodle/grade-shape': 'POST', '/api/estimate': 'POST',
     '/api/push/status': 'GET', '/api/push/events': 'GET', '/api/push/register': 'POST', '/api/push/unregister': 'POST',
     '/api/push/prefs': 'POST', '/api/push/test': 'POST',
   };
@@ -149,6 +149,12 @@ export async function handleApi(request, env, deps = {}) {
 
     const rec = await loadRecord(env, uid);
     if (!rec) return fail('not_connected', 'Connect Moodle first', 409);
+
+    if (route === '/api/moodle/grade-shape') {
+      const cid = Number(body.courseId);
+      if (!rec.courses.some((c) => c.id === cid)) throw new MoodleError('bad_request', 'Unknown course');
+      return json(await gradeReportShape(rec.site, rec.token, rec.userid, cid, fetchFn));
+    }
 
     if (route === '/api/moodle/courses') {
       const valid = new Set(rec.courses.map((c) => c.id));

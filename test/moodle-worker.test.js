@@ -441,3 +441,16 @@ test('disconnect also forgets the snapshot and feed', async () => {
   assert.ok(!env.MOODLE_KV.m.has('snap:user-1'));
   assert.ok(![...env.MOODLE_KV.m.keys()].some((k) => k.startsWith('moodle:')));
 });
+
+test('grade-shape reports field names and types only, never values, and only for your courses', async () => {
+  const env = newEnv();
+  const f = makeFetch();
+  await connected(env, f);
+  const ok = await api('/api/moodle/grade-shape', { env, fetchFn: f, body: { courseId: 7 } });
+  assert.strictEqual(ok.res.status, 200);
+  assert.strictEqual(ok.json.itemTypes.mod.count, 2);
+  assert.deepStrictEqual(ok.json.itemTypes.mod.fields.graderaw.types, { number: 1, null: 1 });
+  const text = JSON.stringify(ok.json);
+  assert.ok(!text.includes('Assignment 5') && !text.includes('87.4') && !text.includes('ws-token-abc'));
+  assert.strictEqual((await api('/api/moodle/grade-shape', { env, fetchFn: f, body: { courseId: 999 } })).res.status, 400);
+});

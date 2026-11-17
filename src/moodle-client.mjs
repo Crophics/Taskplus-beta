@@ -187,3 +187,33 @@ export async function syncCourses(base, token, userid, courseIds, opts = {}) {
 
   return { records, grades, warnings, courses };
 }
+
+/**
+ * Diagnostic: the SHAPE of one course's grade report (field names and value types, never the values),
+ * so a school that omits fields can be understood without exposing grades.
+ */
+export async function gradeReportShape(base, token, userid, courseid, fetchFn = fetch) {
+  const resp = await wsCall(base, token, 'gradereport_user_get_grade_items', { courseid, userid }, fetchFn);
+  const ug = resp && Array.isArray(resp.usergrades) ? resp.usergrades[0] : null;
+  const rows = (ug && ug.gradeitems) || [];
+  const kind = (v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v);
+  const byType = {};
+  rows.forEach((g) => {
+    const t = String(g.itemtype || 'unknown');
+    const entry = byType[t] || (byType[t] = { count: 0, fields: {} });
+    entry.count++;
+    Object.keys(g).forEach((k) => {
+      const f = entry.fields[k] || (entry.fields[k] = { types: {}, present: 0 });
+      const ty = kind(g[k]);
+      f.types[ty] = (f.types[ty] || 0) + 1;
+      f.present++;
+    });
+  });
+  return {
+    topLevelKeys: resp ? Object.keys(resp).sort() : [],
+    userGradeKeys: ug ? Object.keys(ug).sort() : [],
+    maxdepth: ug ? ug.maxdepth : null,
+    warnings: resp && Array.isArray(resp.warnings) ? resp.warnings.map((w) => String((w && (w.warningcode || w.item)) || w).slice(0, 60)) : [],
+    itemTypes: byType,
+  };
+}
