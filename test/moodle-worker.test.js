@@ -386,3 +386,47 @@ test('non-API requests fall through to static assets', async () => {
   const res = await W.default.fetch(new Request('https://beta.example.test/index.html'), env, {});
   assert.strictEqual(await res.text(), 'asset');
 });
+
+/* ---------- Phase 5: alerts routes ---------- */
+
+test('push routes need sign-in and work without a Moodle connection', async () => {
+  const env = newEnv();
+  const FFN = makeFetch();
+  assert.strictEqual((await api('/api/push/status', { method: 'GET', env, token: null, fetchFn: FFN })).res.status, 401);
+  const r = await api('/api/push/register', { env, fetchFn: FFN, body: { token: 'device-token-aaaaaaaaaaaaaaaaaaaa', timeZone: 'America/New_York' } });
+  assert.strictEqual(r.res.status, 200);
+  assert.strictEqual(r.json.devices, 1);
+  assert.strictEqual(r.json.configured, false);
+  assert.strictEqual(r.json.tz, 'America/New_York');
+  assert.strictEqual((await api('/api/push/register', { env, fetchFn: FFN, body: { token: 'x' } })).res.status, 400);
+  const p = await api('/api/push/prefs', { env, fetchFn: FFN, body: { grade: false, quiet: { on: true, start: 23, end: 7 } } });
+  assert.strictEqual(p.json.prefs.grade, false);
+  assert.strictEqual(p.json.prefs.new, true);
+  assert.deepStrictEqual(p.json.prefs.quiet, { on: true, start: 23, end: 7 });
+  assert.strictEqual((await api('/api/push/status', { method: 'GET', env, fetchFn: FFN })).json.devices, 1);
+  await api('/api/push/unregister', { env, fetchFn: FFN, body: {} });
+  assert.strictEqual((await api('/api/push/status', { method: 'GET', env, fetchFn: FFN })).json.devices, 0);
+});
+
+test('push test says when the server has no FCM key or the device is unregistered', async () => {
+  const env = newEnv();
+  const FFN = makeFetch();
+  assert.strictEqual((await api('/api/push/test', { env, fetchFn: FFN, body: {} })).json.error, 'not_configured');
+});
+
+test('sync reports new assignments as events after the baseline, and the feed keeps them', async () => {
+  const env = newEnv();
+  const f = makeFetch();
+  await connected(env, f);
+  const first = await api('/api/moodle/sync', { env, fetchFn: f, now: NOW + 60_000 });
+  assert.deepStrictEqual(first.json.events, []); // baseline
+  // Pretend the first snapshot predates one assignment.
+  const snap = await S.open(ENC_KEY, env.MOODLE_KV.m.get('snap:user-1'));
+  delete snap.items['moodle:5003'];
+  env.MOODLE_KV.m.set('snap:user-1', await S.seal(ENC_KEY, snap));
+  const second = await api('/api/moodle/sync', { env, fetchFn: f, now: NOW + 120_000 });
+  assert.deepStrictEqual(second.json.events.map((e) => e.id), ['new:moodle:5003']);
+  const feed = await api('/api/push/events', { method: 'GET', env, fetchFn: f });
+  assert.strictEqual(feed.json.events.length, 1);
+  assert.ok(!JSON.stringify(feed.json).includes('ws-token-abc'));
+});

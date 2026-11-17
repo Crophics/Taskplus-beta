@@ -5,6 +5,8 @@
 // Every /api call must carry a valid Firebase ID token; the Moodle token
 // never leaves this Worker.
 
+import { processSync, loadEvents, loadPush, savePush, pushStatus, registerToken, unregisterToken, cleanPrefs, cleanTimeZone, sendTest, runCron } from './push.mjs';
+import { parseServiceAccount } from './fcm.mjs';
 import { verifyFirebaseIdToken, AuthError } from './auth.mjs';
 import { MoodleError, normalizeSite, requestToken, getSiteInfo, getCourses, syncCourses } from './moodle-client.mjs';
 import { pickDefaultCourses, courseCode } from './moodle-map.mjs';
@@ -68,9 +70,14 @@ export async function handleApi(request, env, deps = {}) {
   const url = new URL(request.url);
   const route = url.pathname.replace(/\/+$/, '');
 
-  const known = ['/api/moodle/status', '/api/moodle/connect', '/api/moodle/courses', '/api/moodle/sync', '/api/moodle/disconnect', '/api/estimate'];
-  if (!known.includes(route)) return fail('not_found', 'Unknown endpoint', 404);
-  const wantMethod = route === '/api/moodle/status' ? 'GET' : 'POST';
+  const methods = {
+    '/api/moodle/status': 'GET', '/api/moodle/connect': 'POST', '/api/moodle/courses': 'POST', '/api/moodle/sync': 'POST',
+    '/api/moodle/disconnect': 'POST', '/api/estimate': 'POST',
+    '/api/push/status': 'GET', '/api/push/events': 'GET', '/api/push/register': 'POST', '/api/push/unregister': 'POST',
+    '/api/push/prefs': 'POST', '/api/push/test': 'POST',
+  };
+  const wantMethod = methods[route];
+  if (!wantMethod) return fail('not_found', 'Unknown endpoint', 404);
   if (request.method !== wantMethod) return fail('method_not_allowed', 'Use ' + wantMethod, 405);
 
   if (!env.MOODLE_KV || !env.TOKEN_ENC_KEY) return fail('not_configured', 'The server is not set up for Moodle yet', 503);
@@ -102,6 +109,8 @@ export async function handleApi(request, env, deps = {}) {
       if (!list || !list.length) throw new MoodleError('bad_request', 'items must be a non-empty list', 400);
       return json(await estimateItems(env, uid, list, { fresh: body.fresh === true, readFiles: body.readFiles === true, rec, now, deps }));
     }
+
+    if (route.startsWith('/api/push/')) return await pushRoute(route, request, env, uid, now, deps);
 
     if (route === '/api/moodle/status') {
       const rec = await loadRecord(env, uid);
@@ -164,7 +173,10 @@ export async function handleApi(request, env, deps = {}) {
       }
       rec.courses = result.courses.map((c) => ({ id: c.id, fullname: c.fullname }));
       await saveRecord(env, uid, rec);
-      return json({ records: result.records, grades: result.grades, warnings: result.warnings, syncedAt: now, courses: courseView(rec.courses, rec.selected) });
+      // Events go to the feed, not to a push: the user is looking at the app right now.
+      let events = [];
+      try { events = await processSync(env, uid, result, now, { notify: false, deps }); } catch (e) { /* alerts must never break a sync */ }
+      return json({ records: result.records, grades: result.grades, warnings: result.warnings, syncedAt: now, courses: courseView(rec.courses, rec.selected), events });
     }
 
     return fail('not_found', 'Unknown endpoint', 404);
@@ -172,6 +184,38 @@ export async function handleApi(request, env, deps = {}) {
     if (e instanceof MoodleError) return fail(e.code, e.message, e.status);
     return fail('server_error', 'Something went wrong', 500);
   }
+}
+
+const TEST_PUSH_INTERVAL_MS = 30000;
+
+async function pushRoute(route, request, env, uid, now, deps) {
+  if (route === '/api/push/events') return json({ events: await loadEvents(env, uid) });
+  if (route === '/api/push/status') return json(pushStatus(await loadPush(env, uid), env));
+  const body = route === '/api/push/unregister' || route === '/api/push/test' ? await readJson(request).catch(() => ({})) : await readJson(request);
+  if (route === '/api/push/register') {
+    const p = await registerToken(env, uid, { token: body.token, tz: body.timeZone, userAgent: body.userAgent }, now);
+    return json(pushStatus(p, env));
+  }
+  if (route === '/api/push/unregister') {
+    await unregisterToken(env, uid, typeof body.token === 'string' ? body.token : null);
+    return json({ ok: true });
+  }
+  if (route === '/api/push/prefs') {
+    const p = await loadPush(env, uid);
+    p.prefs = cleanPrefs(body, p.prefs);
+    if (body.timeZone) p.tz = cleanTimeZone(body.timeZone);
+    await savePush(env, uid, p);
+    return json(pushStatus(p, env));
+  }
+  // test
+  const p = await loadPush(env, uid);
+  if (!parseServiceAccount(env.FCM_SERVICE_ACCOUNT)) return fail('not_configured', 'Push is not set up on the server yet', 503);
+  if (!p.tokens.length) return fail('no_device', 'This device is not registered for alerts', 409);
+  if (p.lastTest && now - p.lastTest < TEST_PUSH_INTERVAL_MS) return fail('too_soon', 'Wait a moment before another test', 429);
+  p.lastTest = now;
+  await savePush(env, uid, p);
+  const r = await sendTest(env, uid, now, deps);
+  return json({ sent: r.sent });
 }
 
 /**
@@ -252,5 +296,8 @@ export default {
     const { pathname } = new URL(request.url);
     if (pathname.startsWith('/api/')) return handleApi(request, env, {});
     return env.ASSETS.fetch(request);
+  },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runCron(env, Date.now(), {}));
   },
 };

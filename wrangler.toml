@@ -20,6 +20,11 @@ not_found_handling = "single-page-application"
 # binding = "MOODLE_KV"
 # id = "PASTE_NAMESPACE_ID_HERE"
 
+# Background sync + alerts (see docs/SETUP-moodle-worker.md). Does nothing until KV and
+# FCM_SERVICE_ACCOUNT exist and a device has registered.
+[triggers]
+crons = ["*/30 * * * *"]
+
 [[routes]]
 pattern = "beta.taskplus.cc"
 custom_domain = true
