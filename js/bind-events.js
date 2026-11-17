@@ -89,6 +89,22 @@
     if (heavyLine) heavyLine.onclick = () => { api.tab = 'week'; api.savePrefs(); api.render(); };
     const openSettings = document.getElementById('tp-open-settings');
     if (openSettings) openSettings.onclick = () => { api.tab = 'settings'; api.savePrefs(); api.render(); };
+    const openChanges = document.getElementById('tp-open-changes');
+    if (openChanges) openChanges.onclick = () => api.openChanges();
+    const chBack = document.getElementById('tp-ch-back');
+    if (chBack) chBack.onclick = () => api.closeChanges();
+    ['new','moved','grade','feedback','due'].forEach((k) => {
+      const t = document.getElementById('tp-al-' + k);
+      if (t) t.onclick = () => api.savePrefsToServer({ [k]: !api.alerts.prefs[k] });
+    });
+    const alQuiet = document.getElementById('tp-al-quiet');
+    if (alQuiet) alQuiet.onclick = () => api.savePrefsToServer({ quiet: { on: !api.alerts.prefs.quiet.on } });
+    const alQs = document.getElementById('tp-al-qstart');
+    if (alQs) alQs.onchange = (e) => api.savePrefsToServer({ quiet: { start: Number(e.target.value) } });
+    const alQe = document.getElementById('tp-al-qend');
+    if (alQe) alQe.onchange = (e) => api.savePrefsToServer({ quiet: { end: Number(e.target.value) } });
+    const alTest = document.getElementById('tp-al-test');
+    if (alTest) alTest.onclick = () => api.sendTestAlert();
     const openAll = document.getElementById('tp-open-all');
     if (openAll) openAll.onclick = () => { api.tab = 'all'; api.savePrefs(); api.render(); };
     const allBack = document.getElementById('tp-all-back');

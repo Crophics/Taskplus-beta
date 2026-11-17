@@ -99,6 +99,15 @@ for the one-time Cloudflare setup. What matters when touching code:
 - **Moodle `accessexception` is not an auth failure** (`src/moodle-client.mjs`):
   it means the school has not enabled a function for the mobile service. Only
   `invalidtoken` disconnects a user.
+- **Alerts (Phase 5).** `src/events.mjs` (pure: snapshot, diff, wording, due-soon, quiet hours), `src/fcm.mjs`
+  (service-account JWT, data-only FCM v1 send, the shape `sw.js` displays), `src/push.mjs` (KV: `push:<uid>`,
+  `snap:<uid>`, `evt:<uid>`, all sealed; `processSync`, `notifyUser`, `runCron`). `/api/push/*` routes live in
+  `worker.mjs`; the default export has a `scheduled` handler (`*/30 * * * *`). The first snapshot is a baseline
+  (no events); a user's own in-app sync records events to the feed but never pushes (`notify:false`). Reminder
+  keys include the due timestamp so a moved date reminds again. Client: `tp-push-token` (dispatched by
+  `firebase-sync.js`) registers the FCM token with the Worker; `tp-feed` is the device-local feed; tab `changes`
+  (bell on Today) is never persisted. Disconnect deletes `snap:`/`evt:`. Tests use fake KV/FCM; real FCM and cron
+  are only verifiable on a deployed Worker with a real device. Production's `functions/` digest stays separate.
 - **`.assetsignore` already hid repo internals** (`*.md`, `test/`, etc.); `src/`
   was added to it. Don't rewrite that file wholesale.
 

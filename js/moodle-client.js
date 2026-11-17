@@ -283,7 +283,40 @@
     sync: () => call('/api/moodle/sync', 'POST', {}),
     estimate: (items, fresh, readFiles) => call('/api/estimate', 'POST', { items, fresh: !!fresh, readFiles: !!readFiles }),
     disconnect: () => call('/api/moodle/disconnect', 'POST', {}),
+    pushStatus: () => call('/api/push/status', 'GET'),
+    registerPush: (token) => call('/api/push/register', 'POST', { token, timeZone: tz(), userAgent: (global.navigator && global.navigator.userAgent) || '' }),
+    unregisterPush: (token) => call('/api/push/unregister', 'POST', { token }),
+    pushPrefs: (prefs) => call('/api/push/prefs', 'POST', { ...prefs, timeZone: tz() }),
+    testPush: () => call('/api/push/test', 'POST', {}),
+    feed: () => call('/api/push/events', 'GET'),
   };
 
-  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, shouldAutoSync, summarize, MoodleClientError, api, AUTO_SYNC_MIN_HOURS };
+  function tz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { return 'UTC'; } }
+
+  /* ---- What's new feed (events come from the Worker; this only merges and words them) ---- */
+  const FEED_MAX = 50;
+  // feed = {events:[{id, kind, title, course, at, ...}], seenAt}. Merge by id, newest first.
+  function mergeFeed(feed, incoming, now) {
+    const base = feed && Array.isArray(feed.events) ? feed : { events: [], seenAt: now };
+    const have = new Set(base.events.map((e) => e.id));
+    const add = (incoming || []).filter((e) => e && e.id && !have.has(e.id)).map((e) => ({ ...e, at: e.at || now }));
+    const events = add.concat(base.events).sort((a, b) => b.at - a.at).slice(0, FEED_MAX);
+    return { events, seenAt: base.seenAt || 0 };
+  }
+  function unreadCount(feed) {
+    if (!feed || !Array.isArray(feed.events)) return 0;
+    return feed.events.filter((e) => e.at > (feed.seenAt || 0)).length;
+  }
+  function markFeedSeen(feed, now) { return { events: (feed && feed.events) || [], seenAt: now }; }
+  function feedLine(e) {
+    switch (e.kind) {
+      case 'new': return { head: 'New ' + (e.quiz ? 'quiz' : 'assignment'), text: e.title };
+      case 'moved': return { head: 'Date moved', text: e.title };
+      case 'grade': return { head: 'Graded ' + (Math.round(e.pct * 10) / 10) + '%', text: e.title };
+      case 'feedback': return { head: 'Feedback', text: e.title };
+      default: return { head: 'Update', text: e.title || '' };
+    }
+  }
+
+  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, shouldAutoSync, summarize, MoodleClientError, api, AUTO_SYNC_MIN_HOURS, mergeFeed, unreadCount, markFeedSeen, feedLine };
 })(typeof window !== 'undefined' ? window : globalThis);

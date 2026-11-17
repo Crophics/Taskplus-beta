@@ -119,6 +119,9 @@ export async function handleApi(request, env, deps = {}) {
 
     if (route === '/api/moodle/disconnect') {
       await deleteRecord(env, uid);
+      // The snapshot and feed hold assignment titles from the school: forget them with the connection.
+      await env.MOODLE_KV.delete('snap:' + uid);
+      await env.MOODLE_KV.delete('evt:' + uid);
       return json({ ok: true });
     }
 

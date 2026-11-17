@@ -133,6 +133,7 @@
       </div>
       <div class="tp-t-header-right">
         ${streak > 0 ? `<div class="tp-t-streak">${streak}-day streak</div>` : ''}
+        ${ctx.showBell ? window.TPViews.bellButtonHtml(ctx.unread || 0) : ''}
         <button type="button" class="tp-icon-btn" id="tp-open-settings" aria-label="Settings">${window.TPIcons.svg('cog_outline')}</button>
       </div>
     </div>`;

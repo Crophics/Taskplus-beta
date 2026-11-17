@@ -430,3 +430,14 @@ test('sync reports new assignments as events after the baseline, and the feed ke
   assert.strictEqual(feed.json.events.length, 1);
   assert.ok(!JSON.stringify(feed.json).includes('ws-token-abc'));
 });
+
+test('disconnect also forgets the snapshot and feed', async () => {
+  const env = newEnv();
+  const f = makeFetch();
+  await connected(env, f);
+  await api('/api/moodle/sync', { env, fetchFn: f, now: NOW + 60_000 });
+  assert.ok(env.MOODLE_KV.m.has('snap:user-1'));
+  await api('/api/moodle/disconnect', { env, fetchFn: f, body: {} });
+  assert.ok(!env.MOODLE_KV.m.has('snap:user-1'));
+  assert.ok(![...env.MOODLE_KV.m.keys()].some((k) => k.startsWith('moodle:')));
+});

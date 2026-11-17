@@ -33,6 +33,7 @@
   const MOODLE_ITEMS_KEY='tp-moodle-items';
   const MOODLE_STATE_KEY='tp-moodle';
   const MOODLE_EVENTS_KEY='tp-moodle-events';
+  const FEED_KEY='tp-feed';
   const MOODLE_SITE_KEY='tp-moodle-last-site';
   // Grades: what Moodle reported (replaced each sync) and what the user owns
   // (weights, targets, credits). Device-local, like imported items.
@@ -123,8 +124,8 @@
   try{ prefs = JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; }catch(e){ prefs = {}; }
   let searchTerm = prefs.searchTerm || ''; // All-tab search text
   let theme = ['dark','light','blue','auto'].includes(prefs.theme) ? prefs.theme : 'dark';
-  const TABS = ['today','all','week','settings','courses','course','manage','item'];
-  let tab = TABS.includes(prefs.tab) && prefs.tab !== 'course' && prefs.tab !== 'item' ? prefs.tab : 'today';
+  const TABS = ['today','all','week','settings','courses','course','manage','item','changes'];
+  let tab = TABS.includes(prefs.tab) && prefs.tab !== 'course' && prefs.tab !== 'item' && prefs.tab !== 'changes' ? prefs.tab : 'today';
   let addOpen = false;
   let pickerOpen = false;
   let moreOpen = false; // add-sheet "Notes, subtasks, repeat, dependency" disclosure
@@ -208,7 +209,7 @@
   pruneDeletedLog();
 
   function savePrefs(){
-    localStorage.setItem(PREFS_KEY, JSON.stringify({searchTerm,theme,notifyHour,notifyDigest,tab: tab==='course' ? 'courses' : tab==='item' ? itemDetailFrom : tab,allSortMode}));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({searchTerm,theme,notifyHour,notifyDigest,tab: tab==='course' ? 'courses' : tab==='item' ? itemDetailFrom : tab==='changes' ? changesFrom : tab,allSortMode}));
     syncPush();
   }
 
@@ -840,6 +841,7 @@
       items = merged.items;
       if(window.TPMoodle.ensureCourses(courses, res.records)) saveCourses();
       appendMoodleEvents(merged.events);
+      addToFeed(res.events);
       moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt };
       saveMoodleState();
       if(Array.isArray(res.grades)){
@@ -896,6 +898,65 @@
     if(window.TPMoodle.shouldAutoSync(moodleState, Date.now())) moodleSync({silent:true});
     else requestModelEstimates().catch(()=>{}); // nothing to sync yet, but older items may still need Claude's estimate
   }
+
+  /* ---- What's new feed + Moodle alerts (Phase 5; js/views/changes-html.js) ---- */
+  let feed = (function(){ const f = readJsonObject(FEED_KEY, null); return f && Array.isArray(f.events) ? f : { events: [], seenAt: Date.now() }; })();
+  let changesFrom = 'today';
+  let alerts = { loaded:false, configured:false, devices:0, prefs:{ new:true, moved:true, grade:true, feedback:true, due:true, quiet:{ on:false, start:22, end:8 } } };
+  function saveFeed(){ try{ localStorage.setItem(FEED_KEY, JSON.stringify(feed)); }catch(e){} }
+  function addToFeed(events){
+    if(!events || !events.length) return;
+    feed = window.TPMoodle.mergeFeed(feed, events, Date.now());
+    saveFeed();
+  }
+  function openChanges(){
+    if(tab !== 'changes') changesFrom = tab;
+    tab = 'changes';
+    screenJustSwitched = true;
+    if(typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+    render();
+    feed = window.TPMoodle.markFeedSeen(feed, Date.now()); // the unread highlight stays for this view, then clears
+    saveFeed();
+  }
+  function closeChanges(){ tab = changesFrom || 'today'; render(); }
+  async function loadFeed(){
+    try{
+      const r = await window.TPMoodle.api.feed();
+      addToFeed(r.events);
+    }catch(e){ /* offline or not set up: keep what we have */ }
+  }
+  async function loadAlerts(){
+    try{
+      const s = await window.TPMoodle.api.pushStatus();
+      alerts = { loaded:true, configured:!!s.configured, devices:s.devices||0, prefs:s.prefs };
+      if(tab === 'settings' && !userIsTyping()) render();
+    }catch(e){ /* keep defaults */ }
+  }
+  async function registerPushToken(token){
+    try{ await window.TPMoodle.api.registerPush(token); }catch(e){ return; }
+    loadAlerts();
+  }
+  document.addEventListener('tp-push-token', function(e){ if(e.detail && e.detail.token) registerPushToken(e.detail.token); });
+  async function savePrefsToServer(patch){
+    const old = alerts.prefs;
+    const next = { ...old, ...patch, quiet: { ...old.quiet, ...(patch.quiet||{}) } };
+    alerts = { ...alerts, prefs: next };
+    render();
+    try{
+      const s = await window.TPMoodle.api.pushPrefs(next);
+      alerts = { loaded:true, configured:!!s.configured, devices:s.devices||0, prefs:s.prefs };
+    }catch(e){
+      alerts = { ...alerts, prefs: old };
+      showToast((e && e.message) || 'Could not save that change');
+    }
+    if(!userIsTyping()) render();
+  }
+  async function sendTestAlert(){
+    try{
+      const r = await window.TPMoodle.api.testPush();
+      showToast(r.sent ? 'Test sent' : 'Nothing was delivered. Check notification permission.');
+    }catch(e){ showToast((e && e.message) || 'Could not send a test'); }
+  }
   async function moodleBoot(){
     try{
       const status = await window.TPMoodle.api.status();
@@ -905,6 +966,8 @@
       return; // not configured, offline, or signed out: keep the cached state
     }
     if(tab === 'settings' && !userIsTyping()) render();
+    loadFeed().then(()=>{ if(tab === 'today' && !userIsTyping()) render(); });
+    loadAlerts();
     moodleMaybeAutoSync();
   }
   document.addEventListener('tp-auth-changed', function(e){
@@ -947,6 +1010,7 @@
         weekdayLabel: d.toLocaleDateString(undefined,{weekday:'long'}),
         courseColorFor, relativeDueLabel, unitLabel, capUnit, plan,
         TPTodayLogic: window.TPTodayLogic,
+        showBell: !!moodleState.connected, unread: window.TPMoodle.unreadCount(feed),
       });
     } else if(tab==='all'){
       screenHtml = V.allScreenHtml(allCtx());
@@ -983,7 +1047,7 @@
         theme, notifyHour, notifyDigest, courses, escapeHtml,
         completedCount: items.filter(i=>i.completed).length,
         syncLabel: window.tpSyncLabel || 'Sign in to sync',
-        moodle: { state: moodleState, busy: moodleBusy, signedIn: moodleSignedIn() }, llmOn, filesOn,
+        moodle: { state: moodleState, busy: moodleBusy, signedIn: moodleSignedIn() }, llmOn, filesOn, alerts,
       }) + V.devToolbarHtml({ devMode, devPanelOpen });
     } else if(tab==='courses'){
       const ov = window.TPGrades.overview({ courses, items, store: gradesStore, settings: gradeSettings, colorFor: courseColorFor, today: today() });
@@ -994,6 +1058,8 @@
       screenHtml = V.courseDetailHtml(ctx);
     } else if(tab==='item'){
       screenHtml = V.itemDetailHtml(itemDetailCtx());
+    } else if(tab==='changes'){
+      screenHtml = V.changesScreenHtml({ feed, escapeHtml, now: Date.now(), fromLabel: changesFrom === 'week' ? 'Week' : changesFrom === 'courses' ? 'Courses' : 'Today', colorFor: courseColorFor });
     } else if(tab==='manage'){
       screenHtml = V.coursesScreenHtml({
         escapeHtml, courses, openCountFor: (name)=> window.TPCourses.openCountForCourse(items, name),
@@ -1002,7 +1068,7 @@
     }
 
     if(screenJustSwitched) screenHtml = `<div class="tp-screen-enter">${screenHtml}</div>`;
-    let html = V.tabBarHtml({ tab: tab==='item' ? itemDetailFrom : tab }) + screenHtml;
+    let html = V.tabBarHtml({ tab: tab==='item' ? itemDetailFrom : tab==='changes' ? changesFrom : tab }) + screenHtml;
 
     if(addOpen && draft){
       html += V.addSheetHtml({ draft, courses, items, pickerOpen, moreOpen, prereqOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null, sheetJustOpened });
@@ -1102,6 +1168,7 @@
       get connectDraft(){ return connectDraft; },
       get connectBusy(){ return connectBusy; },
       openCourse, setWeight, stepCourseSetting, useSuggestedWeights, importGradeSettings, gradeSummaryHtml,
+      openChanges, closeChanges, savePrefsToServer, sendTestAlert, get alerts(){ return alerts; },
       openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate, askClaude, setLlmOn, setFilesOn,
       get llmOn(){ return llmOn; }, get filesOn(){ return filesOn; },
       get itemDetailId(){ return itemDetailId; },

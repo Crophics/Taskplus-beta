@@ -527,3 +527,16 @@ body::-webkit-scrollbar{display:none;}
 #tp-app .tp-i-ask:disabled{opacity:.6;cursor:default;}
 .tp-t-step{font-size:13px;color:var(--text-muted);margin:2px 0 0 18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tp-i-read{color:var(--accent-bright);margin-top:6px;}
+
+/* What's new feed and bell (Phase 5) */
+#tp-app .tp-bell{position:relative;}
+#tp-app .tp-bell-dot{position:absolute;top:9px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--accent);border:2px solid var(--surface);box-sizing:content-box;}
+.tp-ch-row{display:flex;gap:12px;align-items:flex-start;padding:14px 4px;border-bottom:1px solid var(--line);}
+.tp-ch-row .tp-i-dot{margin-top:6px;flex:0 0 auto;}
+.tp-ch-new .tp-ch-head{color:var(--accent-bright);}
+.tp-ch-main{min-width:0;flex:1;}
+.tp-ch-head{display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;}
+.tp-ch-when{font-weight:400;text-transform:none;letter-spacing:0;}
+.tp-ch-title{font-size:15px;color:var(--text);margin-top:2px;overflow-wrap:anywhere;}
+.tp-ch-sub{font-size:12px;color:var(--text-dim);margin-top:2px;}
+.tp-ch-empty{padding:32px 4px;font-size:14px;color:var(--text-dim);line-height:1.5;}

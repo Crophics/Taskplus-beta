@@ -66,6 +66,35 @@
     );
   }
 
+  // Alerts about imported Moodle work. Only shown once Moodle is connected: they have nothing to say before that.
+  function alertsGroupHtml(ctx) {
+    const a = ctx.alerts;
+    if (!a || !ctx.moodle || !ctx.moodle.state || !ctx.moodle.state.connected) return '';
+    const p = a.prefs;
+    const granted = 'Notification' in window && Notification.permission === 'granted';
+    const quietSel = (id, v) => {
+      let o = '';
+      for (let h = 0; h < 24; h++) o += `<option value="${h}" ${h === v ? 'selected' : ''}>${hourLabel(h)}</option>`;
+      return `<select class="tp-s-hour-select" id="${id}">${o}</select>`;
+    };
+    let status;
+    if (!granted) status = 'Turn on notification permission above to get alerts when the app is closed.';
+    else if (a.loaded && !a.configured) status = 'The server cannot send notifications yet (see docs/SETUP-moodle-worker.md). Changes still appear in What\'s new.';
+    else if (a.loaded && !a.devices) status = 'This device is not registered yet. Reopen the app and try again.';
+    else status = '';
+    const rows =
+      rowHtml('New assignments', pillToggleHtml('tp-al-new', p.new)) +
+      rowHtml('Due date changes', pillToggleHtml('tp-al-moved', p.moved)) +
+      rowHtml('Grades posted', pillToggleHtml('tp-al-grade', p.grade)) +
+      rowHtml('Feedback', pillToggleHtml('tp-al-feedback', p.feedback)) +
+      rowHtml('Due soon', pillToggleHtml('tp-al-due', p.due), 'A day before and an hour before something is due.') +
+      rowHtml('Quiet hours', pillToggleHtml('tp-al-quiet', p.quiet.on), 'Alerts wait and arrive together afterwards.') +
+      (p.quiet.on ? rowHtml('From', quietSel('tp-al-qstart', p.quiet.start)) + rowHtml('Until', quietSel('tp-al-qend', p.quiet.end)) : '') +
+      (granted && a.configured && a.devices ? rowHtml('Test', `<button type="button" class="tp-s-link" id="tp-al-test">Send a test</button>`) : '') +
+      (status ? `<div class="tp-s-row"><div class="tp-s-row-sub">${status}</div></div>` : '');
+    return groupHtml('Moodle alerts', rows);
+  }
+
   function settingsScreenHtml(ctx) {
     const { theme, notifyHour, notifyDigest, courses, escapeHtml, completedCount, syncLabel } = ctx;
 
@@ -84,6 +113,7 @@
       rowHtml('Notification permission', notifPermRow)
     );
 
+    const alerts = alertsGroupHtml(ctx);
     const courseDots = courses.slice(0, 5).map(c => `<span class="tp-s-course-dot" style="background:${c.color}"></span>`).join('');
     const estimates = groupHtml('Time estimates',
       rowHtml('Use Claude to estimate', pillToggleHtml('tp-llm-toggle', ctx.llmOn !== false),
@@ -107,7 +137,7 @@
 
     return `<div class="tp-screen tp-screen-settings">
       <div class="tp-a-header-top"><span class="tp-a-title-heading">Settings</span></div>
-      ${appearance}${reminders}${moodleGroupHtml(ctx)}${estimates}${account}${clear}
+      ${appearance}${reminders}${alerts}${moodleGroupHtml(ctx)}${estimates}${account}${clear}
     </div>`;
   }
 

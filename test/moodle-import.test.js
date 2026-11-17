@@ -411,3 +411,16 @@ test('force asks regardless of the handout state', () => {
   const read = M.applyModelResults([pdfItem()], [{ id: pdfItem().id, ok: true, estimate: claudeFiles() }], { today: TODAY, readFiles: true }).items[0];
   assert.strictEqual(M.needsModel(read, TODAY, true, true), true);
 });
+
+test('feed: merges by id, newest first, counts unread, caps length', () => {
+  const T = global.window.TPMoodle;
+  let f = T.mergeFeed(null, [{ id: 'new:a', kind: 'new', title: 'A', at: 1000 }], 1000);
+  f = T.markFeedSeen(f, 1500);
+  f = T.mergeFeed(f, [{ id: 'new:a', kind: 'new', title: 'A', at: 2000 }, { id: 'grade:b:90', kind: 'grade', title: 'B', pct: 90, at: 2000 }], 2000);
+  assert.strictEqual(f.events.length, 2);
+  assert.strictEqual(T.unreadCount(f), 1);
+  assert.strictEqual(T.unreadCount(T.markFeedSeen(f, 3000)), 0);
+  assert.strictEqual(T.feedLine(f.events[0]).head, 'Graded 90%');
+  const many = Array.from({ length: 80 }, (_, i) => ({ id: 'new:' + i, kind: 'new', title: 'x', at: i }));
+  assert.strictEqual(T.mergeFeed(null, many, 100).events.length, 50);
+});

@@ -83,6 +83,33 @@ documents, slides and images are not read.
 
 The Worker now imports the Anthropic SDK, so the GitHub workflow runs `npm ci` before deploying.
 
+## 3c. Alerts when the app is closed (optional)
+
+Without this the app still shows **What's new** (the bell on Today) after every sync. With it, the Worker
+syncs Moodle in the background every 3 hours (a cron runs every 30 minutes) and sends a push for new
+assignments, moved due dates, grades, feedback, and "due tomorrow" / "due within the hour".
+
+1. Firebase console > Project settings > Service accounts. Create a **dedicated** service account (Google Cloud
+   console > IAM) with only the role **Firebase Cloud Messaging API Admin**, and create a JSON key for it.
+   Do not reuse an admin key: this key lives in the Worker.
+2. Store it as a secret (paste the whole JSON when asked):
+
+```bash
+npx wrangler secret put FCM_SERVICE_ACCOUNT
+```
+
+3. Deploy. In the app, open Settings, turn on Notification permission, then use **Moodle alerts > Send a test**.
+
+Notes:
+- Production's `dailyDueDigest` already sends a daily digest for manually added items. The Worker only covers
+  imported Moodle work, so you will not get duplicates.
+- On iPhone, web push only works after you add the site to the Home Screen.
+- The first sync after connecting is a baseline: it never announces assignments you already have.
+- Quiet hours hold alerts and send them together afterwards. Each device registered for alerts is stored
+  (encrypted) in KV; at most 5 per user, and dead ones are dropped automatically.
+- `CRON_SUBREQUEST_BUDGET` (default 45) caps outgoing requests per cron run (Cloudflare free plan: 50). With many
+  users, the least recently served go first.
+
 ## Optional
 
 - `SUBREQUEST_BUDGET` (a Worker variable, default 40): the most Moodle calls one

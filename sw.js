@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v44'; // bumped: Claude reads attached PDFs
+const CACHE_NAME = 'taskplus-cache-v45'; // bumped: Phase 5 alerts and What's new feed
 const urlsToCache = [
   './',
   './index.html',
@@ -91,6 +91,7 @@ const urlsToCache = [
   './js/views/connect-sheet-html.js',
   './js/views/grades-html.js',
   './js/views/item-detail-html.js',
+  './js/views/changes-html.js',
   './js/views/quick-menu-html.js',
   './js/today-logic.js',
   './js/bind-events.js',
