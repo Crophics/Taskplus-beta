@@ -108,6 +108,11 @@ for the one-time Cloudflare setup. What matters when touching code:
   `firebase-sync.js`) registers the FCM token with the Worker; `tp-feed` is the device-local feed; tab `changes`
   (bell on Today) is never persisted. Disconnect deletes `snap:`/`evt:`. Tests use fake KV/FCM; real FCM and cron
   are only verifiable on a deployed Worker with a real device. Production's `functions/` digest stays separate.
+- **Class schedule (Phase 6a).** `js/schedule-logic.js` (`TPSchedule`, pure, tested) parses one line of text per
+  course (`MWF 10:00-10:50 Room 101`; `R` = Thursday, `U` = Sunday) and never guesses: unreadable text is rejected.
+  Stored device-local in `tp-schedule` as `{courseName: text}`; edited on Course detail (`#tp-cls-input`, saves on
+  `change`, never renders while typing); shown on Today ("Classes today") and in Week's selected-day card.
+  Keyed by course name string, so renaming a course orphans its entry (same as other course-keyed stores).
 - **`.assetsignore` already hid repo internals** (`*.md`, `test/`, etc.); `src/`
   was added to it. Don't rewrite that file wholesale.
 

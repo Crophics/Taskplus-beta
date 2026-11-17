@@ -132,6 +132,9 @@
         ${stepperHtml('Target', 'target', settingsForCourse.target, '%')}
         ${stepperHtml('Credits', 'credits', settingsForCourse.credits, '')}
       </div>
+      <div class="tp-cls-edit"><label class="tp-cls-edit-label" for="tp-cls-input">Class times</label>
+        <input type="text" id="tp-cls-input" class="tp-cls-input" data-course="${escapeHtml(name)}" value="${escapeHtml(ctx.meets || '')}" placeholder="MWF 10:00-10:50 Room 101" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <div class="tp-cls-hint">Days: M T W R(Thu) F S U. Separate several with ;</div></div>
       <div class="tp-g-weights-note">Weight is each item's share of the whole course grade, from your syllabus.</div>
       ${useSuggested}
       ${coming}${graded}${feedbackHtml}${empty}

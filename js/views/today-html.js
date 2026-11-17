@@ -163,7 +163,7 @@
       ? `Logged ${totalLoggedToday} unit${totalLoggedToday === 1 ? '' : 's'} today · anything below the targets is you getting ahead`
       : 'Nothing logged yet today'}</div>`;
 
-    return `<div class="tp-screen tp-screen-today">${header}${planSummaryHtml(plan, escapeHtml)}${targetsHeading}${targetsBody}${getAheadSection}${footer}</div>`;
+    return `<div class="tp-screen tp-screen-today">${header}${planSummaryHtml(plan, escapeHtml)}${ctx.classes && ctx.classes.length ? `<div class="tp-cls-today"><div class="tp-cls-today-label">Classes today</div>${window.TPViews.classesHtml(ctx.classes, escapeHtml)}</div>` : ''}${targetsHeading}${targetsBody}${getAheadSection}${footer}</div>`;
   }
 
   global.TPViews = global.TPViews || {};

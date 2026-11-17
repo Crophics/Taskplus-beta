@@ -565,3 +565,12 @@ Each phase ships on its own and leaves the app working.
 - **Not built**: a minutes-based "today's plan" digest (the Worker would need the client's plan; production's
   digest already covers manual items).
 - **Unverified**: real FCM delivery and the Cloudflare cron have only run against fakes.
+
+## What Phase 6 shipped so far (6a: class schedule)
+
+- Meeting times are typed once per course on Course detail, in the vault's own style (`MWF 10:00-10:50 Room 101`).
+  Moodle does not provide them. They show on Today and on the selected day in Week. Device-local (`tp-schedule`).
+- **Still to do in Phase 6, and why not yet:** flashcards (SM-2 review; needs a decision on importing the vault's
+  `Q::A` cards and where they sync), lecture/topic notes (new Firestore collections, per section 3.3), the CSCI
+  course-site adapter (needs that site's address, login style and page structure), and scheduled backups (Firestore
+  export is a Google Cloud setting, not app code). The manual Backup button still exports items only.

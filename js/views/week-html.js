@@ -49,6 +49,14 @@
     </div>`;
   }
 
+  function classesHtml(classes, escapeHtml) {
+    if (!classes || !classes.length) return '';
+    const T = window.TPSchedule;
+    return '<div class="tp-cls-list">' + classes.map((c) => `<div class="tp-cls-row"><span class="tp-cls-time">${T.fmtTime(c.start)}</span><span class="tp-cls-name">${escapeHtml(c.course)}${c.where ? ' · ' + escapeHtml(c.where) : ''}</span></div>`).join('') + '</div>';
+  }
+  window.TPViews = window.TPViews || {};
+  window.TPViews.classesHtml = classesHtml;
+
   function dayDetailHtml(ctx, selDay) {
     const { escapeHtml, dayLabels, courseColorFor, TPWeekLogic } = ctx;
     const mins = !!(ctx.minutes && ctx.minutes.on);
@@ -75,7 +83,7 @@
         <div class="tp-w-detail-status">${escapeHtml(shareText)}</div>
       </div>`;
     }).join('') : `<div class="tp-w-detail-empty">Nothing due. A good day to pull work forward from ${escapeHtml(ctx.heaviestLabel)}.</div>`;
-    return `<div class="tp-w-detail-card">${header}${rows}</div>`;
+    return `<div class="tp-w-detail-card">${header}${classesHtml(ctx.classes, ctx.escapeHtml)}${rows}</div>`;
   }
 
   function byCourseHtml(courseStats, escapeHtml) {

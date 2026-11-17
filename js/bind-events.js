@@ -358,6 +358,8 @@
     root.querySelectorAll('.tp-g-step[data-g-step]').forEach(b => b.onclick = () => {
       api.stepCourseSetting(api.courseDetailName, b.dataset.gStep, Number(b.dataset.dir));
     });
+    const clsInput = document.getElementById('tp-cls-input');
+    if (clsInput) clsInput.onchange = (e) => { if (!api.setMeets(clsInput.dataset.course, e.target.value)) e.target.value = ''; };
     const gUseSuggested = document.getElementById('tp-g-use-suggested');
     if (gUseSuggested) gUseSuggested.onclick = () => api.useSuggestedWeights(api.courseDetailName);
 

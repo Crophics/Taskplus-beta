@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v45'; // bumped: Phase 5 alerts and What's new feed
+const CACHE_NAME = 'taskplus-cache-v46'; // bumped: Phase 6 class schedule
 const urlsToCache = [
   './',
   './index.html',
@@ -75,6 +75,7 @@ const urlsToCache = [
   './js/plan-logic.js',
   './js/all-logic.js',
   './js/week-logic.js',
+  './js/schedule-logic.js',
   './js/html.js',
   './js/toast.js',
   './js/theme.js',

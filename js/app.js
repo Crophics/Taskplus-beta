@@ -34,6 +34,7 @@
   const MOODLE_STATE_KEY='tp-moodle';
   const MOODLE_EVENTS_KEY='tp-moodle-events';
   const FEED_KEY='tp-feed';
+  const SCHEDULE_KEY='tp-schedule';
   const MOODLE_SITE_KEY='tp-moodle-last-site';
   // Grades: what Moodle reported (replaced each sync) and what the user owns
   // (weights, targets, credits). Device-local, like imported items.
@@ -576,10 +577,21 @@
     });
     return {
       escapeHtml: window.TPHtml.escapeHtml, name, color: courseColorFor(name), relativeDueLabel,
-      settingsForCourse: cs, entries, weights: gradeSettings.weights, calc, target: cs.target,
+      meets: schedule[name] || '', settingsForCourse: cs, entries, weights: gradeSettings.weights, calc, target: cs.target,
       letter: G.letterFor(calc.currentPct, cs.scale), summary: '',
     };
   }
+  // Class meeting times: device-local text per course (see js/schedule-logic.js).
+  let schedule = readJsonObject(SCHEDULE_KEY, {});
+  function setMeets(course, text){
+    const t = String(text||'').trim().slice(0, 200);
+    const r = window.TPSchedule.parseMeets(t);
+    if(!r.ok){ showToast('Could not read that. Try: MWF 10:00-10:50'); return false; }
+    if(t) schedule[course] = t; else delete schedule[course];
+    try{ localStorage.setItem(SCHEDULE_KEY, JSON.stringify(schedule)); }catch(e){}
+    return true;
+  }
+  function classesForDay(offset){ return window.TPSchedule.classesOn(window.TP.asDate(addDays(today(), offset)), schedule); }
   function gradeSummaryHtml(){
     return courseDetailName ? window.TPViews.gradeSummaryHtml(courseDetailCtx(courseDetailName)) : '';
   }
@@ -1010,7 +1022,7 @@
         weekdayLabel: d.toLocaleDateString(undefined,{weekday:'long'}),
         courseColorFor, relativeDueLabel, unitLabel, capUnit, plan,
         TPTodayLogic: window.TPTodayLogic,
-        showBell: !!moodleState.connected, unread: window.TPMoodle.unreadCount(feed),
+        classes: classesForDay(0), showBell: !!moodleState.connected, unread: window.TPMoodle.unreadCount(feed),
       });
     } else if(tab==='all'){
       screenHtml = V.allScreenHtml(allCtx());
@@ -1041,6 +1053,7 @@
         escapeHtml, days, dayLabels, selDay: weekSelDay, stats, heaviestLabel,
         courseColorFor, courseStats, advice, relativeDueLabel, animateChart,
         items, today, daysBetween, TPWeekLogic: window.TPWeekLogic, minutes: minutesCtx,
+        classes: classesForDay(weekSelDay),
       });
     } else if(tab==='settings'){
       screenHtml = V.settingsScreenHtml({
@@ -1168,6 +1181,7 @@
       get connectDraft(){ return connectDraft; },
       get connectBusy(){ return connectBusy; },
       openCourse, setWeight, stepCourseSetting, useSuggestedWeights, importGradeSettings, gradeSummaryHtml,
+      setMeets,
       openChanges, closeChanges, savePrefsToServer, sendTestAlert, get alerts(){ return alerts; },
       openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate, askClaude, setLlmOn, setFilesOn,
       get llmOn(){ return llmOn; }, get filesOn(){ return filesOn; },

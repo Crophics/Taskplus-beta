@@ -540,3 +540,15 @@ body::-webkit-scrollbar{display:none;}
 .tp-ch-title{font-size:15px;color:var(--text);margin-top:2px;overflow-wrap:anywhere;}
 .tp-ch-sub{font-size:12px;color:var(--text-dim);margin-top:2px;}
 .tp-ch-empty{padding:32px 4px;font-size:14px;color:var(--text-dim);line-height:1.5;}
+
+/* Class schedule (Phase 6) */
+.tp-cls-list{margin:6px 0 10px;}
+.tp-cls-row{display:flex;gap:12px;font-size:13px;padding:3px 0;color:var(--text-muted);}
+.tp-cls-time{flex:0 0 68px;color:var(--text-dim);font-variant-numeric:tabular-nums;}
+.tp-cls-name{min-width:0;overflow-wrap:anywhere;}
+.tp-cls-today{margin:6px 0 4px;}
+.tp-cls-today-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);}
+.tp-cls-edit{margin:14px 0 6px;}
+.tp-cls-edit-label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;}
+#tp-app .tp-cls-input{width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 12px;color:var(--text);font-family:inherit;font-size:15px;}
+.tp-cls-hint{font-size:11px;color:var(--text-faint);margin-top:6px;}
