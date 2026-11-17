@@ -227,7 +227,27 @@ In rough priority order, by value over cost:
 Not replaced: the Obsidian vault itself can keep existing. This plan makes
 the web app the source of truth for *work*; the vault becomes optional notes.
 
-## 9. Open decisions (need your call)
+## 9. Decisions
+
+**Resolved by the user:**
+- Audience: mostly the owner; may be shared with others later as a proof of
+  concept. Beta only for now. **Mobile app first.** Because others may use it,
+  Moodle tokens are stored **per user** in the Worker (never in the browser,
+  never returned to the client), entered once on an in-app settings screen.
+- Imported items go in a **beta-only** Firestore document, not production's
+  shared `data` doc (interpreted from "beta only"; revisit when merging back).
+- Sending assignment text to the Anthropic API for estimates: **approved**.
+- Everything, including reminders, runs on the **existing Cloudflare Worker**.
+
+**Defaults proposed, pending confirmation:**
+- Capacity: user-set minutes per weekday / weekend (start 120 / 180),
+  editable; class meeting times may reduce it later.
+- Time logging: optional "how long did it take?" prompt with quick-tap
+  options when marking an item done; skippable.
+
+The original questions are kept below for reference.
+
+### Original open questions
 
 1. **Single user or multi-user?** If only you, tokens and the API key can be
    plain Worker secrets. If other students might use it, tokens must be stored
