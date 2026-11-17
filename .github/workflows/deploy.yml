@@ -16,6 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - run: npm ci
       - run: npm test
 
   deploy-site:
@@ -27,6 +28,11 @@ jobs:
       url: https://beta.taskplus.cc
     steps:
       - uses: actions/checkout@v4
+      # The Worker imports @anthropic-ai/sdk, so wrangler needs it installed to bundle.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
       - name: Publish to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:

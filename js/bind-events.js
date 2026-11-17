@@ -63,6 +63,17 @@
       api.save();
     }
 
+    // Undo the last finished part (assignment detail): done and, if it was logged today, today go back by one.
+    function undoOne(idx) {
+      const it = api.items[idx];
+      if (!it || !(it.done > 0)) return;
+      it.done -= 1;
+      if ((it.today || 0) > 0) it.today -= 1;
+      if (it.completed) { it.completed = false; it.completedAt = null; it.archived = false; }
+      api.touchItem(it);
+      api.save();
+    }
+
     root.querySelectorAll('.tp-log').forEach(b => b.onclick = () => logOne(parseInt(b.dataset.i), b));
     root.querySelectorAll('.tp-complete').forEach(b => b.onclick = () => toggleComplete(parseInt(b.dataset.i)));
 
@@ -74,15 +85,70 @@
     });
     const addToggle = document.getElementById('tp-add-toggle');
     if (addToggle) addToggle.onclick = () => { api.openAddSheet(); api.render(); };
+    const heavyLine = document.getElementById('tp-t-heavy');
+    if (heavyLine) heavyLine.onclick = () => { api.tab = 'week'; api.savePrefs(); api.render(); };
+    const openSettings = document.getElementById('tp-open-settings');
+    if (openSettings) openSettings.onclick = () => { api.tab = 'settings'; api.savePrefs(); api.render(); };
+    const openChanges = document.getElementById('tp-open-changes');
+    if (openChanges) openChanges.onclick = () => api.openChanges();
+    const chBack = document.getElementById('tp-ch-back');
+    if (chBack) chBack.onclick = () => api.closeChanges();
+    ['new','moved','grade','feedback','due'].forEach((k) => {
+      const t = document.getElementById('tp-al-' + k);
+      if (t) t.onclick = () => api.savePrefsToServer({ [k]: !api.alerts.prefs[k] });
+    });
+    const alQuiet = document.getElementById('tp-al-quiet');
+    if (alQuiet) alQuiet.onclick = () => api.savePrefsToServer({ quiet: { on: !api.alerts.prefs.quiet.on } });
+    const alQs = document.getElementById('tp-al-qstart');
+    if (alQs) alQs.onchange = (e) => api.savePrefsToServer({ quiet: { start: Number(e.target.value) } });
+    const alQe = document.getElementById('tp-al-qend');
+    if (alQe) alQe.onchange = (e) => api.savePrefsToServer({ quiet: { end: Number(e.target.value) } });
+    const alTest = document.getElementById('tp-al-test');
+    if (alTest) alTest.onclick = () => api.sendTestAlert();
+    const openAll = document.getElementById('tp-open-all');
+    if (openAll) openAll.onclick = () => { api.tab = 'all'; api.savePrefs(); api.render(); };
+    const allBack = document.getElementById('tp-all-back');
+    if (allBack) allBack.onclick = () => { api.tab = 'week'; api.savePrefs(); api.render(); };
 
     /* ---- Today screen: tap a row body to open the quick-action menu ---- */
     root.querySelectorAll('.tp-t-row, .tp-t-ahead-row').forEach(row => {
       row.onclick = (e) => {
         if (e.target.closest('.tp-t-action') || e.target.closest('.tp-t-ahead-more')) return;
         const idx = Number(row.dataset.itemI);
-        if (!Number.isNaN(idx)) { api.menuFor = idx; api.render(); }
+        if (Number.isNaN(idx)) return;
+        const it = api.items[idx];
+        // Imported work opens its plan-first detail screen; manual items keep the quick-action menu.
+        if (it && it.source && it.source.type === 'moodle' && it.estimate) api.openItem(it.id);
+        else { api.menuFor = idx; api.render(); }
       };
     });
+
+    /* ---- Assignment detail ---- */
+    const itemBack = document.getElementById('tp-i-back');
+    if (itemBack) itemBack.onclick = () => api.closeItem();
+    root.querySelectorAll('.tp-i-part').forEach(b => b.onclick = () => {
+      const idx = parseInt(b.dataset.i);
+      const part = parseInt(b.dataset.part);
+      const it = api.items[idx];
+      if (!it) return;
+      if (part === (it.done || 0) && !it.completed) logOne(idx, b);
+      else if (part === (it.done || 0) - 1) undoOne(idx);
+    });
+    root.querySelectorAll('.tp-i-step[data-delta]').forEach(b => b.onclick = () => api.adjustEstimate(api.itemDetailId, Number(b.dataset.delta)));
+    const itemAsk = document.getElementById('tp-i-ask');
+    if (itemAsk) itemAsk.onclick = () => api.askClaude(api.itemDetailId);
+    const filesToggle = document.getElementById('tp-files-toggle');
+    if (filesToggle) filesToggle.onclick = () => api.setFilesOn(!api.filesOn);
+    const llmToggle = document.getElementById('tp-llm-toggle');
+    if (llmToggle) llmToggle.onclick = () => api.setLlmOn(!api.llmOn);
+    const itemReset = document.getElementById('tp-i-reset');
+    if (itemReset) itemReset.onclick = () => api.resetEstimate(api.itemDetailId);
+    const itemDescToggle = document.getElementById('tp-i-desc-toggle');
+    if (itemDescToggle) itemDescToggle.onclick = () => { api.itemDescOpen = !api.itemDescOpen; api.render(); };
+    const itemNotes = document.getElementById('tp-i-notes');
+    if (itemNotes) itemNotes.oninput = (e) => api.setItemNotes(api.itemDetailId, e.target.value);
+    const itemMore = document.getElementById('tp-i-more');
+    if (itemMore) itemMore.onclick = () => { api.menuFor = Number(itemMore.dataset.i); api.render(); };
 
     /* ---- All screen ----
        The header (search input, sort/course chips) lives outside
@@ -266,15 +332,63 @@
       api.render();
     };
     const manageBtn = document.getElementById('tp-manage-courses');
-    if (manageBtn) manageBtn.onclick = () => { api.tab = 'courses'; api.savePrefs(); api.render(); };
+    if (manageBtn) manageBtn.onclick = () => { api.tab = 'manage'; api.savePrefs(); api.render(); };
     const exportBtn = document.getElementById('tp-export');
     if (exportBtn) exportBtn.onclick = api.exportData;
     const exportIcsBtn = document.getElementById('tp-export-ics');
     if (exportIcsBtn) exportIcsBtn.onclick = api.exportIcs;
+    const importGradesEl = document.getElementById('tp-import-grades');
+    if (importGradesEl) importGradesEl.onchange = (e) => { if (e.target.files[0]) api.importGradeSettings(e.target.files[0]); };
     const importEl = document.getElementById('tp-import');
     if (importEl) importEl.onchange = (e) => { if (e.target.files[0]) api.importData(e.target.files[0]); };
     const clearCompletedBtn = document.getElementById('tp-clear-completed');
     if (clearCompletedBtn) clearCompletedBtn.onclick = api.clearCompleted;
+
+    /* ---- Courses tab + Course detail ---- */
+    root.querySelectorAll('.tp-g-card[data-course]').forEach(b => b.onclick = () => api.openCourse(b.dataset.course));
+    const gToSettings = document.getElementById('tp-g-to-settings');
+    if (gToSettings) gToSettings.onclick = () => { api.tab = 'settings'; api.savePrefs(); api.render(); };
+    const gBack = document.getElementById('tp-g-back');
+    if (gBack) gBack.onclick = () => { api.tab = 'courses'; api.savePrefs(); api.render(); };
+    // Weights: model only + patch the one summary node (never rebuild the focused input).
+    root.querySelectorAll('.tp-g-weight[data-weight-id]').forEach(inp => inp.oninput = (e) => {
+      api.setWeight(inp.dataset.weightId, e.target.value);
+      api.patch('tp-g-summary', api.gradeSummaryHtml());
+    });
+    root.querySelectorAll('.tp-g-step[data-g-step]').forEach(b => b.onclick = () => {
+      api.stepCourseSetting(api.courseDetailName, b.dataset.gStep, Number(b.dataset.dir));
+    });
+    const clsInput = document.getElementById('tp-cls-input');
+    if (clsInput) clsInput.onchange = (e) => { if (!api.setMeets(clsInput.dataset.course, e.target.value)) e.target.value = ''; };
+    const gUseSuggested = document.getElementById('tp-g-use-suggested');
+    if (gUseSuggested) gUseSuggested.onclick = () => api.useSuggestedWeights(api.courseDetailName);
+
+    /* ---- Moodle (Settings group + Connect sheet) ---- */
+    const moodleConnectBtn = document.getElementById('tp-moodle-connect');
+    if (moodleConnectBtn) moodleConnectBtn.onclick = () => { api.openConnectSheet(); api.render(); };
+    const moodleSyncBtn = document.getElementById('tp-moodle-sync');
+    if (moodleSyncBtn) moodleSyncBtn.onclick = () => api.moodleSync({ silent: false });
+    const moodleDisconnectBtn = document.getElementById('tp-moodle-disconnect');
+    if (moodleDisconnectBtn) moodleDisconnectBtn.onclick = api.moodleDisconnect;
+    root.querySelectorAll('[data-moodle-course]').forEach(b => b.onclick = () => {
+      api.moodleSetCourse(Number(b.dataset.moodleCourse), b.getAttribute('aria-checked') !== 'true');
+    });
+
+    const connectBackdrop = document.getElementById('tp-connect-backdrop');
+    if (connectBackdrop) connectBackdrop.addEventListener('click', (e) => {
+      if (e.target === connectBackdrop && !api.connectBusy) { api.closeConnectSheet(); api.render(); }
+    });
+    const connectCancel = document.getElementById('tp-connect-cancel');
+    if (connectCancel) connectCancel.onclick = () => { api.closeConnectSheet(); api.render(); };
+    // Model-only fields (same rule as the Add sheet): typing never re-renders.
+    [['tp-connect-site', 'site'], ['tp-connect-user', 'username'], ['tp-connect-pass', 'password']].forEach(([id, key]) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.oninput = (e) => { api.connectDraft[key] = e.target.value; };
+      el.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); api.moodleConnect(); } };
+    });
+    const connectSubmit = document.getElementById('tp-connect-submit');
+    if (connectSubmit) connectSubmit.onclick = () => api.moodleConnect();
 
     /* ---- Dev toolbar (unchanged from the desktop app) ---- */
     const devToolbarBtn = document.getElementById('tp-dev-toolbar-btn');
@@ -378,6 +492,8 @@
     // input is never touched, so it can't lose focus or its caret position.
     const addTitle = document.getElementById('tp-add-title');
     if (addTitle) addTitle.oninput = (e) => { api.draft.title = e.target.value; };
+    const addMinutes = document.getElementById('tp-add-minutes');
+    if (addMinutes) addMinutes.oninput = (e) => { api.draft.minutes = e.target.value; };
     const addNotes = document.getElementById('tp-add-notes');
     if (addNotes) addNotes.oninput = (e) => { api.draft.notes = e.target.value; };
 
@@ -421,7 +537,7 @@
     const manageFromSheet = document.getElementById('tp-add-manage-courses');
     if (manageFromSheet) manageFromSheet.onclick = () => {
       api.closeAddSheet();
-      api.tab = 'courses';
+      api.tab = 'manage';
       api.savePrefs();
       api.render();
     };
@@ -475,6 +591,7 @@
         .map(t => ({ text: t, done: false }));
       const recurring = api.draft.recurring || '';
       const dependsOn = api.draft.dependsOn || '';
+      const minutes = Number(api.draft.minutes) || 0;
       if (api.editIndex !== null) {
         const it = api.items[api.editIndex];
         const oldTitle = it.title;
@@ -492,16 +609,23 @@
         if (oldTitle !== title) {
           api.items.forEach(x => { if (x.dependsOn === oldTitle) x.dependsOn = title; });
         }
+        if (!api.draft.imported) {
+          // A time estimate typed here is the user's own; clearing the field removes it.
+          if (minutes > 0) it.estimate = window.TPEstimate.userEstimate(minutes);
+          else if (it.estimate && it.estimate.basis === 'user') delete it.estimate;
+        }
         api.touchItem(it);
         if (api.isDevModeTrigger(it.title, it.total)) api.activateDevMode();
       } else {
         const maxOrder = api.items.reduce((m, x) => Math.max(m, x.order ?? -1), -1);
-        api.items.push({
+        const created = {
           id: api.newItemId(), title, course: courseName, due, total: amount, unit,
           notes, done: 0, today: 0, completed: false, dependsOn, recurring,
           subtasks, completedAt: null, createdAt: api.today(), archived: false,
           order: maxOrder + 1, updatedAt: Date.now(),
-        });
+        };
+        if (minutes > 0) created.estimate = window.TPEstimate.userEstimate(minutes);
+        api.items.push(created);
         if (api.isDevModeTrigger(title, amount)) api.activateDevMode();
         api.tab = 'today';
         api.savePrefs();

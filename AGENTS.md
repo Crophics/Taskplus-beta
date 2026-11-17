@@ -22,6 +22,103 @@ but don't bring `wrangler.toml`'s `[[routes]]` block or any beta-specific
 naming across, or production will start claiming the beta subdomain/Worker
 name.
 
+## Moodle import (Phase 1, added after the original build)
+
+Read `docs/PLAN-moodle-import.md` for the plan and `docs/SETUP-moodle-worker.md`
+for the one-time Cloudflare setup. What matters when touching code:
+
+- **There is now a Worker.** `src/worker.mjs` (ES modules, `.mjs`) serves
+  `/api/moodle/*` and passes everything else to the static assets via the
+  `ASSETS` binding (`wrangler.toml`). It verifies the caller's Firebase ID token,
+  exchanges Moodle credentials for a token (password never stored), keeps the
+  token AES-GCM encrypted in KV, and returns mapped records. Until the
+  `MOODLE_KV` binding and `TOKEN_ENC_KEY` secret exist it answers 503 and the
+  rest of the site is unaffected. The `[[kv_namespaces]]` block in
+  `wrangler.toml` is **commented out on purpose**: CI uses wrangler 3.x, which
+  fails a deploy on a KV binding with no id.
+- **Imported items are a second storage key.** `js/app.js` `loadItems()` /
+  `persistItems()` split `items` between `tp-assignments` (manual, synced) and
+  `tp-moodle-items` (imported, device-only). **Never write
+  `localStorage.setItem('tp-assignments', ...)` from app code directly; call
+  `persistItems()`**, or imported items leak into the shared Firestore doc.
+  `today-logic.js` takes a `persist` callback for the same reason. Imported items
+  are identified by `item.source.type === 'moodle'`; ids are `moodle:<cmid>`.
+- **`js/moodle-client.js` (`TPMoodle`)** holds the pure merge (`mergeImported`,
+  tested in `test/moodle-import.test.js`) and the API wrapper. It loads right
+  after `courses.js`. Moodle owns title/course/due/`source`; the user owns the
+  rest.
+- **Navigation is three tabs** (Today, Week, Courses). Settings is the gear on
+  Today, All is a drill-down from Week, Add is the + on Week. `TABS` in `app.js`
+  still lists every screen so an old saved tab preference keeps working.
+- **Tests for the Worker** (`test/moodle-worker.test.js`) use a fake Moodle
+  `fetch`, a fake KV and real RSA-signed Firebase tokens; nothing touches the
+  network. For changes to the wiring, the jsdom technique below still applies,
+  and the Worker handler can be called directly in that script
+  (`handleApi(request, env, {fetchFn})`) so the app and Worker run together.
+- **Claude estimates (Phase 4).** `src/estimate.mjs` builds the prompt, sanitises the input, calls Claude
+  and validates the answer; `/api/estimate` in `src/worker.mjs` adds the per-user cache and daily caps.
+  The Anthropic SDK is imported lazily inside the Worker (`defaultMakeClient`) so tests and the rest of the
+  Worker never need it; tests inject a fake client. CI now runs `npm ci` (the Worker bundles the SDK).
+  **Never send notes, grades, account ids or credentials in a request** (`TPMoodle.modelInput` is the only
+  place the payload is built; a test checks it). SDK 1.x authenticates with `Authorization: Bearer` under
+  API version `2026-10-21`, which rejects `temperature`/`top_p`/`top_k`: don't add them. Claude Opus 5.5
+  always thinks, so the `thinking` parameter is omitted, and forced `tool_choice` is a 400 (we use
+  structured output instead). `estimate.basis` is now `'heuristic' | 'quiz-limit' | 'model' | 'user'`;
+  `estimate.key` fingerprints the assignment text (`TPEstimate.inputsKey`); `item.modelTry` remembers a
+  failed ask for the day; `estimate.steps` are trusted only while `steps.length === item.total`
+  (`TPEstimate.stepsUsable`).
+- **Handouts.** `src/handouts.mjs` downloads an assignment's PDFs for Claude. This is the one place a URL from
+  the browser meets the stored Moodle token, so keep it strict: same host and the site's
+  `/webservice/pluginfile.php/` path only, `redirect: 'manual'`, size caps, `%PDF-` check
+  (`test/handouts.test.js` covers the refusals; do not loosen it). The mapper strips any `token=` from file URLs
+  (`safeFileUrl`) because records go to the browser. File addresses are sent to the Worker only when the PDF
+  switch is on. Which files were read is the server's report on `estimate.files`, never the model's claim.
+- **Estimates and minutes planning (Phase 3).** `js/estimate-logic.js`
+  (`TPEstimate`, a rule-of-thumb estimator; its constants are guesses, see the
+  header) and `js/plan-logic.js` (`TPPlan`, minutes per day, heavy day) are pure
+  and tested. `item.estimate = {minutes, low, high, basis: 'heuristic' |
+  'quiz-limit' | 'user', confidence, factors}`. Imported unfinished work is split
+  into ~50-minute parts by setting `total` (and `unit: 'part'`); never re-split an
+  item that has progress (`TPEstimate.withEstimate` enforces this). A `user` basis
+  estimate must never be overwritten by a sync. **Trap:** `TPPlan.computeDays`
+  takes `today` as a date STRING, whereas `TPWeekLogic` and `TPTodayLogic` take a
+  function; passing the function gives `NaN` days. `test/plan-logic.test.js`
+  cross-checks the planner against `today-logic.js`; keep that test passing if
+  either pacing rule changes. Assignment detail is `tab === 'item'` (never saved
+  as the tab preference); it opens only for imported items that have an estimate.
+- **Grades (Phase 2).** `js/grades-logic.js` (`TPGrades`) is the pure grade
+  math, settings and overview, tested in `test/grades-logic.test.js`;
+  `js/views/grades-html.js` lays out the Courses tab and Course detail. State
+  lives in `app.js`: `gradesStore` (`tp-moodle-grades`, replaced each sync) and
+  `gradeSettings` (`tp-grade-settings`: weights by entry id, targets, credits),
+  both device-local. Entry ids are `moodle:<cmid>` for activities and
+  `gi:<gradeitem id>` for manual items. Tabs: `courses` = overview, `course` =
+  detail (never persisted as the saved tab), `manage` = the course manager.
+  Weight inputs follow the render-loop rule: model update + patch of
+  `#tp-g-summary` only.
+- **Moodle `accessexception` is not an auth failure** (`src/moodle-client.mjs`):
+  it means the school has not enabled a function for the mobile service. Only
+  `invalidtoken` disconnects a user.
+- **Alerts (Phase 5).** `src/events.mjs` (pure: snapshot, diff, wording, due-soon, quiet hours), `src/fcm.mjs`
+  (service-account JWT, data-only FCM v1 send, the shape `sw.js` displays), `src/push.mjs` (KV: `push:<uid>`,
+  `snap:<uid>`, `evt:<uid>`, all sealed; `processSync`, `notifyUser`, `runCron`). `/api/push/*` routes live in
+  `worker.mjs`; the default export has a `scheduled` handler (`*/30 * * * *`). The first snapshot is a baseline
+  (no events); a user's own in-app sync records events to the feed but never pushes (`notify:false`). Reminder
+  keys include the due timestamp so a moved date reminds again. Client: `tp-push-token` (dispatched by
+  `firebase-sync.js`) registers the FCM token with the Worker; `tp-feed` is the device-local feed; tab `changes`
+  (bell on Today) is never persisted. Disconnect deletes `snap:`/`evt:`. Tests use fake KV/FCM; real FCM and cron
+  are only verifiable on a deployed Worker with a real device. Production's `functions/` digest stays separate.
+- **Class schedule (Phase 6a).** `js/schedule-logic.js` (`TPSchedule`, pure, tested) parses one line of text per
+  course (`MWF 10:00-10:50 Room 101`; `R` = Thursday, `U` = Sunday) and never guesses: unreadable text is rejected.
+  Stored device-local in `tp-schedule` as `{courseName: text}`; edited on Course detail (`#tp-cls-input`, saves on
+  `change`, never renders while typing); shown on Today ("Classes today") and in Week's selected-day card.
+  Keyed by course name string, so renaming a course orphans its entry (same as other course-keyed stores).
+- **Cutover (Phase 7).** `docs/CUTOVER.md` is the checklist; `tools/compare-vault.mjs` compares the vault's
+  Coursework notes (`link: ...id=<cmid>`, `due`, `status`) with a Backup export, matching on cmid. Read-only.
+  It reuses `parseFrontmatter` from `tools/import-vault-grades.mjs`.
+- **`.assetsignore` already hid repo internals** (`*.md`, `test/`, etc.); `src/`
+  was added to it. Don't rewrite that file wholesale.
+
 ## Orientation
 
 Buildless, no bundler, no framework. Every `js/*.js` and `js/views/*.js`

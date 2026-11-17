@@ -36,7 +36,7 @@
   }
 
   function computeTodayPanel(ctx) {
-    const { items, storageKey: KEY, isLocked, unlockedToday, today, daysBetween } = ctx;
+    const { items, storageKey: KEY, persist, isLocked, unlockedToday, today, daysBetween } = ctx;
   const active = items.filter(x=>!x.completed && !x.archived && !isLocked(x) && !unlockedToday(x));
   const multi = active.filter(it=>it.total>1);
   const singles = active.filter(it=>it.total<=1 && it.done<it.total);
@@ -55,7 +55,12 @@
       dailyTargetsChanged = true;
     }
   });
-  if(dailyTargetsChanged) localStorage.setItem(KEY, JSON.stringify(items));
+  // `persist` lets the app split imported items into their own storage key
+  // (js/app.js persistItems); the raw write is the fallback for other callers.
+  if(dailyTargetsChanged){
+    if(typeof persist === 'function') persist();
+    else localStorage.setItem(KEY, JSON.stringify(items));
+  }
 
   const multiTargetsAll = multi.map(it=>{
     const left = Math.max(it.total-it.done,0);

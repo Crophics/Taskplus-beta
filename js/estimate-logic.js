@@ -1,0 +1,195 @@
+/* estimate-logic.js — how long will this take? (Phase 3 heuristic estimator)
+
+   Pure functions (no DOM, no network), tested in test/estimate-logic.test.js.
+
+   HONEST STATUS: this is a rule-of-thumb prior, not a measurement. The numbers
+   below are educated guesses, chosen to be sensible and easy to change. It exists
+   so every imported assignment has *some* estimate on day one; the plan replaces
+   the guesswork with an LLM read of the description (Phase 4) and, later, with
+   your own logged times. The range is deliberately wide to say so: a tight
+   range with no evidence behind it would be false precision.
+
+   Layers (docs/PLAN-moodle-import.md, section 5):
+     quiz with a Moodle time limit -> 'quiz-limit'  (limit is known; study time is a guess)
+     everything else               -> 'heuristic'
+     Claude's read of the description -> 'model'    (src/estimate.mjs; replaces 'heuristic', adds named steps)
+     the user's own number         -> 'user'        (always wins; see userEstimate)
+*/
+(function (global) {
+  const PART_MIN = 50;   // target length of one "part" an assignment is split into
+  const MAX_PARTS = 8;
+  const MIN_MIN = 15;
+  const MAX_MIN = 600;
+
+  const round5 = (n) => Math.round(n / 5) * 5;
+  const clampMin = (n) => Math.min(MAX_MIN, Math.max(MIN_MIN, round5(n)));
+  const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+
+  const EXAM = /\b(exam|midterm|final|test)\b/i;
+  const HEAVY = /\b(project|paper|essay|report|presentation|portfolio|research|thesis|proposal|write-?up)\b/i;
+  const LIGHT = /\b(reading|response|reflection|discussion|journal|check-?in|survey|attendance|participation|forum|syllabus|introduction)\b/i;
+
+  function countWords(text) {
+    const t = String(text || '').trim();
+    return t ? t.split(/\s+/).length : 0;
+  }
+
+  /**
+   * rec: { kind: 'assign'|'quiz', title, points, description, files[], timeLimitMin, wordLimit }
+   * -> { minutes, low, high, basis, confidence, factors[] }   (minutes rounded to 5)
+   */
+  function estimateRecord(rec) {
+    const title = String((rec && rec.title) || '');
+    const factors = [];
+
+    if (rec && rec.kind === 'quiz') {
+      const limit = rec.timeLimitMin > 0 ? rec.timeLimitMin : null;
+      const take = limit || 30;
+      const exam = EXAM.test(title);
+      const prep = exam ? clamp(take * 2, 60, 240) : clamp(take, 15, 60);
+      factors.push(limit ? `${limit} min time limit` : 'no time limit given, assumed 30 min');
+      factors.push(`${prep} min of studying`);
+      return {
+        minutes: clampMin(take + prep),
+        low: clampMin(take + prep * 0.25),
+        high: clampMin(take + prep * 2),
+        basis: limit ? 'quiz-limit' : 'heuristic',
+        confidence: limit ? 'medium' : 'low',
+        factors,
+      };
+    }
+
+    const points = rec && rec.points > 0 ? rec.points : null;
+    let base = points === null ? 60 : points <= 10 ? 30 : points <= 25 ? 45 : points <= 50 ? 75 : points <= 100 ? 120 : 180;
+    factors.push(points === null ? 'no point value' : `${points} points`);
+
+    if (EXAM.test(title)) { base = Math.max(base, 240); factors.push('an exam or big test'); }
+    else if (HEAVY.test(title)) { base = Math.max(base, 150); factors.push('writing or project work'); }
+    else if (LIGHT.test(title)) { base *= 0.6; factors.push('a lighter task (reading or a short response)'); }
+
+    const words = countWords(rec && rec.description);
+    const lengthFactor = words < 30 ? 0.85 : words < 120 ? 1 : words < 300 ? 1.2 : 1.4;
+    factors.push(words < 30 ? 'a short description' : words < 120 ? 'a normal-length description' : words < 300 ? 'a detailed description' : 'a long, detailed description');
+    let minutes = base * lengthFactor;
+
+    if (rec && rec.files && rec.files.length) { minutes += 15; factors.push('has a handout to read'); }
+    if (rec && rec.wordLimit > 0) {
+      const writing = Math.round(rec.wordLimit / 10) + 20; // ~10 words a minute including thinking
+      if (writing > minutes) minutes = writing;
+      factors.push(`${rec.wordLimit}-word limit`);
+    }
+    minutes = clampMin(minutes);
+    return { minutes, low: clampMin(minutes * 0.7), high: clampMin(minutes * 1.5), basis: 'heuristic', confidence: 'low', factors };
+  }
+
+  // A short, stable fingerprint of everything an estimate depends on. It is stored on the estimate
+  // so a sync can tell "Moodle changed this assignment" (ask again) from "same assignment" (keep).
+  function hash32(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    return (h >>> 0).toString(36);
+  }
+
+  function inputsKey(item) {
+    const s = (item && item.source) || {};
+    return hash32(JSON.stringify([
+      item && item.title, s.kind, s.points, s.description, (s.files || []).map((f) => [f.name, f.size, f.modified]),
+      s.timeLimitMin, s.wordLimit, s.submissionTypes || [],
+    ]));
+  }
+
+  /** Estimate for an imported item: title lives on the item, Moodle details on `source`. */
+  function estimateForItem(item) {
+    const s = (item && item.source) || {};
+    const est = estimateRecord({
+      kind: s.kind, title: item && item.title, points: s.points, description: s.description, files: s.files,
+      timeLimitMin: s.timeLimitMin, wordLimit: s.wordLimit,
+    });
+    est.key = inputsKey(item);
+    return est;
+  }
+
+  /**
+   * Scales named steps to a new total, keeping the names and the count (so an item's parts
+   * stay valid). Returns [] if the steps cannot fit (each needs at least 5 minutes).
+   */
+  function scaleSteps(steps, minutes) {
+    if (!Array.isArray(steps) || !steps.length || steps.length * 5 > minutes) return [];
+    const total = steps.reduce((s, x) => s + x.minutes, 0);
+    if (!(total > 0)) return [];
+    const out = steps.map((x) => ({ name: x.name, minutes: Math.max(5, round5((x.minutes / total) * minutes)) }));
+    const diff = minutes - out.reduce((s, x) => s + x.minutes, 0);
+    const big = out.reduce((a, b) => (b.minutes > a.minutes ? b : a));
+    big.minutes = Math.max(5, big.minutes + diff);
+    return out;
+  }
+
+  /** The user's own number. No range: they decided. Named steps (if any) are rescaled, not lost. */
+  function userEstimate(minutes, steps) {
+    const m = clamp(Math.round(Number(minutes) / 5) * 5, MIN_MIN, MAX_MIN);
+    return { minutes: m, low: m, high: m, basis: 'user', confidence: 'high', factors: ['set by you'], steps: scaleSteps(steps, m) };
+  }
+
+  /**
+   * Claude's answer (already validated by the server) as an estimate. A quiz is one sitting,
+   * so it keeps the minutes but not the steps.
+   */
+  function fromModel(result, key, kind, opts) {
+    const f = result.files || { read: [], skipped: [], retry: false };
+    return {
+      minutes: result.minutes, low: result.low, high: result.high, basis: 'model',
+      confidence: result.confidence || 'low', factors: result.rationale ? [result.rationale] : [],
+      steps: kind === 'quiz' ? [] : (result.steps || []).map((s) => ({ name: s.name, minutes: s.minutes })), key,
+      // Which handouts Claude read (the server's report), which it could not, and whether reading them
+      // was attempted for good: a temporary failure ("retry") is not "asked", so it is tried again later.
+      filesRead: f.read || [], filesSkipped: f.skipped || [], filesAsked: !!(opts && opts.readFiles) && !f.retry,
+    };
+  }
+
+  /** Named steps are only trusted while there is exactly one per part. */
+  function stepsUsable(item) {
+    const st = item && item.estimate && item.estimate.steps;
+    return Array.isArray(st) && st.length > 0 && st.length === (item.total || 1);
+  }
+
+  function stepName(item, index) {
+    return stepsUsable(item) && item.estimate.steps[index] ? item.estimate.steps[index].name : null;
+  }
+
+  /**
+   * How many parts a piece of work is split into for daily pacing. A quiz is one sitting. When
+   * Claude named the steps, each step is a part; otherwise parts are ~50 minutes each.
+   */
+  function partsFor(minutes, kind, steps) {
+    if (kind === 'quiz') return 1;
+    if (Array.isArray(steps) && steps.length) return clamp(steps.length, 1, MAX_PARTS);
+    return clamp(Math.round(minutes / PART_MIN), 1, MAX_PARTS);
+  }
+
+  function sameEstimate(a, b) {
+    if (!a || !b) return false;
+    return a.minutes === b.minutes && a.low === b.low && a.high === b.high && a.basis === b.basis && a.key === b.key;
+  }
+
+  /**
+   * Returns a NEW item carrying `est`. An imported item that has no progress yet is
+   * re-split into parts for the new estimate; one with progress keeps its parts
+   * (the minutes per part just change), so logged progress is never reinterpreted.
+   */
+  function withEstimate(item, est) {
+    const next = { ...item, estimate: est };
+    const imported = item.source && item.source.type === 'moodle';
+    const untouched = !(item.done > 0) && !(item.today > 0) && !item.completed;
+    if (imported && untouched) {
+      const n = partsFor(est.minutes, item.source.kind, est.steps);
+      next.total = n;
+      next.unit = n > 1 ? 'part' : (item.source.kind === 'quiz' ? 'quiz' : 'assignment');
+    }
+    return next;
+  }
+
+  global.TPEstimate = { PART_MIN, MAX_PARTS, MIN_MIN, MAX_MIN, countWords, estimateRecord, estimateForItem, inputsKey, scaleSteps, userEstimate, fromModel, stepsUsable, stepName, partsFor, sameEstimate, withEstimate };
+})(typeof window !== 'undefined' ? window : globalThis);

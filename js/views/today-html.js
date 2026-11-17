@@ -6,6 +6,18 @@
     return 'tp-t-dot-ok';
   }
 
+  // "~50m" for an entry with an estimate, '' for one without (manual items).
+  function estPillHtml(entry) {
+    const m = window.TPPlan ? window.TPPlan.entryMinutes(entry) : null;
+    if (m === null || m === undefined) return '';
+    return `<span class="tp-t-est">~${window.TPPlan.fmtMinutes(window.TPPlan.roundDisplay(m))}</span>`;
+  }
+
+  // Imported work split into parts reads "Part 2 of 3"; other multi-unit items keep "x of y today".
+  function isPartsItem(it) {
+    return it.unit === 'part' && it.total > 1;
+  }
+
   function pipRowHtml(target, todayCount) {
     let pips = '';
     for (let i = 0; i < target; i++) {
@@ -24,7 +36,16 @@
     const isMulti = it.total > 1;
     const color = it.course ? courseColorFor(it.course) : 'var(--text-faint)';
     const metaBits = [it.course, relativeDueLabel(it.due)];
-    if (isMulti) metaBits.push(`${todayCount} of ${target} today`);
+    let stepLine = '';
+    if (isPartsItem(it)) {
+      const idxPart = Math.min((it.done || 0), it.total - 1);
+      const stepName = window.TPEstimate ? window.TPEstimate.stepName(it, idxPart) : null;
+      // Claude named the steps: the one to do now gets its own line under the title (a long name would
+      // otherwise push the time estimate off the end of the meta line); else a short "Part 2 of 4".
+      if (stepName) stepLine = `<div class="tp-t-step">${escapeHtml(stepName)} · step ${idxPart + 1} of ${it.total}</div>`;
+      else metaBits.push(`Part ${idxPart + 1} of ${it.total}`);
+    }
+    else if (isMulti) metaBits.push(`${todayCount} of ${target} today`);
     return `<div class="tp-t-row" data-item-i="${idx}">
       <div class="tp-t-bar" style="background:${color}"></div>
       <div class="tp-t-body">
@@ -32,7 +53,8 @@
           <span class="tp-t-dot ${urgencyDotClass(entry)}"></span>
           <span class="tp-t-title">${escapeHtml(it.title)}</span>
         </div>
-        <div class="tp-t-meta">${metaBits.filter(Boolean).map(escapeHtml).join(' · ')}</div>
+        ${stepLine}
+        <div class="tp-t-meta">${metaBits.filter(Boolean).map(escapeHtml).join(' · ')}${estPillHtml(entry)}</div>
         ${isMulti ? pipRowHtml(target, todayCount) : ''}
       </div>
       <div class="tp-t-action">
@@ -66,13 +88,39 @@
     return `<div class="tp-t-ahead-row" data-item-i="${idx}">
       <span class="tp-t-ahead-pill">${escapeHtml(capUnit(entry.unit || it.unit || 'units'))}</span>
       <div class="tp-t-ahead-body"><div class="tp-t-title">${escapeHtml(entry.title || it.title)}</div></div>
+      ${estPillHtml(entry)}
     </div>`;
+  }
+
+  // "2h 30m left today · 4 tasks" with a thin progress bar, then a one-line heavy-day nudge.
+  function planSummaryHtml(plan, escapeHtml) {
+    if (!plan) return '';
+    const { summary: s, heavy } = plan;
+    const P = window.TPPlan;
+    let block = '';
+    if (s.leftMin > 0 || s.doneMin > 0) {
+      const left = s.leftMin > 0 ? P.fmtMinutes(P.roundDisplay(s.leftMin)) : 'Done';
+      const sub = s.leftMin > 0 ? `left today · ${s.tasks} task${s.tasks === 1 ? '' : 's'}` : 'with today\'s time';
+      const notes = [];
+      if (s.doneMin > 0) notes.push(`${P.fmtMinutes(P.roundDisplay(s.doneMin))} done today`);
+      if (s.aheadMin > 0) notes.push(`+${P.fmtMinutes(P.roundDisplay(s.aheadMin))} of get-ahead work planned`);
+      if (s.unestimated) notes.push(`${s.unestimated} task${s.unestimated === 1 ? '' : 's'} without a time estimate`);
+      block = `<div class="tp-t-plan">
+        <div class="tp-t-plan-main"><span class="tp-t-plan-left">${escapeHtml(left)}</span><span class="tp-t-plan-sub">${escapeHtml(sub)}</span></div>
+        <div class="tp-t-plan-track"><div class="tp-t-plan-fill" style="width:${Math.round(s.pct * 100)}%"></div></div>
+        <div class="tp-t-plan-note">${escapeHtml(notes.join(' · '))}</div>
+      </div>`;
+    }
+    const heavyLine = heavy ? `<button type="button" class="tp-t-heavy" id="tp-t-heavy">
+        <span class="tp-t-heavy-text">${escapeHtml(heavy.label)} is heavy · ${escapeHtml(P.fmtMinutes(P.roundDisplay(heavy.minutes)))} planned</span>${window.TPIcons.svg('chevron_right', { className: 'tp-t-heavy-icon' })}
+      </button>` : '';
+    return block + heavyLine;
   }
 
   function todayScreenHtml(ctx) {
     const {
       streak, dateLabel, weekdayLabel, screen, escapeHtml,
-      totalLoggedToday,
+      totalLoggedToday, plan,
     } = ctx;
     const targets = screen.targets;
     const getAhead = screen.getAhead;
@@ -83,7 +131,11 @@
         <div class="tp-t-weekday">${escapeHtml(weekdayLabel)}</div>
         <div class="tp-t-date">${escapeHtml(dateLabel)}</div>
       </div>
-      ${streak > 0 ? `<div class="tp-t-streak">${streak}-day streak</div>` : ''}
+      <div class="tp-t-header-right">
+        ${streak > 0 ? `<div class="tp-t-streak">${streak}-day streak</div>` : ''}
+        ${ctx.showBell ? window.TPViews.bellButtonHtml(ctx.unread || 0) : ''}
+        <button type="button" class="tp-icon-btn" id="tp-open-settings" aria-label="Settings">${window.TPIcons.svg('cog_outline')}</button>
+      </div>
     </div>`;
 
     const targetsHeading = `<div class="tp-section-heading">
@@ -111,7 +163,7 @@
       ? `Logged ${totalLoggedToday} unit${totalLoggedToday === 1 ? '' : 's'} today · anything below the targets is you getting ahead`
       : 'Nothing logged yet today'}</div>`;
 
-    return `<div class="tp-screen tp-screen-today">${header}${targetsHeading}${targetsBody}${getAheadSection}${footer}</div>`;
+    return `<div class="tp-screen tp-screen-today">${header}${planSummaryHtml(plan, escapeHtml)}${ctx.classes && ctx.classes.length ? `<div class="tp-cls-today"><div class="tp-cls-today-label">Classes today</div>${window.TPViews.classesHtml(ctx.classes, escapeHtml)}</div>` : ''}${targetsHeading}${targetsBody}${getAheadSection}${footer}</div>`;
   }
 
   global.TPViews = global.TPViews || {};

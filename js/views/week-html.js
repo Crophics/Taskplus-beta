@@ -1,15 +1,25 @@
 /* views/week-html.js — Week screen: stat tiles, paced-load chart, day detail, by-course, advice */
 (function (global) {
-  function statTilesHtml(stats, heaviestLabel) {
+  // Minutes view (js/plan-logic.js): bar labels read "50m" / "1.5h", the second tile is time left.
+  function fmtLoad(n, minutes) {
+    if (!minutes) return String(Math.round(n * 10) / 10);
+    return n >= 60 ? (Math.round((n / 60) * 10) / 10) + 'h' : Math.round(n) + 'm';
+  }
+
+  function statTilesHtml(stats, heaviestLabel, minutes) {
+    const second = minutes && minutes.on
+      ? `<div class="tp-w-tile-label">Time left</div><div class="tp-w-tile-value tp-w-tile-accent">${window.TPPlan.fmtMinutes(window.TPPlan.roundDisplay(minutes.leftMin))}</div>`
+      : `<div class="tp-w-tile-label">Units left to log</div><div class="tp-w-tile-value tp-w-tile-accent">${stats.unitsLeft}</div>`;
     return `<div class="tp-w-tiles">
       <div class="tp-w-tile"><div class="tp-w-tile-label">Due this week</div><div class="tp-w-tile-value">${stats.dueThisWeek}</div></div>
-      <div class="tp-w-tile"><div class="tp-w-tile-label">Units left to log</div><div class="tp-w-tile-value tp-w-tile-accent">${stats.unitsLeft}</div></div>
+      <div class="tp-w-tile">${second}</div>
       <div class="tp-w-tile"><div class="tp-w-tile-label">Heaviest day</div><div class="tp-w-tile-value">${heaviestLabel}</div></div>
     </div>`;
   }
 
-  function chartHtml(days, dayLabels, selDay, courseColorFor) {
-    const scale = Math.max(3, ...days.map(d => d.total));
+  function chartHtml(days, dayLabels, selDay, courseColorFor, minutes) {
+    const on = !!(minutes && minutes.on);
+    const scale = Math.max(on ? 60 : 3, ...days.map(d => d.total));
     const cols = days.map(d => {
       const isEmpty = d.total <= 0;
       const h = isEmpty ? 4 : Math.round((d.total / scale) * 128) + 6;
@@ -25,8 +35,9 @@
       }
       const selected = d.dayIndex === selDay;
       const isToday = d.dayIndex === 0;
-      return `<div class="tp-w-col${selected ? ' tp-w-col-selected' : ''}" data-day="${d.dayIndex}">
-        <div class="tp-w-col-count">${d.total > 0 ? Math.round(d.total * 10) / 10 : ''}</div>
+      const heavy = on && minutes.heavyIndex === d.dayIndex;
+      return `<div class="tp-w-col${selected ? ' tp-w-col-selected' : ''}${heavy ? ' tp-w-col-heavy' : ''}" data-day="${d.dayIndex}">
+        <div class="tp-w-col-count">${d.total > 0 ? fmtLoad(d.total, on) : ''}</div>
         ${barHtml}
         <div class="tp-w-col-label${selected ? ' tp-w-label-selected' : (isToday ? ' tp-w-label-today' : '')}">${dayLabels[d.dayIndex][0]}</div>
       </div>`;
@@ -34,28 +45,45 @@
     return `<div class="tp-w-chart-block">
       <div class="tp-section-heading"><span>Paced load by day</span><span class="tp-section-rule"></span><span class="tp-section-count">tap a day</span></div>
       <div class="tp-w-chart">${cols}</div>
+      ${on && minutes.unestimated ? `<div class="tp-w-note">${minutes.unestimated} item${minutes.unestimated === 1 ? '' : 's'} without a time estimate ${minutes.unestimated === 1 ? 'is' : 'are'} not in this chart.</div>` : ''}
     </div>`;
   }
 
+  function classesHtml(classes, escapeHtml) {
+    if (!classes || !classes.length) return '';
+    const T = window.TPSchedule;
+    return '<div class="tp-cls-list">' + classes.map((c) => `<div class="tp-cls-row"><span class="tp-cls-time">${T.fmtTime(c.start)}</span><span class="tp-cls-name">${escapeHtml(c.course)}${c.where ? ' · ' + escapeHtml(c.where) : ''}</span></div>`).join('') + '</div>';
+  }
+  window.TPViews = window.TPViews || {};
+  window.TPViews.classesHtml = classesHtml;
+
   function dayDetailHtml(ctx, selDay) {
     const { escapeHtml, dayLabels, courseColorFor, TPWeekLogic } = ctx;
-    const contribs = TPWeekLogic.contributionsForDay(ctx, selDay);
+    const mins = !!(ctx.minutes && ctx.minutes.on);
+    const contribs = mins
+      ? ctx.minutes.entriesFor(selDay).map(e => ({ it: e.it, load: e.minutes }))
+      : TPWeekLogic.contributionsForDay(ctx, selDay);
     const total = contribs.reduce((s, c) => s + c.load, 0);
+    const totalText = mins
+      ? `${window.TPPlan.fmtMinutes(window.TPPlan.roundDisplay(total))} across ${contribs.length}`
+      : `${Math.round(total * 10) / 10} units across ${contribs.length}`;
     const header = `<div class="tp-w-detail-header">
       <span>${dayLabels[selDay]}${selDay === 0 ? ' · today' : ''}</span>
-      <span class="tp-text-dim">${total > 0 ? `${Math.round(total * 10) / 10} units across ${contribs.length}` : 'clear'}</span>
+      <span class="tp-text-dim">${total > 0 ? totalText : 'clear'}</span>
     </div>`;
     const rows = contribs.length ? contribs.map(({ it, load }) => {
       const color = it.course ? courseColorFor(it.course) : 'var(--text-faint)';
       const isFinish = Math.max((it.total || 0) - (it.done || 0), 0) <= Math.ceil(load);
-      const shareText = it.total > 1 ? `${Math.round(load * 10) / 10} ${it.unit || 'units'}` : (isFinish ? 'finish' : `${Math.round(load * 10) / 10}`);
+      const shareText = mins
+        ? '~' + window.TPPlan.fmtMinutes(window.TPPlan.roundDisplay(load))
+        : (it.total > 1 ? `${Math.round(load * 10) / 10} ${it.unit || 'units'}` : (isFinish ? 'finish' : `${Math.round(load * 10) / 10}`));
       return `<div class="tp-w-detail-row">
         <span class="tp-a-bar" style="background:${color}"></span>
         <div class="tp-w-detail-body"><div class="tp-t-title">${escapeHtml(it.title)}</div><div class="tp-t-meta">${[it.course, ctx.relativeDueLabel(it.due)].filter(Boolean).map(escapeHtml).join(' · ')}</div></div>
         <div class="tp-w-detail-status">${escapeHtml(shareText)}</div>
       </div>`;
     }).join('') : `<div class="tp-w-detail-empty">Nothing due. A good day to pull work forward from ${escapeHtml(ctx.heaviestLabel)}.</div>`;
-    return `<div class="tp-w-detail-card">${header}${rows}</div>`;
+    return `<div class="tp-w-detail-card">${header}${classesHtml(ctx.classes, ctx.escapeHtml)}${rows}</div>`;
   }
 
   function byCourseHtml(courseStats, escapeHtml) {
@@ -74,18 +102,21 @@
   }
 
   function weekScreenHtml(ctx) {
-    const { escapeHtml, days, dayLabels, selDay, stats, heaviestLabel, courseColorFor, courseStats, advice, animateChart } = ctx;
-    const header = `<div class="tp-a-header-top"><span class="tp-a-title-heading">Week</span></div>`;
+    const { escapeHtml, days, dayLabels, selDay, stats, heaviestLabel, courseColorFor, courseStats, advice, animateChart, minutes } = ctx;
+    const header = `<div class="tp-a-header-top tp-a-header-top-center"><span class="tp-a-title-heading">Week</span>
+      <button type="button" class="tp-icon-btn" id="tp-add-toggle" aria-label="Add an assignment manually">${window.TPIcons.svg('plus')}</button>
+    </div>`;
     // The bar-grow-in animation (css/mobile.css) is scoped under
     // .tp-w-chart-animate so it only plays on animateChart's one true
     // render (js/app.js's weekChartFirstRender) - not on every re-render
     // this screen gets from switching days, adding an assignment, etc.
     return `<div class="tp-screen tp-screen-week${animateChart ? ' tp-w-chart-animate' : ''}">${header}
-      ${statTilesHtml(stats, heaviestLabel)}
-      ${chartHtml(days, dayLabels, selDay, courseColorFor)}
+      ${statTilesHtml(stats, heaviestLabel, minutes)}
+      ${chartHtml(days, dayLabels, selDay, courseColorFor, minutes)}
       ${dayDetailHtml(ctx, selDay)}
       ${byCourseHtml(courseStats, escapeHtml)}
       ${adviceHtml(advice)}
+      <button type="button" class="tp-w-all-link" id="tp-open-all"><span>All items</span>${window.TPIcons.svg('chevron_right')}</button>
     </div>`;
   }
 

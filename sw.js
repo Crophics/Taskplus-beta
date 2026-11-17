@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v39'; // bumped: full revert to the original position:fixed tab bar - nothing tonight fixed it
+const CACHE_NAME = 'taskplus-cache-v46'; // bumped: Phase 6 class schedule
 const urlsToCache = [
   './',
   './index.html',
@@ -69,8 +69,13 @@ const urlsToCache = [
   './js/utils.js',
   './js/item-logic.js',
   './js/courses.js',
+  './js/moodle-client.js',
+  './js/grades-logic.js',
+  './js/estimate-logic.js',
+  './js/plan-logic.js',
   './js/all-logic.js',
   './js/week-logic.js',
+  './js/schedule-logic.js',
   './js/html.js',
   './js/toast.js',
   './js/theme.js',
@@ -84,6 +89,10 @@ const urlsToCache = [
   './js/views/settings-html.js',
   './js/views/courses-html.js',
   './js/views/add-sheet-html.js',
+  './js/views/connect-sheet-html.js',
+  './js/views/grades-html.js',
+  './js/views/item-detail-html.js',
+  './js/views/changes-html.js',
   './js/views/quick-menu-html.js',
   './js/today-logic.js',
   './js/bind-events.js',

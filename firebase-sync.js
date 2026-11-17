@@ -392,6 +392,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     });
     if (!token) return { ok: false, reason: "no-token" };
     await saveFcmToken(token, notifyHour);
+    document.dispatchEvent(new CustomEvent("tp-push-token", { detail: { token } }));
 
     // Foreground messages while the app is open
     onMessage(msg, (payload) => {
@@ -427,7 +428,10 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
         vapidKey: FCM_VAPID_KEY,
         serviceWorkerRegistration: reg || undefined,
       });
-      if (token) await saveFcmToken(token);
+      if (token) {
+        await saveFcmToken(token);
+        document.dispatchEvent(new CustomEvent("tp-push-token", { detail: { token } }));
+      }
     } catch (e) {
       console.warn("FCM token refresh failed", e);
     }
@@ -437,6 +441,9 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     signIn: () => signInWithPopup(auth, provider),
     signOut: () => signOut(auth),
     getUser: () => currentUser,
+    // Firebase ID token for authenticating calls to this app's own Worker
+    // (js/moodle-client.js). Refreshed automatically by the SDK when stale.
+    getIdToken: async () => (currentUser ? currentUser.getIdToken() : null),
     ensureItemMeta,
     newId,
     enablePush,

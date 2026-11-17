@@ -12,7 +12,7 @@
     try{ prefsNow = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); }catch(e){}
     const { theme: _theme, tab: _tab, ...syncPrefs } = prefsNow;
     window.tpSync.push({
-      items,
+      items: items.filter(it=>!window.TPMoodle.isImported(it)),
       courseColors,
       courses,
       dayCompleteLog,
@@ -27,13 +27,37 @@
   const DAY_COMPLETE_LOG_KEY='tp-day-complete-log';
   const DELETED_LOG_KEY='tp-deleted-log';
   const TOMBSTONE_MAX_AGE_MS = 120*24*60*60*1000; // keep in sync with firebase-sync.js
+  // Imported (Moodle) items are stored apart from manual ones so they never
+  // reach the shared Firestore doc that firebase-sync.js merges - Moodle is
+  // their source of truth and each device syncs from it directly.
+  const MOODLE_ITEMS_KEY='tp-moodle-items';
+  const MOODLE_STATE_KEY='tp-moodle';
+  const MOODLE_EVENTS_KEY='tp-moodle-events';
+  const FEED_KEY='tp-feed';
+  const SCHEDULE_KEY='tp-schedule';
+  const MOODLE_SITE_KEY='tp-moodle-last-site';
+  // Grades: what Moodle reported (replaced each sync) and what the user owns
+  // (weights, targets, credits). Device-local, like imported items.
+  const LLM_KEY='tp-llm-on';
+  const LLM_FILES_KEY='tp-llm-files';
+  const GRADES_KEY='tp-moodle-grades';
+  const GRADE_SETTINGS_KEY='tp-grade-settings';
   const DEV_MODE_KEY='tp-dev-mode';
   const DEV_PANEL_KEY='tp-dev-panel-open';
   const DAY_OFFSET_KEY='tp-day-offset';
   const ARCHIVE_AFTER_DAYS=14;
 
   /* ---- State ---- */
-  let items = JSON.parse(localStorage.getItem(KEY) || '[]');
+  function readJsonArray(key){
+    try{ const v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; }catch(e){ return []; }
+  }
+  function loadItems(){ return readJsonArray(KEY).concat(readJsonArray(MOODLE_ITEMS_KEY)); }
+  function persistItems(){
+    const isImp = window.TPMoodle.isImported;
+    localStorage.setItem(KEY, JSON.stringify(items.filter(it=>!isImp(it))));
+    localStorage.setItem(MOODLE_ITEMS_KEY, JSON.stringify(items.filter(isImp)));
+  }
+  let items = loadItems();
   function newItemId(){
     if(window.tpSync && window.tpSync.newId) return window.tpSync.newId();
     if(typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -49,7 +73,7 @@
     if(!it.id){ it.id = newItemId(); idsMigrated = true; }
     if(it.updatedAt==null){ it.updatedAt = Date.now(); idsMigrated = true; }
   });
-  if(idsMigrated) localStorage.setItem(KEY, JSON.stringify(items));
+  if(idsMigrated) persistItems();
 
   // Day rollover: the `today` pacing counter (js/today-logic.js) only means
   // anything for the calendar day it was logged on, so reset it the first
@@ -58,7 +82,7 @@
     const storedActiveDate = localStorage.getItem(LAST_ACTIVE_DATE_KEY);
     const nowDate = window.TP.today();
     if(window.TPTodayLogic.resetTodayCounters(items, storedActiveDate, nowDate)){
-      localStorage.setItem(KEY, JSON.stringify(items));
+      persistItems();
     }
     localStorage.setItem(LAST_ACTIVE_DATE_KEY, nowDate);
   }
@@ -76,7 +100,7 @@
   function saveCourses(){ localStorage.setItem(COURSES_KEY, JSON.stringify(courses)); syncPush(); }
 
   document.addEventListener('tp-remote-data', function(){
-    items = JSON.parse(localStorage.getItem(KEY) || '[]');
+    items = loadItems();
     try{ courseColors = JSON.parse(localStorage.getItem(COURSE_COLORS_KEY)) || {}; }catch(e){ courseColors = {}; }
     try{ courses = JSON.parse(localStorage.getItem(COURSES_KEY)) || []; }catch(e){ courses = []; }
     try{ dayCompleteLog = JSON.parse(localStorage.getItem(DAY_COMPLETE_LOG_KEY)) || []; }catch(e){ dayCompleteLog = []; }
@@ -101,8 +125,8 @@
   try{ prefs = JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; }catch(e){ prefs = {}; }
   let searchTerm = prefs.searchTerm || ''; // All-tab search text
   let theme = ['dark','light','blue','auto'].includes(prefs.theme) ? prefs.theme : 'dark';
-  const TABS = ['today','all','week','settings','courses'];
-  let tab = TABS.includes(prefs.tab) ? prefs.tab : 'today';
+  const TABS = ['today','all','week','settings','courses','course','manage','item','changes'];
+  let tab = TABS.includes(prefs.tab) && prefs.tab !== 'course' && prefs.tab !== 'item' && prefs.tab !== 'changes' ? prefs.tab : 'today';
   let addOpen = false;
   let pickerOpen = false;
   let moreOpen = false; // add-sheet "Notes, subtasks, repeat, dependency" disclosure
@@ -186,7 +210,7 @@
   pruneDeletedLog();
 
   function savePrefs(){
-    localStorage.setItem(PREFS_KEY, JSON.stringify({searchTerm,theme,notifyHour,notifyDigest,tab,allSortMode}));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({searchTerm,theme,notifyHour,notifyDigest,tab: tab==='course' ? 'courses' : tab==='item' ? itemDetailFrom : tab==='changes' ? changesFrom : tab,allSortMode}));
     syncPush();
   }
 
@@ -204,6 +228,7 @@
 
   document.addEventListener('keydown', (e)=>{
     if(e.key === 'Escape'){
+      if(connectOpen && !connectBusy){ closeConnectSheet(); render(); return; }
       if(menuFor!==null){ menuFor = null; render(); return; }
       if(addOpen){ closeAddSheet(); render(); return; }
     }
@@ -223,11 +248,13 @@
         title: it.title, courseId: course ? course.id : null, due: it.due, amount: it.total, unit: it.unit || '',
         notes: it.notes || '', subtasksText: (it.subtasks || []).map(s => s.text).join('\n'),
         recurring: it.recurring || '', dependsOn: it.dependsOn || '',
+        minutes: it.estimate && it.estimate.basis === 'user' ? it.estimate.minutes : '',
+        imported: window.TPMoodle.isImported(it), // imported work edits its estimate on its own detail screen
       };
     } else {
       editIndex = null;
       const preselected = lastAddedCourseId && window.TPCourses.byId(courses, lastAddedCourseId) ? lastAddedCourseId : null;
-      draft = { title: '', courseId: preselected, due: '', amount: 1, unit: '', notes: '', subtasksText: '', recurring: '', dependsOn: '' };
+      draft = { title: '', courseId: preselected, due: '', amount: 1, unit: '', notes: '', subtasksText: '', recurring: '', dependsOn: '', minutes: '', imported: false };
     }
     pickerOpen = false;
     moreOpen = false;
@@ -252,7 +279,7 @@
   const burstConfetti = window.TP.burstConfetti;
   function save(){
     items.forEach(it=>{ if(!it.id) it.id = newItemId(); });
-    localStorage.setItem(KEY, JSON.stringify(items));
+    persistItems();
     render();
     syncPush();
   }
@@ -334,7 +361,7 @@
         it.archived = true; changed=true;
       }
     });
-    if(changed) localStorage.setItem(KEY, JSON.stringify(items));
+    if(changed) persistItems();
   }
   autoArchive();
 
@@ -343,7 +370,7 @@
     items.forEach((it,idx)=>{
       if(it.order===undefined){ it.order = idx; changed=true; }
     });
-    if(changed) localStorage.setItem(KEY, JSON.stringify(items));
+    if(changed) persistItems();
   }
   ensureOrder();
 
@@ -511,7 +538,7 @@
   /* ---- Today's targets (js/today-logic.js) ---- */
   function todayLogicCtx(){
     return {
-      items, storageKey: KEY, isLocked, unlockedToday, today, daysBetween
+      items, storageKey: KEY, persist: persistItems, isLocked, unlockedToday, today, daysBetween
     };
   }
   function computeTodayPanel(){
@@ -528,6 +555,441 @@
     });
   }
 
+  /* ---- Grades (js/grades-logic.js, js/views/grades-html.js) ---- */
+  function readJsonObject(key, fallback){
+    try{ const v = JSON.parse(localStorage.getItem(key)); return v && typeof v === 'object' && !Array.isArray(v) ? v : fallback; }catch(e){ return fallback; }
+  }
+  let gradesStore = readJsonObject(GRADES_KEY, { syncedAt: null, courses: {} });
+  let gradeSettings = readJsonObject(GRADE_SETTINGS_KEY, window.TPGrades.emptySettings());
+  if(!gradeSettings.weights) gradeSettings.weights = {};
+  if(!gradeSettings.courses) gradeSettings.courses = {};
+  let courseDetailName = null;
+  function saveGradeSettings(){ localStorage.setItem(GRADE_SETTINGS_KEY, JSON.stringify(gradeSettings)); }
+  function saveGradesStore(){ localStorage.setItem(GRADES_KEY, JSON.stringify(gradesStore)); }
+
+  function courseDetailCtx(name){
+    const G = window.TPGrades;
+    const gc = gradesStore.courses[name] || null;
+    const entries = G.buildEntries(name, items, gc);
+    const cs = G.courseSettings(gradeSettings, name);
+    const calc = G.computeCourse(entries.graded.concat(entries.coming), gradeSettings.weights, {
+      target: cs.target, moodleTotal: gc && gc.total !== undefined ? gc.total : null,
+    });
+    return {
+      escapeHtml: window.TPHtml.escapeHtml, name, color: courseColorFor(name), relativeDueLabel,
+      meets: schedule[name] || '', settingsForCourse: cs, entries, weights: gradeSettings.weights, calc, target: cs.target,
+      letter: G.letterFor(calc.currentPct, cs.scale), summary: '',
+    };
+  }
+  // Class meeting times: device-local text per course (see js/schedule-logic.js).
+  let schedule = readJsonObject(SCHEDULE_KEY, {});
+  function setMeets(course, text){
+    const t = String(text||'').trim().slice(0, 200);
+    const r = window.TPSchedule.parseMeets(t);
+    if(!r.ok){ showToast('Could not read that. Try: MWF 10:00-10:50'); return false; }
+    if(t) schedule[course] = t; else delete schedule[course];
+    try{ localStorage.setItem(SCHEDULE_KEY, JSON.stringify(schedule)); }catch(e){}
+    return true;
+  }
+  function classesForDay(offset){ return window.TPSchedule.classesOn(window.TP.asDate(addDays(today(), offset)), schedule); }
+  function gradeSummaryHtml(){
+    return courseDetailName ? window.TPViews.gradeSummaryHtml(courseDetailCtx(courseDetailName)) : '';
+  }
+  function openCourse(name){
+    courseDetailName = name;
+    if(tab !== 'course') screenJustSwitched = true;
+    tab = 'course';
+    if(typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+    savePrefs();
+    render();
+  }
+  // Weight typing is model-only: the caller patches #tp-g-summary, nothing re-renders.
+  function setWeight(id, value){
+    gradeSettings = window.TPGrades.setWeight(gradeSettings, id, value);
+    saveGradeSettings();
+  }
+  function stepCourseSetting(name, which, dir){
+    const cs = window.TPGrades.courseSettings(gradeSettings, name);
+    const patch = which === 'target' ? { target: cs.target + dir } : { credits: cs.credits + dir * 0.5 };
+    gradeSettings = window.TPGrades.setCourseSetting(gradeSettings, name, patch);
+    saveGradeSettings();
+    render();
+  }
+  function useSuggestedWeights(name){
+    const e = window.TPGrades.buildEntries(name, items, gradesStore.courses[name] || null);
+    let n = 0;
+    e.coming.concat(e.graded).forEach(x=>{
+      if(x.weightSuggested && !(gradeSettings.weights[x.id] > 0)){ gradeSettings = window.TPGrades.setWeight(gradeSettings, x.id, x.weightSuggested); n++; }
+    });
+    saveGradeSettings();
+    showToast(n ? `Filled ${n} weight${n===1?'':'s'} from Moodle` : 'No weights to fill in');
+    render();
+  }
+  function importGradeSettings(file){
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const out = window.TPGrades.importSettings(gradeSettings, JSON.parse(reader.result));
+        if(!out.stats.weights && !out.stats.courses){ showToast('Nothing to import in that file'); return; }
+        gradeSettings = out.settings;
+        saveGradeSettings();
+        showToast(`Imported ${out.stats.weights} weight${out.stats.weights===1?'':'s'} and settings for ${out.stats.courses} course${out.stats.courses===1?'':'s'}`);
+        render();
+      }catch(e){
+        showToast('That is not a grade settings file');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  /* ---- Claude estimates (src/estimate.mjs via /api/estimate) ---- */
+  // Opt-out switch in Settings. On by default: the assignment's title, points and description go to
+  // Anthropic so Claude can estimate it and name the steps. Device-local.
+  let llmOn = localStorage.getItem(LLM_KEY) !== '0';
+  // Separate switch for sending the assignment's attached PDFs (the handout), on by default.
+  let filesOn = localStorage.getItem(LLM_FILES_KEY) !== '0';
+  let modelBusy = false;
+  let llmUnavailable = false; // the server said it is not set up / not allowed: stop asking this session
+  function setLlmOn(on){
+    llmOn = !!on;
+    localStorage.setItem(LLM_KEY, llmOn ? '1' : '0');
+    if(llmOn) llmUnavailable = false;
+    render();
+    if(llmOn) requestModelEstimates().catch(()=>{});
+  }
+  function setFilesOn(on){
+    filesOn = !!on;
+    localStorage.setItem(LLM_FILES_KEY, filesOn ? '1' : '0');
+    render();
+    if(filesOn && llmOn) requestModelEstimates().catch(()=>{});
+  }
+  // Asks Claude about items that still have the rule-of-thumb estimate (a few at a time), or, with
+  // `force`, about the given items regardless. Quiet by default: a failure leaves the rule-of-thumb
+  // estimate in place and nothing else changes.
+  async function requestModelEstimates(opts){
+    const force = !!(opts && opts.force);
+    const only = opts && opts.ids;
+    if(!llmOn || !moodleSignedIn() || modelBusy || (llmUnavailable && !force)) return;
+    const t = today();
+    const cand = items.filter(it=> (!only || only.includes(it.id)) && window.TPMoodle.needsModel(it, t, force, filesOn)).slice(0, 15);
+    if(!cand.length){ if(force) showToast('Nothing to estimate'); return; }
+    modelBusy = true;
+    if(force) render();
+    let applied = 0, limited = false, errorMessage = '';
+    try{
+      for(let i = 0; i < cand.length; i += 5){
+        const chunk = cand.slice(i, i + 5);
+        const keys = {};
+        chunk.forEach(it=>{ keys[it.id] = window.TPEstimate.inputsKey(it); });
+        let res;
+        try{
+          res = await window.TPMoodle.api.estimate(chunk.map(it=> window.TPMoodle.modelInput(it, daysBetween(t, it.due), filesOn)), force, filesOn);
+        }catch(e){
+          if(e && (e.code === 'not_configured' || e.code === 'not_allowed')) llmUnavailable = true;
+          errorMessage = (e && e.message) || '';
+          break;
+        }
+        const out = window.TPMoodle.applyModelResults(items, res.results, { today: t, keys, force, readFiles: filesOn });
+        items = out.items;
+        applied += out.stats.applied;
+        if(out.stats.limited) limited = true;
+        if(out.stats.unavailable) llmUnavailable = true;
+        persistItems();
+        if(out.stats.limited || out.stats.unavailable) break;
+      }
+    } finally {
+      modelBusy = false;
+    }
+    if(force){
+      showToast(applied ? 'Updated with Claude\'s estimate'
+        : limited ? 'Today\'s limit for Claude estimates is used up'
+        : (errorMessage || 'Claude could not estimate that. Keeping the current estimate.'));
+    } else if(applied){
+      showToast(`Claude improved ${applied} estimate${applied === 1 ? '' : 's'}`);
+    }
+    if(!userIsTyping()) render();
+  }
+  function askClaude(id){ return requestModelEstimates({ force: true, ids: [id] }); }
+
+  /* ---- Assignment detail (js/views/item-detail-html.js) ---- */
+  let itemDetailId = null;
+  let itemDetailFrom = 'today';
+  let itemDescOpen = false;
+  function itemIndexById(id){ return items.findIndex(x=>x && x.id === id); }
+  function openItem(id){
+    if(itemIndexById(id) < 0) return;
+    itemDetailId = id;
+    itemDescOpen = false;
+    if(tab !== 'item') itemDetailFrom = tab;
+    screenJustSwitched = true;
+    tab = 'item';
+    if(typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+    savePrefs();
+    render();
+  }
+  function closeItem(){
+    tab = itemDetailFrom || 'today';
+    savePrefs();
+    render();
+  }
+  // Notes are model-only: typing never re-renders (render-loop rule in AGENTS.md).
+  function setItemNotes(id, value){
+    const i = itemIndexById(id);
+    if(i < 0) return;
+    items[i].notes = value;
+    touchItem(items[i]);
+    persistItems();
+  }
+  function replaceItem(i, next){
+    items[i] = touchItem(next);
+    persistItems();
+    syncPush();
+    render();
+  }
+  function adjustEstimate(id, delta){
+    const i = itemIndexById(id);
+    if(i < 0 || !items[i].estimate) return;
+    const minutes = items[i].estimate.minutes + delta;
+    replaceItem(i, window.TPEstimate.withEstimate(items[i], window.TPEstimate.userEstimate(minutes, items[i].estimate.steps)));
+  }
+  function resetEstimate(id){
+    const i = itemIndexById(id);
+    if(i < 0) return;
+    replaceItem(i, window.TPEstimate.withEstimate(items[i], window.TPEstimate.estimateForItem(items[i])));
+  }
+  function itemDetailCtx(){
+    const i = itemIndexById(itemDetailId);
+    const item = items[i];
+    return {
+      item, idx: i, escapeHtml: window.TPHtml.escapeHtml, color: item.course ? courseColorFor(item.course) : 'var(--text-faint)',
+      relativeDueLabel, daysToDue: daysBetween(today(), item.due), descOpen: itemDescOpen,
+      weightPct: gradeSettings.weights[item.id] > 0 ? gradeSettings.weights[item.id] : null,
+      fromLabel: ({ today:'Today', week:'Week', all:'All', courses:'Courses' })[itemDetailFrom] || 'Back',
+      llm: { available: llmOn && moodleSignedIn() && !llmUnavailable, busy: modelBusy },
+    };
+  }
+
+  /* ---- Moodle import (js/moodle-client.js, src/worker.mjs) ---- */
+  // Cached copy of the server's connection status, so Settings can render
+  // instantly and offline. The server is the source of truth.
+  function readMoodleState(){
+    try{ const v = JSON.parse(localStorage.getItem(MOODLE_STATE_KEY)); return v && typeof v === 'object' ? v : {connected:false}; }catch(e){ return {connected:false}; }
+  }
+  let moodleState = readMoodleState();
+  function saveMoodleState(){ localStorage.setItem(MOODLE_STATE_KEY, JSON.stringify(moodleState)); }
+  let moodleBusy = false;
+  let connectOpen = false;
+  let connectBusy = false;
+  let connectError = '';
+  let connectJustOpened = false;
+  // The draft lives in memory only. The password is never written to storage
+  // and is cleared as soon as the attempt finishes, successful or not.
+  let connectDraft = { site: '', username: '', password: '' };
+
+  function moodleSignedIn(){ return !!(window.tpSync && window.tpSync.getUser && window.tpSync.getUser()); }
+  function appendMoodleEvents(events){
+    if(!events || !events.length) return;
+    let log = readJsonArray(MOODLE_EVENTS_KEY);
+    const ts = Date.now();
+    log = log.concat(events.map(e=>({ts, ...e}))).slice(-100);
+    localStorage.setItem(MOODLE_EVENTS_KEY, JSON.stringify(log));
+  }
+  // A background sync must never rebuild the DOM under someone who is typing.
+  function userIsTyping(){
+    const a = document.activeElement;
+    return addOpen || connectOpen || !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  }
+  function openConnectSheet(){
+    connectDraft = { site: localStorage.getItem(MOODLE_SITE_KEY) || '', username: '', password: '' };
+    connectError = '';
+    connectBusy = false;
+    connectOpen = true;
+    connectJustOpened = true;
+  }
+  function closeConnectSheet(){
+    if(document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
+    connectOpen = false;
+    connectBusy = false;
+    connectError = '';
+    connectJustOpened = false;
+    connectDraft = { site: '', username: '', password: '' };
+  }
+  async function moodleConnect(){
+    if(connectBusy) return;
+    const d = connectDraft;
+    if(!d.site.trim() || !d.username.trim() || !d.password){
+      connectError = 'Fill in the address, username and password.';
+      render();
+      return;
+    }
+    connectBusy = true;
+    connectError = '';
+    render();
+    try{
+      const status = await window.TPMoodle.api.connect(d.site, d.username.trim(), d.password);
+      localStorage.setItem(MOODLE_SITE_KEY, d.site.trim());
+      moodleState = status;
+      saveMoodleState();
+      closeConnectSheet();
+      render();
+      moodleSync({silent:false});
+    }catch(e){
+      connectBusy = false;
+      connectError = (e && e.message) || 'Could not connect. Try again.';
+      d.password = '';
+      pendingFocus = {id:'tp-connect-pass'};
+      render();
+    }
+  }
+  // Pulls the latest assignments/quizzes through the Worker and merges them in.
+  async function moodleSync(opts){
+    const silent = !!(opts && opts.silent);
+    if(moodleBusy) return;
+    moodleBusy = true;
+    if(!silent && tab === 'settings' && !userIsTyping()) render();
+    try{
+      const res = await window.TPMoodle.api.sync();
+      const merged = window.TPMoodle.mergeImported(items, res.records, { today: today(), deletedLog, now: Date.now() });
+      items = merged.items;
+      if(window.TPMoodle.ensureCourses(courses, res.records)) saveCourses();
+      appendMoodleEvents(merged.events);
+      addToFeed(res.events);
+      moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt };
+      saveMoodleState();
+      if(Array.isArray(res.grades)){
+        gradesStore = window.TPGrades.mergeGrades(gradesStore, res.grades, res.syncedAt);
+        saveGradesStore();
+      }
+      persistItems();
+      if(!silent || merged.stats.added || merged.stats.moved) showToast(window.TPMoodle.summarize(merged.stats));
+      requestModelEstimates().catch(()=>{});
+    }catch(e){
+      const code = e && e.code;
+      if(code === 'moodle_auth'){
+        moodleState = { connected: false };
+        saveMoodleState();
+        showToast('Moodle sign-in expired. Connect again in Settings.');
+      } else if(!silent && code !== 'too_soon'){
+        showToast((e && e.message) || 'Could not sync Moodle');
+      }
+    } finally {
+      moodleBusy = false;
+      if(!userIsTyping()) render();
+    }
+  }
+  async function moodleDisconnect(){
+    if(!window.confirm('Disconnect Moodle? Assignments already imported stay, but stop updating.')) return;
+    try{
+      await window.TPMoodle.api.disconnect();
+      moodleState = { connected: false };
+      saveMoodleState();
+      showToast('Moodle disconnected');
+    }catch(e){
+      showToast((e && e.message) || 'Could not disconnect. Try again.');
+    }
+    render();
+  }
+  async function moodleSetCourse(id, on){
+    const prev = moodleState.courses || [];
+    moodleState = { ...moodleState, courses: prev.map(c=> c.id === id ? { ...c, selected: on } : c) };
+    saveMoodleState();
+    render();
+    try{
+      const status = await window.TPMoodle.api.saveCourses(moodleState.courses.filter(c=>c.selected).map(c=>c.id));
+      moodleState = status;
+      saveMoodleState();
+    }catch(e){
+      moodleState = { ...moodleState, courses: prev };
+      saveMoodleState();
+      showToast('Could not save that change');
+    }
+    render();
+  }
+  function moodleMaybeAutoSync(){
+    if(!moodleSignedIn()) return;
+    if(window.TPMoodle.shouldAutoSync(moodleState, Date.now())) moodleSync({silent:true});
+    else requestModelEstimates().catch(()=>{}); // nothing to sync yet, but older items may still need Claude's estimate
+  }
+
+  /* ---- What's new feed + Moodle alerts (Phase 5; js/views/changes-html.js) ---- */
+  let feed = (function(){ const f = readJsonObject(FEED_KEY, null); return f && Array.isArray(f.events) ? f : { events: [], seenAt: Date.now() }; })();
+  let changesFrom = 'today';
+  let alerts = { loaded:false, configured:false, devices:0, prefs:{ new:true, moved:true, grade:true, feedback:true, due:true, quiet:{ on:false, start:22, end:8 } } };
+  function saveFeed(){ try{ localStorage.setItem(FEED_KEY, JSON.stringify(feed)); }catch(e){} }
+  function addToFeed(events){
+    if(!events || !events.length) return;
+    feed = window.TPMoodle.mergeFeed(feed, events, Date.now());
+    saveFeed();
+  }
+  function openChanges(){
+    if(tab !== 'changes') changesFrom = tab;
+    tab = 'changes';
+    screenJustSwitched = true;
+    if(typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+    render();
+    feed = window.TPMoodle.markFeedSeen(feed, Date.now()); // the unread highlight stays for this view, then clears
+    saveFeed();
+  }
+  function closeChanges(){ tab = changesFrom || 'today'; render(); }
+  async function loadFeed(){
+    try{
+      const r = await window.TPMoodle.api.feed();
+      addToFeed(r.events);
+    }catch(e){ /* offline or not set up: keep what we have */ }
+  }
+  async function loadAlerts(){
+    try{
+      const s = await window.TPMoodle.api.pushStatus();
+      alerts = { loaded:true, configured:!!s.configured, devices:s.devices||0, prefs:s.prefs };
+      if(tab === 'settings' && !userIsTyping()) render();
+    }catch(e){ /* keep defaults */ }
+  }
+  async function registerPushToken(token){
+    try{ await window.TPMoodle.api.registerPush(token); }catch(e){ return; }
+    loadAlerts();
+  }
+  document.addEventListener('tp-push-token', function(e){ if(e.detail && e.detail.token) registerPushToken(e.detail.token); });
+  async function savePrefsToServer(patch){
+    const old = alerts.prefs;
+    const next = { ...old, ...patch, quiet: { ...old.quiet, ...(patch.quiet||{}) } };
+    alerts = { ...alerts, prefs: next };
+    render();
+    try{
+      const s = await window.TPMoodle.api.pushPrefs(next);
+      alerts = { loaded:true, configured:!!s.configured, devices:s.devices||0, prefs:s.prefs };
+    }catch(e){
+      alerts = { ...alerts, prefs: old };
+      showToast((e && e.message) || 'Could not save that change');
+    }
+    if(!userIsTyping()) render();
+  }
+  async function sendTestAlert(){
+    try{
+      const r = await window.TPMoodle.api.testPush();
+      showToast(r.sent ? 'Test sent' : 'Nothing was delivered. Check notification permission.');
+    }catch(e){ showToast((e && e.message) || 'Could not send a test'); }
+  }
+  async function moodleBoot(){
+    try{
+      const status = await window.TPMoodle.api.status();
+      moodleState = status.connected ? status : { connected: false };
+      saveMoodleState();
+    }catch(e){
+      return; // not configured, offline, or signed out: keep the cached state
+    }
+    if(tab === 'settings' && !userIsTyping()) render();
+    loadFeed().then(()=>{ if(tab === 'today' && !userIsTyping()) render(); });
+    loadAlerts();
+    moodleMaybeAutoSync();
+  }
+  document.addEventListener('tp-auth-changed', function(e){
+    if(e.detail && e.detail.user) moodleBoot();
+    else if(tab === 'settings' && !userIsTyping()) render();
+  });
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'visible') moodleMaybeAutoSync();
+  });
+
   /* ---- Render ---- */
   function render(){
     const V = window.TPViews;
@@ -539,23 +1001,44 @@
     if(panel.allDoneToday) logDayComplete();
     const streak = currentStreak();
 
+    if(tab==='item' && itemIndexById(itemDetailId) < 0) tab = itemDetailFrom || 'today';
     let screenHtml = '';
     if(tab==='today'){
       const screen = window.TPTodayLogic.computeTodayScreen(panel);
       const totalLoggedToday = items.reduce((s,it)=> s + (it.today||0), 0);
       const d = window.TP.asDate(today());
+      // Minutes view (js/plan-logic.js): what is left today, and whether a later day stands out as heavy.
+      const todayPlan = window.TPPlan.computeDays({ items, today: today(), daysBetween, isLocked });
+      const heavy = window.TPPlan.heavyDay(todayPlan.days);
+      const plan = {
+        summary: window.TPPlan.todaySummary(screen.targets, items, screen.getAhead),
+        heavy: heavy && heavy.dayIndex > 0
+          ? { label: window.TP.asDate(addDays(today(), heavy.dayIndex)).toLocaleDateString(undefined,{weekday:'long'}), minutes: heavy.minutes }
+          : null,
+      };
       screenHtml = V.todayScreenHtml({
         streak, totalLoggedToday, screen, escapeHtml, itemIndexMap,
         dateLabel: d.toLocaleDateString(undefined,{month:'long',day:'numeric'}),
         weekdayLabel: d.toLocaleDateString(undefined,{weekday:'long'}),
-        courseColorFor, relativeDueLabel, unitLabel, capUnit,
+        courseColorFor, relativeDueLabel, unitLabel, capUnit, plan,
         TPTodayLogic: window.TPTodayLogic,
+        classes: classesForDay(0), showBell: !!moodleState.connected, unread: window.TPMoodle.unreadCount(feed),
       });
     } else if(tab==='all'){
       screenHtml = V.allScreenHtml(allCtx());
     } else if(tab==='week'){
       const weekCtx = { items, today, daysBetween };
-      const days = window.TPWeekLogic.computePacedLoad(weekCtx);
+      // Minutes view when any open item has a time estimate; otherwise the original unit view.
+      const planDays = window.TPPlan.computeDays({ items, today: today(), daysBetween, isLocked });
+      const hasEstimates = items.some(it=> !it.completed && !it.archived && window.TPPlan.minutesPerUnit(it) !== null);
+      const days = hasEstimates
+        ? planDays.days.map(d=>({ dayIndex: d.dayIndex, total: d.minutes, byCourse: d.byCourse }))
+        : window.TPWeekLogic.computePacedLoad(weekCtx);
+      const heavyWeek = hasEstimates ? window.TPPlan.heavyDay(planDays.days) : null;
+      const minutesCtx = hasEstimates ? {
+        on: true, entriesFor: (i)=> planDays.days[i].entries, heavyIndex: heavyWeek ? heavyWeek.dayIndex : -1, unestimated: planDays.unestimated,
+        leftMin: items.reduce((s,it)=> (it.completed||it.archived) ? s : s + (window.TPPlan.leftMinutes(it) || 0), 0),
+      } : { on: false };
       const dayLabels = days.map((_,i)=> window.TP.asDate(addDays(today(),i)).toLocaleDateString(undefined,{weekday:'long'}));
       const stats = window.TPWeekLogic.statTiles(weekCtx);
       const heaviestLabel = window.TPWeekLogic.heaviestDayLabel(days, dayLabels);
@@ -569,15 +1052,28 @@
       screenHtml = V.weekScreenHtml({
         escapeHtml, days, dayLabels, selDay: weekSelDay, stats, heaviestLabel,
         courseColorFor, courseStats, advice, relativeDueLabel, animateChart,
-        items, today, daysBetween, TPWeekLogic: window.TPWeekLogic,
+        items, today, daysBetween, TPWeekLogic: window.TPWeekLogic, minutes: minutesCtx,
+        classes: classesForDay(weekSelDay),
       });
     } else if(tab==='settings'){
       screenHtml = V.settingsScreenHtml({
         theme, notifyHour, notifyDigest, courses, escapeHtml,
         completedCount: items.filter(i=>i.completed).length,
         syncLabel: window.tpSyncLabel || 'Sign in to sync',
+        moodle: { state: moodleState, busy: moodleBusy, signedIn: moodleSignedIn() }, llmOn, filesOn, alerts,
       }) + V.devToolbarHtml({ devMode, devPanelOpen });
     } else if(tab==='courses'){
+      const ov = window.TPGrades.overview({ courses, items, store: gradesStore, settings: gradeSettings, colorFor: courseColorFor, today: today() });
+      screenHtml = V.coursesOverviewHtml({ escapeHtml, rows: ov.rows, gpa: ov.gpa, connected: !!moodleState.connected, relativeDueLabel });
+    } else if(tab==='course' && courseDetailName){
+      const ctx = courseDetailCtx(courseDetailName);
+      ctx.summary = V.gradeSummaryHtml(ctx);
+      screenHtml = V.courseDetailHtml(ctx);
+    } else if(tab==='item'){
+      screenHtml = V.itemDetailHtml(itemDetailCtx());
+    } else if(tab==='changes'){
+      screenHtml = V.changesScreenHtml({ feed, escapeHtml, now: Date.now(), fromLabel: changesFrom === 'week' ? 'Week' : changesFrom === 'courses' ? 'Courses' : 'Today', colorFor: courseColorFor });
+    } else if(tab==='manage'){
       screenHtml = V.coursesScreenHtml({
         escapeHtml, courses, openCountFor: (name)=> window.TPCourses.openCountForCourse(items, name),
         draftName: newCourseName, draftColor: newCourseColor,
@@ -585,10 +1081,14 @@
     }
 
     if(screenJustSwitched) screenHtml = `<div class="tp-screen-enter">${screenHtml}</div>`;
-    let html = V.tabBarHtml({ tab }) + screenHtml;
+    let html = V.tabBarHtml({ tab: tab==='item' ? itemDetailFrom : tab==='changes' ? changesFrom : tab }) + screenHtml;
 
     if(addOpen && draft){
       html += V.addSheetHtml({ draft, courses, items, pickerOpen, moreOpen, prereqOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null, sheetJustOpened });
+    }
+    if(connectOpen){
+      html += V.connectSheetHtml({ draft: connectDraft, error: connectError, busy: connectBusy, escapeHtml, sheetJustOpened: connectJustOpened });
+      connectJustOpened = false;
     }
     if(menuFor!=null && items[menuFor]){
       const it = items[menuFor];
@@ -677,6 +1177,17 @@
       get newCourseColor(){ return newCourseColor; }, set newCourseColor(v){ newCourseColor = v; },
       get lastAddedCourseId(){ return lastAddedCourseId; }, set lastAddedCourseId(v){ lastAddedCourseId = v; },
       touchItem, newItemId,
+      openConnectSheet, closeConnectSheet, moodleConnect, moodleSync, moodleDisconnect, moodleSetCourse,
+      get connectDraft(){ return connectDraft; },
+      get connectBusy(){ return connectBusy; },
+      openCourse, setWeight, stepCourseSetting, useSuggestedWeights, importGradeSettings, gradeSummaryHtml,
+      setMeets,
+      openChanges, closeChanges, savePrefsToServer, sendTestAlert, get alerts(){ return alerts; },
+      openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate, askClaude, setLlmOn, setFilesOn,
+      get llmOn(){ return llmOn; }, get filesOn(){ return filesOn; },
+      get itemDetailId(){ return itemDetailId; },
+      get itemDescOpen(){ return itemDescOpen; }, set itemDescOpen(v){ itemDescOpen = v; },
+      get courseDetailName(){ return courseDetailName; },
     };
   }
   render();
