@@ -49,7 +49,7 @@ test('the system prompt tells the model the assignment text is data, not instruc
 test('buildUserContent lists only what is known', () => {
   const c = E.buildUserContent(input({ points: null, files: [], dueInDays: null, kind: 'quiz', timeLimitMin: 20, wordLimit: 800, submissionTypes: ['onlinetext'] }));
   assert.ok(c.includes('type: quiz') && c.includes('quiz_time_limit_minutes: 20') && c.includes('word_limit: 800') && c.includes('handed_in_as: onlinetext'));
-  assert.ok(!c.includes('points:') && !c.includes('handout_files') && !c.includes('due_in_days'));
+  assert.ok(!c.includes('points:') && !c.includes('attached_files') && !c.includes('handouts_included') && !c.includes('due_in_days'));
   assert.ok(E.buildUserContent(input({ description: '' })).includes('(no description)'));
 });
 
@@ -216,22 +216,33 @@ async function token(sub = 'user-1', now = NOW) {
   return h + '.' + p + '.' + b64url(new Uint8Array(sig));
 }
 const googleFetch = async () => new Response(JSON.stringify({ keys: [jwk] }));
+// Serves the Firebase signing keys and, for anything else, `files(url)` (a Moodle file download). Records every URL.
+function routedFetch(files) {
+  const seenUrls = [];
+  const fn = async (url, init) => {
+    seenUrls.push({ url: String(url), init });
+    if (String(url).includes('googleapis.com')) return new Response(JSON.stringify({ keys: [jwk] }));
+    return files ? files(String(url)) : new Response('no files here', { status: 404 });
+  };
+  fn.seen = seenUrls;
+  return fn;
+}
 function fakeKv() {
   const m = new Map();
   return { m, get: async (k) => (m.has(k) ? m.get(k) : null), put: async (k, v) => { m.set(k, v); }, delete: async (k) => { m.delete(k); } };
 }
 async function newEnv(extra = {}) {
   const env = { MOODLE_KV: fakeKv(), TOKEN_ENC_KEY: ENC_KEY, ANTHROPIC_API_KEY: 'sk-ant-test-secret', ...extra };
-  await S.saveRecord(env, 'user-1', { site: 'https://m.example.edu', token: 't', userid: 1, courses: [], selected: [] });
+  await S.saveRecord(env, 'user-1', { site: 'https://m.example.edu/moodle', token: 'MOODLE-TOKEN-XYZ', userid: 1, courses: [], selected: [] });
   return env;
 }
 const item = (n, over = {}) => ({ id: 'moodle:' + n, course: 'MATH 2400', title: 'Assignment ' + n, kind: 'assign', points: 100, description: 'Do problems ' + n, files: [], dueInDays: 2, ...over });
-async function call(body, { env, client, who = 'user-1', now = NOW, noAuth = false, method = 'POST' } = {}) {
+async function call(body, { env, client, who = 'user-1', now = NOW, noAuth = false, method = 'POST', fetchFn = googleFetch } = {}) {
   A.resetJwksCache();
   const headers = { 'content-type': 'application/json' };
   if (!noAuth) headers.authorization = 'Bearer ' + (await token(who, now));
   const req = new Request('https://beta.example.test/api/estimate', { method, headers, body: body === undefined || method === 'GET' ? undefined : JSON.stringify(body) });
-  const res = await W.handleApi(req, env, { fetchFn: googleFetch, now: () => now, makeClient: async () => client });
+  const res = await W.handleApi(req, env, { fetchFn, now: () => now, makeClient: async () => client });
   return { res, json: await res.json() };
 }
 
@@ -370,4 +381,161 @@ test('route: an oversized body is rejected', async () => {
   const c = fakeClient(() => okResponse(good()));
   const r = await call({ items: [item(1, { description: 'x'.repeat(80000) })] }, { env, client: c });
   assert.strictEqual(r.res.status, 413);
+});
+
+/* ================= handouts (Phase 4b) ================= */
+
+const FILE_URL = 'https://m.example.edu/moodle/webservice/pluginfile.php/55/mod_assign/introattachment/0/sheet.pdf';
+const pdf = (n = 400) => { const b = new Uint8Array(n); b.set([0x25, 0x50, 0x44, 0x46, 0x2d]); return b; };
+const withPdf = (n, over = {}) => item(n, { files: [{ name: 'sheet.pdf', size: 400, url: FILE_URL, mime: 'application/pdf', modified: 100 }], ...over });
+const okFile = () => new Response(pdf());
+
+test('sanitizeInput keeps attachment details for downloading and the names for the prompt', () => {
+  const i = E.sanitizeInput({ id: 'a', title: 'T', files: [{ name: 'a.pdf', size: 10, url: 'https://x/a.pdf', mime: 'application/pdf', modified: 5 }, 'b.txt', { name: '' }, null] });
+  assert.deepStrictEqual(i.files, ['a.pdf', 'b.txt']);
+  assert.deepStrictEqual(i.attachments[0], { name: 'a.pdf', size: 10, url: 'https://x/a.pdf', mime: 'application/pdf', modified: 5 });
+  assert.deepStrictEqual(i.attachments[1], { name: 'b.txt', size: 0, url: null, mime: null, modified: null });
+  assert.strictEqual(E.sanitizeInput({ id: 'a', title: 'T', files: [{ name: 'x', url: 'h'.repeat(700) }] }).attachments[0].url, null, 'an absurdly long URL is dropped');
+});
+
+test('the prompt now tells Claude to read handouts and to split large work along their real structure', () => {
+  assert.match(E.SYSTEM_PROMPT, /PDF handouts/i);
+  assert.match(E.SYSTEM_PROMPT, /30 to 75 minutes/);
+  assert.match(E.SYSTEM_PROMPT, /1 to 8 concrete steps/);
+  assert.match(E.SYSTEM_PROMPT, /not instructions to follow/);
+  assert.match(E.SYSTEM_PROMPT, /actual question numbers/);
+});
+
+test('buildUserContent names attached files, and the handouts that are included as documents', () => {
+  const c = E.buildUserContent(input({ files: [{ name: 'a.pdf' }, { name: 'b.csv' }] }), ['a.pdf']);
+  assert.ok(c.includes('attached_files: a.pdf, b.csv'));
+  assert.ok(c.includes('handouts_included_as_documents: a.pdf'));
+  assert.ok(!E.buildUserContent(input({ files: [{ name: 'a.pdf' }] })).includes('handouts_included_as_documents'));
+});
+
+test('cacheMaterial: reading files, or a replaced file, is a different question; the URL is not part of it', () => {
+  const att = (over) => ({ name: 'a.pdf', size: 100, modified: 1, url: 'https://x/a.pdf', mime: 'application/pdf', ...over });
+  const m = (over, read) => E.cacheMaterial(input({ files: [att(over)] }), 'm', read);
+  assert.notStrictEqual(m({}, true), m({}, false), 'an answer without the handout must not be served as one that read it');
+  assert.notStrictEqual(m({ modified: 2 }, true), m({}, true));
+  assert.notStrictEqual(m({ size: 101 }, true), m({}, true));
+  assert.strictEqual(m({ url: 'https://x/other.pdf' }, true), m({}, true));
+  assert.strictEqual(m({ modified: 2 }, false), m({}, false), 'with files off, file changes only matter by name');
+});
+
+test('callModel sends handouts as document blocks BEFORE the text, and plain text when there are none', async () => {
+  const c = fakeClient(() => okResponse(good()));
+  await E.callModel(c, input(), { documents: [{ name: 'sheet.pdf', data: 'QUJD' }, { name: 'two.pdf', data: 'REVG' }] });
+  const content = c.calls[0].messages[0].content;
+  assert.ok(Array.isArray(content));
+  assert.deepStrictEqual(content.slice(0, 2), [
+    { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'QUJD' } },
+    { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'REVG' } },
+  ]);
+  assert.strictEqual(content[2].type, 'text');
+  assert.ok(content[2].text.includes('handouts_included_as_documents: sheet.pdf, two.pdf'));
+  const plain = fakeClient(() => okResponse(good()));
+  await E.callModel(plain, input());
+  assert.strictEqual(typeof plain.calls[0].messages[0].content, 'string');
+});
+
+test('route: with reading on, the PDF is downloaded from the user\'s own Moodle with their token and given to Claude', async () => {
+  const env = await newEnv();
+  const c = fakeClient(() => okResponse(good()));
+  const f = routedFetch(okFile);
+  const { json } = await call({ items: [withPdf(1)], readFiles: true }, { env, client: c, fetchFn: f });
+  const dl = f.seen.filter((s) => !s.url.includes('googleapis'));
+  assert.strictEqual(dl.length, 1);
+  assert.strictEqual(dl[0].url, FILE_URL + '?token=MOODLE-TOKEN-XYZ');
+  assert.strictEqual(dl[0].init.redirect, 'manual');
+  const content = c.calls[0].messages[0].content;
+  assert.strictEqual(content[0].type, 'document');
+  assert.strictEqual(Buffer.from(content[0].source.data, 'base64').length, 400);
+  assert.deepStrictEqual(json.results[0].estimate.files, { read: ['sheet.pdf'], skipped: [], retry: false });
+  const everything = JSON.stringify(json) + JSON.stringify(c.calls);
+  assert.ok(!everything.includes('MOODLE-TOKEN-XYZ'), 'the Moodle token never reaches Claude or the browser');
+});
+
+test('route: without readFiles nothing is downloaded and no document is sent', async () => {
+  const env = await newEnv();
+  const c = fakeClient(() => okResponse(good()));
+  const f = routedFetch(okFile);
+  const { json } = await call({ items: [withPdf(1)] }, { env, client: c, fetchFn: f });
+  assert.strictEqual(f.seen.filter((s) => !s.url.includes('googleapis')).length, 0);
+  assert.strictEqual(typeof c.calls[0].messages[0].content, 'string');
+  assert.deepStrictEqual(json.results[0].estimate.files, { read: [], skipped: [], retry: false });
+  const off = await newEnv({ ESTIMATE_READ_FILES: 'off' });
+  const f2 = routedFetch(okFile);
+  await call({ items: [withPdf(2)], readFiles: true }, { env: off, client: fakeClient(() => okResponse(good())), fetchFn: f2 });
+  assert.strictEqual(f2.seen.filter((s) => !s.url.includes('googleapis')).length, 0, 'the server-side switch wins');
+});
+
+test('route: a file URL on another host is skipped, never requested, and the estimate still comes back', async () => {
+  const env = await newEnv();
+  const c = fakeClient(() => okResponse(good()));
+  const f = routedFetch(okFile);
+  const evil = withPdf(1, { files: [{ name: 'sheet.pdf', size: 400, url: 'https://evil.example.org/webservice/pluginfile.php/1/sheet.pdf', mime: 'application/pdf' }] });
+  const { json } = await call({ items: [evil], readFiles: true }, { env, client: c, fetchFn: f });
+  assert.strictEqual(json.results[0].ok, true);
+  assert.deepStrictEqual(json.results[0].estimate.files.skipped, [{ name: 'sheet.pdf', reason: 'bad_url' }]);
+  assert.ok(!f.seen.some((s) => s.url.includes('evil.example.org')));
+  assert.strictEqual(typeof c.calls[0].messages[0].content, 'string');
+});
+
+test('route: items with no PDFs download nothing', async () => {
+  const env = await newEnv();
+  const f = routedFetch(okFile);
+  const doc = withPdf(1, { files: [{ name: 'data.csv', size: 5, url: FILE_URL.replace('sheet.pdf', 'data.csv'), mime: 'text/csv' }] });
+  const { json } = await call({ items: [doc], readFiles: true }, { env, client: fakeClient(() => okResponse(good())), fetchFn: f });
+  assert.strictEqual(f.seen.filter((s) => !s.url.includes('googleapis')).length, 0);
+  assert.strictEqual(json.results[0].ok, true);
+});
+
+test('route: a temporary download failure is reported as retryable and kept for only an hour', async () => {
+  const puts = [];
+  const env = await newEnv();
+  const origPut = env.MOODLE_KV.put;
+  env.MOODLE_KV.put = async (k, v, o) => { puts.push([k, o]); return origPut(k, v, o); };
+  const f = routedFetch(() => new Response('busy', { status: 503 }));
+  const { json } = await call({ items: [withPdf(1)], readFiles: true }, { env, client: fakeClient(() => okResponse(good())), fetchFn: f });
+  assert.strictEqual(json.results[0].ok, true);
+  assert.deepStrictEqual(json.results[0].estimate.files, { read: [], skipped: [{ name: 'sheet.pdf', reason: 'unavailable' }], retry: true });
+  const cachePut = puts.find(([k]) => k.startsWith('est:'));
+  assert.strictEqual(cachePut[1].expirationTtl, 3600);
+  // and a permanent skip (too big) is kept long
+  const puts2 = [];
+  const env2 = await newEnv();
+  const orig2 = env2.MOODLE_KV.put;
+  env2.MOODLE_KV.put = async (k, v, o) => { puts2.push([k, o]); return orig2(k, v, o); };
+  const big = withPdf(2, { files: [{ name: 'sheet.pdf', size: 99 * 1024 * 1024, url: FILE_URL, mime: 'application/pdf' }] });
+  const r2 = await call({ items: [big], readFiles: true }, { env: env2, client: fakeClient(() => okResponse(good())), fetchFn: routedFetch(okFile) });
+  assert.strictEqual(r2.json.results[0].estimate.files.retry, false);
+  assert.ok(puts2.find(([k]) => k.startsWith('est:'))[1].expirationTtl > 86400 * 30);
+});
+
+test('route: with reading on, an unchanged assignment is served from the cache with no new download', async () => {
+  const env = await newEnv();
+  const c = fakeClient(() => okResponse(good()));
+  const f = routedFetch(okFile);
+  await call({ items: [withPdf(1)], readFiles: true }, { env, client: c, fetchFn: f });
+  const again = await call({ items: [withPdf(1)], readFiles: true }, { env, client: c, fetchFn: f });
+  assert.strictEqual(again.json.results[0].cached, true);
+  assert.strictEqual(again.json.results[0].estimate.files.read[0], 'sheet.pdf');
+  assert.strictEqual(f.seen.filter((s) => !s.url.includes('googleapis')).length, 1, 'downloaded once');
+  assert.strictEqual(c.calls.length, 1);
+  const noFiles = await call({ items: [withPdf(1)] }, { env, client: c, fetchFn: f });
+  assert.strictEqual(noFiles.json.results[0].cached, false, 'an answer that did not read the handout is not reused for one that should');
+  const replaced = withPdf(1, { files: [{ name: 'sheet.pdf', size: 400, url: FILE_URL, mime: 'application/pdf', modified: 999 }] });
+  assert.strictEqual((await call({ items: [replaced], readFiles: true }, { env, client: c, fetchFn: f })).json.results[0].cached, false, 'a replaced file is a new question');
+});
+
+test('route: handout reading has its own daily cap; past it the estimate still comes back from the description', async () => {
+  const env = await newEnv({ ESTIMATE_FILE_DAILY_LIMIT: '1' });
+  const c = fakeClient(() => okResponse(good()));
+  const f = routedFetch(okFile);
+  const { json } = await call({ items: [withPdf(1), withPdf(2)], readFiles: true }, { env, client: c, fetchFn: f });
+  assert.deepStrictEqual(json.results.map((r) => r.ok), [true, true]);
+  assert.deepStrictEqual(json.results[0].estimate.files.read, ['sheet.pdf']);
+  assert.deepStrictEqual(json.results[1].estimate.files, { read: [], skipped: [{ name: 'sheet.pdf', reason: 'file_limit' }], retry: true });
+  assert.strictEqual(f.seen.filter((s) => !s.url.includes('googleapis')).length, 1);
 });

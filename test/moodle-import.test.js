@@ -276,7 +276,7 @@ test('modelInput sends the assignment details only', () => {
   const inp = M.modelInput(it0, 2);
   assert.deepStrictEqual(Object.keys(inp).sort(), ['course', 'description', 'dueInDays', 'files', 'id', 'kind', 'points', 'submissionTypes', 'timeLimitMin', 'title', 'wordLimit']);
   assert.strictEqual(inp.dueInDays, 2);
-  assert.deepStrictEqual(inp.files, ['a.pdf']);
+  assert.deepStrictEqual(inp.files, [{ name: 'a.pdf', size: 10 }], 'no download address unless handout reading is on');
   assert.strictEqual(inp.wordLimit, 500);
   assert.ok(!JSON.stringify(inp).includes('private'), 'notes never leave the device');
 });
@@ -338,4 +338,76 @@ test('a successful answer clears an earlier failure mark', () => {
   const failed = { ...base, modelTry: { key: global.TPEstimate.inputsKey(base), day: TODAY } };
   const out = M.applyModelResults([failed], [{ id: failed.id, ok: true, estimate: claude() }], { today: TODAY });
   assert.strictEqual(out.items[0].modelTry, undefined);
+});
+
+/* ---------- Phase 4b: handouts ---------- */
+
+const PDF = { name: 'sheet.pdf', size: 4000, url: 'https://m.example.edu/webservice/pluginfile.php/55/sheet.pdf', mime: 'application/pdf', modified: 100 };
+function pdfItem(extra = {}) {
+  const base = M.mergeImported([], [rec({ files: [PDF] })], ctx()).items[0];
+  return { ...base, ...extra };
+}
+const claudeFiles = (over = {}) => claude({ files: { read: ['sheet.pdf'], skipped: [], retry: false }, ...over });
+
+test('modelInput sends download addresses only when handout reading is on', () => {
+  const it0 = pdfItem();
+  assert.deepStrictEqual(M.modelInput(it0, 2, true).files, [{ name: 'sheet.pdf', size: 4000, url: PDF.url, mime: 'application/pdf', modified: 100 }]);
+  assert.deepStrictEqual(M.modelInput(it0, 2, false).files, [{ name: 'sheet.pdf', size: 4000 }]);
+  assert.deepStrictEqual(M.modelInput(it0, 2).files, [{ name: 'sheet.pdf', size: 4000 }]);
+});
+
+test('replacing a handout changes the assignment fingerprint, so Claude is asked again', () => {
+  const a = pdfItem();
+  const replaced = { ...a, source: { ...a.source, files: [{ ...PDF, modified: 200 }] } };
+  const bigger = { ...a, source: { ...a.source, files: [{ ...PDF, size: 5000 }] } };
+  assert.notStrictEqual(global.TPEstimate.inputsKey(replaced), global.TPEstimate.inputsKey(a));
+  assert.notStrictEqual(global.TPEstimate.inputsKey(bigger), global.TPEstimate.inputsKey(a));
+});
+
+test('a Claude answer that never read the handout is upgraded once, when reading is on', () => {
+  const base = pdfItem();
+  const key = global.TPEstimate.inputsKey(base);
+  const noRead = M.applyModelResults([base], [{ id: base.id, ok: true, estimate: claude() }], { today: TODAY, readFiles: false }).items[0];
+  assert.strictEqual(noRead.estimate.filesAsked, false);
+  assert.strictEqual(M.needsModel(noRead, TODAY, false, true), true, 'reading is on now: worth one more try');
+  assert.strictEqual(M.needsModel(noRead, TODAY, false, false), false, 'reading is off: leave it alone');
+  const read = M.applyModelResults([noRead], [{ id: noRead.id, ok: true, estimate: claudeFiles() }], { today: TODAY, readFiles: true }).items[0];
+  assert.deepStrictEqual(read.estimate.filesRead, ['sheet.pdf']);
+  assert.strictEqual(read.estimate.filesAsked, true);
+  assert.strictEqual(M.needsModel(read, TODAY, false, true), false, 'asked and answered: no loop');
+  assert.strictEqual(key, global.TPEstimate.inputsKey(read), 'the answer is for the same text');
+});
+
+test('an item with no PDF is never upgraded', () => {
+  const plain = M.mergeImported([], [rec()], ctx()).items[0];
+  const answered = M.applyModelResults([{ ...plain, source: { ...plain.source, files: [{ name: 'data.csv', size: 5, url: null, mime: 'text/csv', modified: null }] } }], [{ id: plain.id, ok: true, estimate: claude() }], { today: TODAY, readFiles: true }).items[0];
+  assert.strictEqual(M.needsModel(answered, TODAY, false, true), false);
+});
+
+test('a handout that could not be fetched for a lasting reason is not retried; a temporary failure waits a day', () => {
+  const base = pdfItem();
+  const tooBig = M.applyModelResults([base], [{ id: base.id, ok: true, estimate: claude({ files: { read: [], skipped: [{ name: 'sheet.pdf', reason: 'too_large' }], retry: false } }) }], { today: TODAY, readFiles: true }).items[0];
+  assert.strictEqual(tooBig.estimate.filesAsked, true);
+  assert.deepStrictEqual(tooBig.estimate.filesSkipped, [{ name: 'sheet.pdf', reason: 'too_large' }]);
+  assert.strictEqual(M.needsModel(tooBig, TODAY, false, true), false);
+
+  const flaky = M.applyModelResults([base], [{ id: base.id, ok: true, estimate: claude({ files: { read: [], skipped: [{ name: 'sheet.pdf', reason: 'unavailable' }], retry: true } }) }], { today: TODAY, readFiles: true }).items[0];
+  assert.strictEqual(flaky.estimate.filesAsked, false, 'a temporary failure is not "asked"');
+  assert.deepStrictEqual(flaky.modelTry, { key: global.TPEstimate.inputsKey(base), day: TODAY });
+  assert.strictEqual(M.needsModel(flaky, TODAY, false, true), false, 'not again today');
+  assert.strictEqual(M.needsModel(flaky, '2026-11-18', false, true), true, 'but tomorrow');
+});
+
+test('files that had no download address get another go once the address is known', () => {
+  const noUrl = pdfItem();
+  noUrl.source = { ...noUrl.source, files: [{ ...PDF, url: null }] };
+  const answered = M.applyModelResults([noUrl], [{ id: noUrl.id, ok: true, estimate: claude({ files: { read: [], skipped: [{ name: 'sheet.pdf', reason: 'bad_url' }], retry: false } }) }], { today: TODAY, readFiles: true }).items[0];
+  assert.strictEqual(M.needsModel(answered, TODAY, false, true), false, 'still no address: nothing to do');
+  const later = { ...answered, source: { ...answered.source, files: [PDF] } };
+  assert.strictEqual(M.needsModel(later, TODAY, false, true), true, 'now it has one');
+});
+
+test('force asks regardless of the handout state', () => {
+  const read = M.applyModelResults([pdfItem()], [{ id: pdfItem().id, ok: true, estimate: claudeFiles() }], { today: TODAY, readFiles: true }).items[0];
+  assert.strictEqual(M.needsModel(read, TODAY, true, true), true);
 });

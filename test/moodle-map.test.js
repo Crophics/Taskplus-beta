@@ -76,7 +76,7 @@ test('mapAssignments maps fields and skips items with no due date', () => {
   assert.strictEqual(r.cutoffTs, null);
   assert.strictEqual(r.points, 100);
   assert.strictEqual(r.description, 'Do problems 4-10.');
-  assert.deepStrictEqual(r.files, [{ name: 'Assignment 6.pdf', size: 210000 }, { name: 'data.csv', size: 5 }]);
+  assert.deepStrictEqual(r.files, [{ name: 'Assignment 6.pdf', size: 210000, url: null, mime: null, modified: null }, { name: 'data.csv', size: 5, url: null, mime: null, modified: null }]);
   assert.strictEqual(r.link, BASE + '/mod/assign/view.php?id=5001');
 });
 
@@ -207,4 +207,20 @@ test('mapAssignments carries submission types and word limit onto the record', (
   assert.deepStrictEqual(r.submissionTypes, ['onlinetext']);
   assert.strictEqual(r.wordLimit, 800);
   assert.deepStrictEqual(M.mapQuizzes(course, { quizzes: [{ id: 5, coursemodule: 9, name: 'Q', timeclose: 1_795_000_000 }] }, BASE).records[0].submissionTypes, []);
+});
+
+test('file records keep the download URL, type and modified time, and never keep a token', () => {
+  const resp = { courses: [{ id: 7, assignments: [{ id: 1, cmid: 5001, name: 'HW', duedate: 1_795_000_000, grade: 10, intro: '',
+    introattachments: [
+      { filename: 'sheet.pdf', filesize: 1000, mimetype: 'application/pdf', timemodified: 1_790_000_000, fileurl: BASE + '/webservice/pluginfile.php/55/mod_assign/introattachment/0/sheet.pdf?token=SECRET123&forcedownload=1#frag' },
+      { filename: 'broken.pdf', filesize: 5, fileurl: 'not a url' },
+    ] }] }] };
+  const files = M.mapAssignments(course, resp, BASE).records[0].files;
+  assert.strictEqual(files[0].url, BASE + '/webservice/pluginfile.php/55/mod_assign/introattachment/0/sheet.pdf?forcedownload=1');
+  assert.ok(!JSON.stringify(files).includes('SECRET123'), 'the token is stripped');
+  assert.strictEqual(files[0].mime, 'application/pdf');
+  assert.strictEqual(files[0].modified, 1_790_000_000);
+  assert.strictEqual(files[1].url, null, 'an unparseable URL is dropped, not kept');
+  assert.strictEqual(M.safeFileUrl('https://x.example/a?token=abc'), 'https://x.example/a');
+  assert.strictEqual(M.safeFileUrl(undefined), null);
 });

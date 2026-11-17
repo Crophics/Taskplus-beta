@@ -15,6 +15,22 @@
     return 'A rough guess';
   }
 
+  const SKIP_WHY = {
+    too_large: 'is too large to read', not_pdf: 'is not a PDF', too_many: 'was beyond the first 2 files', bad_url: 'could not be fetched',
+    unavailable: 'could not be downloaded right now', redirected: 'could not be downloaded right now', not_a_pdf: 'did not turn out to be a PDF',
+    file_limit: 'was left for tomorrow (daily limit)',
+  };
+
+  // "Claude also read: Assignment 6.pdf" or why it could not. Server-reported, not the model's claim.
+  function readLineHtml(est, escapeHtml) {
+    const read = est.filesRead || [];
+    const skipped = (est.filesSkipped || []).filter((s) => s.reason !== 'not_pdf');
+    const parts = [];
+    if (read.length) parts.push(`Claude also read ${read.map(escapeHtml).join(' and ')}.`);
+    skipped.slice(0, 2).forEach((s) => parts.push(`${escapeHtml(s.name)} ${SKIP_WHY[s.reason] || 'was not read'}.`));
+    return parts.length ? `<div class="tp-i-est-why tp-i-read">${parts.join(' ')}</div>` : '';
+  }
+
   function estimateCardHtml(ctx) {
     const { item, escapeHtml } = ctx;
     const est = item.estimate;
@@ -26,7 +42,7 @@
     const why = est.basis === 'user'
       ? ''
       : est.basis === 'model'
-        ? `<div class="tp-i-est-why">${escapeHtml((est.factors || [])[0] || 'Claude read the assignment description.')} Change it if you know better.</div>`
+        ? `<div class="tp-i-est-why">${escapeHtml((est.factors || [])[0] || 'Claude read the assignment description.')} Change it if you know better.</div>${readLineHtml(est, escapeHtml)}`
         : `<div class="tp-i-est-why">Based on: ${escapeHtml((est.factors || []).join(', ') || 'the details from Moodle')}. ${est.basis === 'heuristic' ? 'It is a rule of thumb, so change it if you know better.' : 'Study time is a guess; change it if you know better.'}</div>`;
     const ask = ctx.llm && ctx.llm.available
       ? `<button type="button" class="tp-i-ask" id="tp-i-ask"${ctx.llm.busy ? ' disabled' : ''}>${ctx.llm.busy ? 'Asking Claude…' : (est.basis === 'model' ? 'Ask Claude again' : 'Ask Claude to estimate')}</button>`

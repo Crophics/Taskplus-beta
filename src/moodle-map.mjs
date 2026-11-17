@@ -52,6 +52,21 @@ function positiveTs(v) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/**
+ * A Moodle file URL, minus any access token. Moodle can put the web-service token in the query
+ * string; the records produced here are sent to the browser, so a token must never survive.
+ */
+export function safeFileUrl(u) {
+  try {
+    const x = new URL(String(u));
+    x.searchParams.delete('token');
+    x.hash = '';
+    return x.toString();
+  } catch (e) {
+    return null;
+  }
+}
+
 function fileList(...lists) {
   const seen = new Set();
   const out = [];
@@ -59,7 +74,13 @@ function fileList(...lists) {
     const name = f && (f.filename || f.name);
     if (!name || seen.has(name)) return;
     seen.add(name);
-    out.push({ name, size: Number(f.filesize) || 0 });
+    out.push({
+      name,
+      size: Number(f.filesize) || 0,
+      url: f.fileurl ? safeFileUrl(f.fileurl) : null,
+      mime: f.mimetype ? String(f.mimetype) : null,
+      modified: Number(f.timemodified) > 0 ? Number(f.timemodified) : null,
+    });
   }));
   return out;
 }

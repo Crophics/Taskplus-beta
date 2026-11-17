@@ -10,6 +10,7 @@ import { MoodleError, normalizeSite, requestToken, getSiteInfo, getCourses, sync
 import { pickDefaultCourses, courseCode } from './moodle-map.mjs';
 import { loadRecord, saveRecord, deleteRecord } from './store.mjs';
 import { DEFAULT_MODEL, sanitizeInput, cacheMaterial, sha256Hex, callModel } from './estimate.mjs';
+import { fetchHandouts, isPdf, TRANSIENT } from './handouts.mjs';
 
 const FIREBASE_PROJECT_ID = 'planner-88ab8';
 const MIN_SYNC_INTERVAL_MS = 30 * 1000;
@@ -19,6 +20,8 @@ const ESTIMATE_BODY_BYTES = 64 * 1024; // descriptions are up to 3,000 character
 const ESTIMATE_CACHE_TTL = 180 * 86400;
 const ESTIMATE_USER_DAILY = 60;
 const ESTIMATE_GLOBAL_DAILY = 300;
+const ESTIMATE_FILE_DAILY = 20;        // requests per user per day that read handouts (PDFs cost far more than text)
+const ESTIMATE_RETRY_TTL = 3600;       // an answer that missed a handout for a temporary reason is only kept an hour
 
 // The Anthropic SDK is imported only when a request actually needs it, so the rest of the
 // Worker (and its tests) never loads it. Tests pass their own fake client via deps.makeClient.
@@ -92,11 +95,12 @@ export async function handleApi(request, env, deps = {}) {
   try {
     if (route === '/api/estimate') {
       // Tied to a real Moodle connection, so a stray Google sign-in cannot spend the budget.
-      if (!(await loadRecord(env, uid))) return fail('not_connected', 'Connect Moodle first', 409);
+      const rec = await loadRecord(env, uid);
+      if (!rec) return fail('not_connected', 'Connect Moodle first', 409);
       const body = await readJson(request, ESTIMATE_BODY_BYTES);
       const list = Array.isArray(body.items) ? body.items.slice(0, ESTIMATE_MAX_ITEMS) : null;
       if (!list || !list.length) throw new MoodleError('bad_request', 'items must be a non-empty list', 400);
-      return json(await estimateItems(env, uid, list, { fresh: body.fresh === true, now, deps }));
+      return json(await estimateItems(env, uid, list, { fresh: body.fresh === true, readFiles: body.readFiles === true, rec, now, deps }));
     }
 
     if (route === '/api/moodle/status') {
@@ -175,7 +179,7 @@ export async function handleApi(request, env, deps = {}) {
  * re-bills), otherwise one model call, counted against a per-user and an overall daily limit.
  * A failure for one item never fails the others.
  */
-async function estimateItems(env, uid, list, { fresh, now, deps }) {
+async function estimateItems(env, uid, list, { fresh, readFiles, rec, now, deps }) {
   const model = env.ESTIMATE_MODEL || DEFAULT_MODEL;
   const fallbacks = String(env.ESTIMATE_FALLBACKS || 'on').toLowerCase() !== 'off';
   const day = new Date(now).toISOString().slice(0, 10);
@@ -183,13 +187,17 @@ async function estimateItems(env, uid, list, { fresh, now, deps }) {
   const globalLimit = Number(env.ESTIMATE_GLOBAL_DAILY_LIMIT) > 0 ? Number(env.ESTIMATE_GLOBAL_DAILY_LIMIT) : ESTIMATE_GLOBAL_DAILY;
   const userKey = `estn:${uid}:${day}`;
   const globalKey = `estn:all:${day}`;
+  const fileKey = `estf:${uid}:${day}`;
+  const fileLimit = Number(env.ESTIMATE_FILE_DAILY_LIMIT) > 0 ? Number(env.ESTIMATE_FILE_DAILY_LIMIT) : ESTIMATE_FILE_DAILY;
+  const filesAllowed = readFiles && String(env.ESTIMATE_READ_FILES || 'on').toLowerCase() !== 'off';
   const results = [];
   let client = null;
 
   for (const raw of list) {
     const input = sanitizeInput(raw);
     if (!input) { results.push({ id: String((raw && raw.id) || ''), ok: false, error: 'bad_input' }); continue; }
-    const cacheKey = `est:${uid}:${await sha256Hex(cacheMaterial(input, model))}`;
+    const wantFiles = filesAllowed && input.attachments.some(isPdf);
+    const cacheKey = `est:${uid}:${await sha256Hex(cacheMaterial(input, model, wantFiles))}`;
 
     if (!fresh) {
       const hit = await env.MOODLE_KV.get(cacheKey);
@@ -211,14 +219,30 @@ async function estimateItems(env, uid, list, { fresh, now, deps }) {
       results.push({ id: input.id, ok: false, error: 'server_misconfigured' });
       break;
     }
-    const r = await callModel(client, input, { model, fallbacks });
+    // Handouts: downloaded from the user's own Moodle with their token, only when asked for and under a daily cap.
+    let docs = [];
+    let skipped = [];
+    if (wantFiles) {
+      const used = Number(await env.MOODLE_KV.get(fileKey)) || 0;
+      if (used >= fileLimit) {
+        skipped = input.attachments.filter(isPdf).map((a) => ({ name: a.name, reason: 'file_limit' }));
+      } else {
+        await env.MOODLE_KV.put(fileKey, String(used + 1), { expirationTtl: 172800 });
+        ({ docs, skipped } = await fetchHandouts(input.attachments, { site: rec.site, token: rec.token, fetchFn: deps.fetchFn || fetch }));
+      }
+    }
+
+    const r = await callModel(client, input, { model, fallbacks, documents: docs });
     if (!r.ok) {
       results.push({ id: input.id, ok: false, error: r.error });
       if (r.error === 'server_misconfigured') break; // the key is wrong: every other item would fail too
       continue;
     }
-    await env.MOODLE_KV.put(cacheKey, JSON.stringify(r.estimate), { expirationTtl: ESTIMATE_CACHE_TTL });
-    results.push({ id: input.id, ok: true, estimate: r.estimate, cached: false });
+    // Which files were read is the SERVER's report, not the model's. `retry` marks a miss that may be temporary.
+    const retry = skipped.some((s) => TRANSIENT.has(s.reason) || s.reason === 'file_limit');
+    const estimate = { ...r.estimate, files: { read: docs.map((d) => d.name), skipped, retry } };
+    await env.MOODLE_KV.put(cacheKey, JSON.stringify(estimate), { expirationTtl: retry ? ESTIMATE_RETRY_TTL : ESTIMATE_CACHE_TTL });
+    results.push({ id: input.id, ok: true, estimate, cached: false });
   }
   return { results, model };
 }

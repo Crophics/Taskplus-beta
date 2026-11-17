@@ -157,20 +157,37 @@
    * for the current text all stay as they are), and not one we already asked about today
    * without success. `force` is the "ask Claude" button on the detail screen.
    */
-  function needsModel(item, today, force) {
+  function hasPdf(item) {
+    return ((item.source && item.source.files) || []).some((f) => /\.pdf$/i.test(f.name || '') || f.mime === 'application/pdf');
+  }
+
+  // A Claude answer that never got to read the handout (the switch was off, or the files had no download
+  // address yet) is worth one more try; one that was asked to read it and could not, for a lasting reason, is not.
+  function wantsHandoutUpgrade(item, filesOn) {
+    const est = item.estimate;
+    if (!filesOn || est.basis !== 'model' || !hasPdf(item)) return false;
+    if (!est.filesAsked) return true;
+    return (est.filesSkipped || []).some((s) => s.reason === 'bad_url' && ((item.source.files || []).find((f) => f.name === s.name) || {}).url);
+  }
+
+  function needsModel(item, today, force, filesOn) {
     if (!isImported(item) || item.completed || item.archived || !item.estimate || !global.TPEstimate) return false;
     if (force) return true;
-    if (item.estimate.basis !== 'heuristic') return false;
+    if (item.estimate.basis !== 'heuristic' && !wantsHandoutUpgrade(item, filesOn)) return false;
     const tried = item.modelTry;
     return !(tried && tried.key === global.TPEstimate.inputsKey(item) && tried.day === today);
   }
 
   /** What is sent to /api/estimate: the assignment's own details, never grades, notes or identity. */
-  function modelInput(item, dueInDays) {
+  function modelInput(item, dueInDays, withFiles) {
     const s = item.source || {};
+    // Download addresses are only sent when handout reading is on: with it off the server never needs them.
+    const files = (s.files || []).slice(0, 6).map((f) => (withFiles
+      ? { name: f.name, size: f.size || 0, url: f.url || null, mime: f.mime || null, modified: f.modified || null }
+      : { name: f.name, size: f.size || 0 }));
     return {
       id: item.id, course: item.course, title: item.title, kind: s.kind === 'quiz' ? 'quiz' : 'assign',
-      points: s.points == null ? null : s.points, description: s.description || '', files: (s.files || []).map((f) => f.name),
+      points: s.points == null ? null : s.points, description: s.description || '', files,
       timeLimitMin: s.timeLimitMin == null ? null : s.timeLimitMin, wordLimit: s.wordLimit == null ? null : s.wordLimit,
       submissionTypes: s.submissionTypes || [], dueInDays,
     };
@@ -178,7 +195,7 @@
 
   /**
    * Applies /api/estimate results to the item list. Returns a NEW list plus stats; nothing is mutated.
-   * ctx: {today, keys: {id: inputsKey at request time}, force}. An answer for text that changed
+   * ctx: {today, keys: {id: inputsKey at request time}, force, readFiles}. An answer for text that changed
    * while the request was in flight is dropped (stale), and your own number is only replaced when
    * you asked for it (`force`). A failed item is remembered for the day so each sync does not retry it.
    */
@@ -195,8 +212,10 @@
       if (ctx.keys && ctx.keys[r.id] !== undefined && ctx.keys[r.id] !== key) { stats.stale++; return; }
       if (r.ok && r.estimate) {
         if (item.estimate && item.estimate.basis === 'user' && !ctx.force) return;
-        const next = E.withEstimate(item, E.fromModel(r.estimate, key, item.source && item.source.kind));
+        const next = E.withEstimate(item, E.fromModel(r.estimate, key, item.source && item.source.kind, { readFiles: ctx.readFiles }));
         delete next.modelTry;
+        // A handout that could not be fetched just now (a temporary failure) is retried, but not before tomorrow.
+        if (r.estimate.files && r.estimate.files.retry) next.modelTry = { key, day: ctx.today };
         out[i] = next;
         stats.applied++;
         return;
@@ -262,7 +281,7 @@
     connect: (site, username, password) => call('/api/moodle/connect', 'POST', { site, username, password }),
     saveCourses: (selected) => call('/api/moodle/courses', 'POST', { selected }),
     sync: () => call('/api/moodle/sync', 'POST', {}),
-    estimate: (items, fresh) => call('/api/estimate', 'POST', { items, fresh: !!fresh }),
+    estimate: (items, fresh, readFiles) => call('/api/estimate', 'POST', { items, fresh: !!fresh, readFiles: !!readFiles }),
     disconnect: () => call('/api/moodle/disconnect', 'POST', {}),
   };
 

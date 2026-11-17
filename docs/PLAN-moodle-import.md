@@ -515,8 +515,18 @@ Each phase ships on its own and leaves the app working.
   puts the intended request on the wire (checked against a local fake server), it bundles and runs inside the
   real Workers runtime, and everything around the call (prompt, validation, cache, limits, errors) is tested
   with a fake client. The quality of the estimates is unmeasured.
-- **Still deferred:** calibration from logged time, reading PDF attachments, and sending a course's past
-  actual times as context.
+- **Handouts (Phase 4b).** With its own Settings switch (on by default) the Worker also downloads the PDFs
+  attached to the assignment (`src/handouts.mjs`: up to 2 files of 5 MB, same-site Moodle file URLs only, no
+  redirects, `%PDF-` check) and sends them to Claude as document blocks before the text. The prompt asks it to
+  use the real question numbers and sections, and to split work over about two hours into 30 to 75 minute
+  steps (up to 8). The server, not the model, reports which files were read or skipped and why; the detail
+  screen shows it. A temporary download failure is retried (once a day) and its answer is cached for only an
+  hour; a lasting one (too big, not a PDF) is final. Existing Claude answers are upgraded once when the switch is
+  on, and the cache key includes whether files were read and each file's name, size and modified time, so a
+  replaced handout is a new question. Handout reading has its own daily cap (default 20 requests per user).
+- **Not read:** Word documents, slides, images, files elsewhere in the course page, and links inside the
+  description. These would be a separate step.
+- **Still deferred:** calibration from logged time, and sending a course's past actual times as context.
 
 ## 12. Testing strategy
 

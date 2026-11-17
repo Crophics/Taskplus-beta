@@ -96,7 +96,7 @@
   function inputsKey(item) {
     const s = (item && item.source) || {};
     return hash32(JSON.stringify([
-      item && item.title, s.kind, s.points, s.description, (s.files || []).map((f) => f.name),
+      item && item.title, s.kind, s.points, s.description, (s.files || []).map((f) => [f.name, f.size, f.modified]),
       s.timeLimitMin, s.wordLimit, s.submissionTypes || [],
     ]));
   }
@@ -137,11 +137,15 @@
    * Claude's answer (already validated by the server) as an estimate. A quiz is one sitting,
    * so it keeps the minutes but not the steps.
    */
-  function fromModel(result, key, kind) {
+  function fromModel(result, key, kind, opts) {
+    const f = result.files || { read: [], skipped: [], retry: false };
     return {
       minutes: result.minutes, low: result.low, high: result.high, basis: 'model',
       confidence: result.confidence || 'low', factors: result.rationale ? [result.rationale] : [],
       steps: kind === 'quiz' ? [] : (result.steps || []).map((s) => ({ name: s.name, minutes: s.minutes })), key,
+      // Which handouts Claude read (the server's report), which it could not, and whether reading them
+      // was attempted for good: a temporary failure ("retry") is not "asked", so it is tried again later.
+      filesRead: f.read || [], filesSkipped: f.skipped || [], filesAsked: !!(opts && opts.readFiles) && !f.retry,
     };
   }
 

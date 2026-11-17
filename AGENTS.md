@@ -67,6 +67,12 @@ for the one-time Cloudflare setup. What matters when touching code:
   `estimate.key` fingerprints the assignment text (`TPEstimate.inputsKey`); `item.modelTry` remembers a
   failed ask for the day; `estimate.steps` are trusted only while `steps.length === item.total`
   (`TPEstimate.stepsUsable`).
+- **Handouts.** `src/handouts.mjs` downloads an assignment's PDFs for Claude. This is the one place a URL from
+  the browser meets the stored Moodle token, so keep it strict: same host and the site's
+  `/webservice/pluginfile.php/` path only, `redirect: 'manual'`, size caps, `%PDF-` check
+  (`test/handouts.test.js` covers the refusals; do not loosen it). The mapper strips any `token=` from file URLs
+  (`safeFileUrl`) because records go to the browser. File addresses are sent to the Worker only when the PDF
+  switch is on. Which files were read is the server's report on `estimate.files`, never the model's claim.
 - **Estimates and minutes planning (Phase 3).** `js/estimate-logic.js`
   (`TPEstimate`, a rule-of-thumb estimator; its constants are guesses, see the
   header) and `js/plan-logic.js` (`TPPlan`, minutes per day, heavy day) are pure

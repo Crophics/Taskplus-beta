@@ -65,10 +65,21 @@ Optional Worker variables (set in `wrangler.toml` under `[vars]` or in the dashb
 | `ESTIMATE_MODEL` | Use another model, e.g. `claude-sonnet-5-5` or `claude-haiku-5-5` (cheaper, probably a little less careful). Default `claude-opus-5-5`. |
 | `ESTIMATE_FALLBACKS` | `off` turns off the server-side refusal fallback (on by default). |
 | `ESTIMATE_DAILY_LIMIT` / `ESTIMATE_GLOBAL_DAILY_LIMIT` | Change the 60 / 300 daily caps. |
+| `ESTIMATE_READ_FILES` | `off` turns off reading PDF handouts for everyone (the per-user Settings switch still exists). |
+| `ESTIMATE_FILE_DAILY_LIMIT` | Handout-reading requests per user per day (default 20). Reading a PDF costs far more than reading text. |
 | `ALLOWED_UIDS` | Comma-separated Firebase user ids allowed to use Claude estimates. Leave unset to allow every connected user. |
 
 Only the assignment's title, points, description, file names and submission type go to Anthropic. Never
 grades, notes, your Moodle login or your account id. Each user can switch it off in Settings.
+
+**Handouts.** With the second Settings switch ("Also read attached PDFs", on by default) the Worker also
+downloads the PDFs attached to the assignment itself (up to 2 per assignment, 5 MB each) from your own Moodle,
+using your stored token, and sends them to Claude so it can split the real questions into steps. It only ever
+fetches files on the site you connected, refuses redirects, and checks the file really is a PDF. It never sends
+your submissions or anything outside the assignment's own attachments. **PDFs cost much more than text** (a
+page is many times the tokens of a paragraph), so expect a handout-heavy assignment to cost several times the
+text-only price; each handout is read once and the answer cached, and the daily file cap limits the rest. Word
+documents, slides and images are not read.
 
 The Worker now imports the Anthropic SDK, so the GitHub workflow runs `npm ci` before deploying.
 

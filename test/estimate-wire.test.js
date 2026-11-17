@@ -94,3 +94,18 @@ test('real SDK error and refusal shapes map to our error codes', { skip: !Anthro
     } finally { server.close(); }
   }
 });
+
+test('a PDF handout goes on the wire as a base64 document block before the text', { skip: !Anthropic }, async () => {
+  const { server, seen, base } = await fakeServer(() => ({ status: 200, json: RESPONSE() }));
+  try {
+    const client = new Anthropic({ apiKey: 'sk-ant-test', baseURL: base, maxRetries: 0 });
+    const r = await E.callModel(client, input(), { documents: [{ name: 'sheet.pdf', data: Buffer.from('%PDF-1.4 hello').toString('base64') }] });
+    assert.strictEqual(r.ok, true, JSON.stringify(r));
+    const content = seen[0].body.messages[0].content;
+    assert.ok(Array.isArray(content));
+    assert.deepStrictEqual(content[0], { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from('%PDF-1.4 hello').toString('base64') } });
+    assert.strictEqual(content[1].type, 'text');
+    assert.ok(content[1].text.includes('handouts_included_as_documents: sheet.pdf'));
+    assert.strictEqual(seen[0].body.output_config.format.type, 'json_schema', 'structured output still applies');
+  } finally { server.close(); }
+});

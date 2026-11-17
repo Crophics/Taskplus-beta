@@ -121,6 +121,8 @@
     root.querySelectorAll('.tp-i-step[data-delta]').forEach(b => b.onclick = () => api.adjustEstimate(api.itemDetailId, Number(b.dataset.delta)));
     const itemAsk = document.getElementById('tp-i-ask');
     if (itemAsk) itemAsk.onclick = () => api.askClaude(api.itemDetailId);
+    const filesToggle = document.getElementById('tp-files-toggle');
+    if (filesToggle) filesToggle.onclick = () => api.setFilesOn(!api.filesOn);
     const llmToggle = document.getElementById('tp-llm-toggle');
     if (llmToggle) llmToggle.onclick = () => api.setLlmOn(!api.llmOn);
     const itemReset = document.getElementById('tp-i-reset');
