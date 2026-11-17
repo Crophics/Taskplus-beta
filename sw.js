@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v46'; // bumped: Phase 6 class schedule
+const CACHE_NAME = 'taskplus-cache-v47'; // bumped: show Moodle sync warnings
 const urlsToCache = [
   './',
   './index.html',

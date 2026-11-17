@@ -854,7 +854,7 @@
       if(window.TPMoodle.ensureCourses(courses, res.records)) saveCourses();
       appendMoodleEvents(merged.events);
       addToFeed(res.events);
-      moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt };
+      moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt, warnings: (res.warnings||[]).slice(0, 40) };
       saveMoodleState();
       if(Array.isArray(res.grades)){
         gradesStore = window.TPGrades.mergeGrades(gradesStore, res.grades, res.syncedAt);

@@ -424,3 +424,14 @@ test('feed: merges by id, newest first, counts unread, caps length', () => {
   const many = Array.from({ length: 80 }, (_, i) => ({ id: 'new:' + i, kind: 'new', title: 'x', at: i }));
   assert.strictEqual(T.mergeFeed(null, many, 100).events.length, 50);
 });
+
+test('explainWarnings turns sync warning codes into plain lines', () => {
+  const courses = [{ id: 7, code: 'MATH 2400' }, { id: 8, code: 'PHIL 2202' }];
+  const lines = M.explainWarnings(['grades_failed:7', 'grades_failed:8', 'skipped_no_due_date:3', 'state_failed:11', 'state_failed:12'], courses);
+  assert.strictEqual(lines.length, 3);
+  assert.match(lines[0], /refused the grade report for MATH 2400, PHIL 2202/);
+  assert.match(lines[1], /3 assignments or quizzes with no due date/);
+  assert.match(lines[2], /2 items/);
+  assert.deepStrictEqual(M.explainWarnings([], courses), []);
+  assert.deepStrictEqual(M.explainWarnings(undefined, courses), []);
+});

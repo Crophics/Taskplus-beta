@@ -54,12 +54,15 @@
         <span class="tp-s-row-label">${escapeHtml(c.code || c.name)}</span>
         <button type="button" class="tp-s-toggle${c.selected ? ' tp-s-toggle-on' : ''}" data-moodle-course="${c.id}" role="switch" aria-checked="${!!c.selected}" aria-label="Sync ${escapeHtml(c.code || c.name)}"><span class="tp-s-toggle-knob"></span></button>
       </div></div>`).join('');
+    const notes = window.TPMoodle.explainWarnings(st.warnings, st.courses);
+    const noteRows = notes.map(n => `<div class="tp-s-row"><div class="tp-s-row-sub tp-s-warn">${escapeHtml(n)}</div></div>`).join('');
     const busy = moodle.busy;
     return groupHtml('Moodle',
       `<div class="tp-s-row"><div class="tp-s-row-main"><span class="tp-s-row-label">${escapeHtml(st.site || 'Connected')}</span>
         <button type="button" class="tp-s-link" id="tp-moodle-sync"${busy ? ' disabled' : ''}>${busy ? 'Syncing…' : 'Sync now'}</button></div>
         <div class="tp-s-row-sub">${escapeHtml(lastSyncedLabel(st.lastSyncAt))}</div></div>` +
       courseRows +
+      noteRows +
       `<div class="tp-s-row"><div class="tp-s-row-sub">Course changes apply on the next sync.</div></div>
        <div class="tp-s-row"><div class="tp-s-row-main"><button type="button" class="tp-s-danger" id="tp-moodle-disconnect">Disconnect Moodle</button></div>
         <div class="tp-s-row-sub">Assignments already imported stay, but stop updating.</div></div>`

@@ -235,6 +235,30 @@
     return nowMs - state.lastSyncAt >= AUTO_SYNC_MIN_HOURS * 3600 * 1000;
   }
 
+  /** Plain-language lines for the Worker's sync warnings (codes like 'grades_failed:7'). courses: [{id, code, name}]. */
+  function explainWarnings(warnings, courses) {
+    const list = Array.isArray(warnings) ? warnings : [];
+    const nameOf = (id) => {
+      const c = (courses || []).find((x) => String(x.id) === String(id));
+      return c ? (c.code || c.name) : 'a course';
+    };
+    const ids = (code) => list.filter((w) => w.startsWith(code + ':')).map((w) => w.split(':')[1]);
+    const num = (code) => ids(code).reduce((n, v) => n + (Number(v) || 0), 0);
+    const out = [];
+    const failed = ids('grades_failed');
+    if (failed.length) out.push(`Your school's Moodle refused the grade report for ${failed.map(nameOf).join(', ')}, so there are no grades or Moodle weights for ${failed.length === 1 ? 'it' : 'them'}.`);
+    const skipped = ids('grades_skipped');
+    if (skipped.length) out.push(`Grades for ${skipped.map(nameOf).join(', ')} were left for the next sync (call limit).`);
+    const noDue = num('skipped_no_due_date');
+    if (noDue) out.push(`${noDue} assignment${noDue === 1 ? '' : 's'} or quiz${noDue === 1 ? '' : 'zes'} with no due date in Moodle ${noDue === 1 ? 'was' : 'were'} not imported.`);
+    const later = num('state_skipped');
+    if (later) out.push(`${later} item${later === 1 ? '' : 's'} will have submission status checked on the next sync (call limit).`);
+    const stateFailed = ids('state_failed').length;
+    if (stateFailed) out.push(`Could not check submission status for ${stateFailed} item${stateFailed === 1 ? '' : 's'}.`);
+    if (list.includes('no_courses_selected')) out.push('No courses are selected to sync.');
+    return out;
+  }
+
   /** A short, human summary of a sync result for a toast. */
   function summarize(stats) {
     const parts = [];
@@ -318,5 +342,5 @@
     }
   }
 
-  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, shouldAutoSync, summarize, MoodleClientError, api, AUTO_SYNC_MIN_HOURS, mergeFeed, unreadCount, markFeedSeen, feedLine };
+  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, shouldAutoSync, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_HOURS, mergeFeed, unreadCount, markFeedSeen, feedLine };
 })(typeof window !== 'undefined' ? window : globalThis);
