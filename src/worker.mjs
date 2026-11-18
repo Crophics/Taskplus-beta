@@ -11,6 +11,7 @@ import { verifyFirebaseIdToken, AuthError } from './auth.mjs';
 import { MoodleError, normalizeSite, requestToken, getSiteInfo, getCourses, syncCourses } from './moodle-client.mjs';
 import { pickDefaultCourses, courseCode } from './moodle-map.mjs';
 import { loadRecord, saveRecord, deleteRecord } from './store.mjs';
+import { callGemini, GEMINI_DEFAULT_MODEL } from './gemini.mjs';
 import { DEFAULT_MODEL, sanitizeInput, cacheMaterial, sha256Hex, callModel } from './estimate.mjs';
 import { fetchHandouts, isPdf, TRANSIENT } from './handouts.mjs';
 
@@ -30,6 +31,19 @@ const ESTIMATE_RETRY_TTL = 3600;       // an answer that missed a handout for a 
 async function defaultMakeClient(env) {
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
   return new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+}
+
+/**
+ * Which service answers estimates: ESTIMATE_PROVIDER ('claude' | 'gemini') if set, else Claude when
+ * ANTHROPIC_API_KEY exists, else Gemini when GEMINI_API_KEY exists. null = not set up.
+ */
+export function pickProvider(env) {
+  const want = String(env.ESTIMATE_PROVIDER || '').toLowerCase();
+  if (want === 'gemini') return env.GEMINI_API_KEY ? 'gemini' : null;
+  if (want === 'claude' || want === 'anthropic') return env.ANTHROPIC_API_KEY ? 'claude' : null;
+  if (env.ANTHROPIC_API_KEY) return 'claude';
+  if (env.GEMINI_API_KEY) return 'gemini';
+  return null;
 }
 
 function json(body, status = 200, extra = {}) {
@@ -81,7 +95,7 @@ export async function handleApi(request, env, deps = {}) {
   if (request.method !== wantMethod) return fail('method_not_allowed', 'Use ' + wantMethod, 405);
 
   if (!env.MOODLE_KV || !env.TOKEN_ENC_KEY) return fail('not_configured', 'The server is not set up for Moodle yet', 503);
-  if (route === '/api/estimate' && !env.ANTHROPIC_API_KEY) return fail('not_configured', 'Claude estimates are not set up on the server yet', 503);
+  if (route === '/api/estimate' && !pickProvider(env)) return fail('not_configured', 'Estimates are not set up on the server yet', 503);
 
   let uid;
   try {
@@ -227,7 +241,8 @@ async function pushRoute(route, request, env, uid, now, deps) {
  * A failure for one item never fails the others.
  */
 async function estimateItems(env, uid, list, { fresh, readFiles, rec, now, deps }) {
-  const model = env.ESTIMATE_MODEL || DEFAULT_MODEL;
+  const provider = pickProvider(env);
+  const model = env.ESTIMATE_MODEL || (provider === 'gemini' ? GEMINI_DEFAULT_MODEL : DEFAULT_MODEL);
   const fallbacks = String(env.ESTIMATE_FALLBACKS || 'on').toLowerCase() !== 'off';
   const day = new Date(now).toISOString().slice(0, 10);
   const userLimit = Number(env.ESTIMATE_DAILY_LIMIT) > 0 ? Number(env.ESTIMATE_DAILY_LIMIT) : ESTIMATE_USER_DAILY;
@@ -259,12 +274,14 @@ async function estimateItems(env, uid, list, { fresh, readFiles, rec, now, deps 
     await env.MOODLE_KV.put(userKey, String(userCount + 1), { expirationTtl: 172800 });
     await env.MOODLE_KV.put(globalKey, String(globalCount + 1), { expirationTtl: 172800 });
 
-    try {
-      client = client || await (deps.makeClient || defaultMakeClient)(env);
-    } catch (e) {
-      console.error('estimate: could not create the model client');
-      results.push({ id: input.id, ok: false, error: 'server_misconfigured' });
-      break;
+    if (provider !== 'gemini') {
+      try {
+        client = client || await (deps.makeClient || defaultMakeClient)(env);
+      } catch (e) {
+        console.error('estimate: could not create the model client');
+        results.push({ id: input.id, ok: false, error: 'server_misconfigured' });
+        break;
+      }
     }
     // Handouts: downloaded from the user's own Moodle with their token, only when asked for and under a daily cap.
     let docs = [];
@@ -279,7 +296,9 @@ async function estimateItems(env, uid, list, { fresh, readFiles, rec, now, deps 
       }
     }
 
-    const r = await callModel(client, input, { model, fallbacks, documents: docs });
+    const r = provider === 'gemini'
+      ? await callGemini(input, { apiKey: env.GEMINI_API_KEY, model, documents: docs, fetchFn: deps.geminiFetch || fetch })
+      : await callModel(client, input, { model, fallbacks, documents: docs });
     if (!r.ok) {
       results.push({ id: input.id, ok: false, error: r.error });
       if (r.error === 'server_misconfigured') break; // the key is wrong: every other item would fail too

@@ -58,6 +58,21 @@ $4 per million input tokens and $20 per million output, so on the order of a cen
 An assignment is only sent once: the answer is cached for 180 days and re-used until Moodle changes the
 assignment's text. Built-in limits: 60 requests per user per day and 300 per day across everyone.
 
+### Free alternative: Google Gemini
+
+Instead of (or without) an Anthropic key, estimates can come from Google's Gemini API, which has a free tier:
+
+```bash
+npx wrangler secret put GEMINI_API_KEY
+```
+
+Create the key in Google AI Studio (aistudio.google.com). With only `GEMINI_API_KEY` set, Gemini answers; if both
+keys exist, Claude is used unless `ESTIMATE_PROVIDER` is `gemini` (`claude` forces Claude). The default model is
+`gemini-3.5-flash-lite` (override with `ESTIMATE_MODEL`). Handout PDFs are sent inline, like with Claude.
+Free-tier limits and Gemini's use of free-tier content for improving Google's products are Google's terms, not ours:
+check them. (The app never sends notes, grades, account ids or credentials; only assignment text and handouts.)
+The same answer checks, caching and daily caps apply as for Claude.
+
 Optional Worker variables (set in `wrangler.toml` under `[vars]` or in the dashboard):
 
 | Variable | Effect |

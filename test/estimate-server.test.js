@@ -237,12 +237,12 @@ async function newEnv(extra = {}) {
   return env;
 }
 const item = (n, over = {}) => ({ id: 'moodle:' + n, course: 'MATH 2400', title: 'Assignment ' + n, kind: 'assign', points: 100, description: 'Do problems ' + n, files: [], dueInDays: 2, ...over });
-async function call(body, { env, client, who = 'user-1', now = NOW, noAuth = false, method = 'POST', fetchFn = googleFetch } = {}) {
+async function call(body, { env, client, who = 'user-1', now = NOW, noAuth = false, method = 'POST', fetchFn = googleFetch, geminiFetch } = {}) {
   A.resetJwksCache();
   const headers = { 'content-type': 'application/json' };
   if (!noAuth) headers.authorization = 'Bearer ' + (await token(who, now));
   const req = new Request('https://beta.example.test/api/estimate', { method, headers, body: body === undefined || method === 'GET' ? undefined : JSON.stringify(body) });
-  const res = await W.handleApi(req, env, { fetchFn, now: () => now, makeClient: async () => client });
+  const res = await W.handleApi(req, env, { fetchFn, geminiFetch, now: () => now, makeClient: async () => client });
   return { res, json: await res.json() };
 }
 
@@ -538,4 +538,108 @@ test('route: handout reading has its own daily cap; past it the estimate still c
   assert.deepStrictEqual(json.results[0].estimate.files.read, ['sheet.pdf']);
   assert.deepStrictEqual(json.results[1].estimate.files, { read: [], skipped: [{ name: 'sheet.pdf', reason: 'file_limit' }], retry: true });
   assert.strictEqual(f.seen.filter((s) => !s.url.includes('googleapis')).length, 1);
+});
+
+
+/* ================= Gemini as the provider ================= */
+
+const goodObj = () => ({ minutes: 90, low: 60, high: 120, confidence: 'medium', rationale: 'Seven short problems.', steps: [{ name: 'Read', minutes: 20 }, { name: 'Solve', minutes: 70 }] });
+const geminiOk = (obj = goodObj(), extra = {}) => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(obj) }] } }], usageMetadata: { promptTokenCount: 1500, candidatesTokenCount: 300, thoughtsTokenCount: 200 }, ...extra });
+function fakeGemini(responder) {
+  const calls = [];
+  const fn = async (url, init) => { calls.push({ url: String(url), init, body: JSON.parse(init.body) }); const r = responder(calls.length, calls[calls.length - 1]); return new Response(JSON.stringify(r.body), { status: r.status || 200 }); };
+  fn.calls = calls;
+  return fn;
+}
+
+test('pickProvider: Claude wins when both keys exist, ESTIMATE_PROVIDER overrides, nothing set means null', () => {
+  assert.strictEqual(W.pickProvider({}), null);
+  assert.strictEqual(W.pickProvider({ ANTHROPIC_API_KEY: 'a' }), 'claude');
+  assert.strictEqual(W.pickProvider({ GEMINI_API_KEY: 'g' }), 'gemini');
+  assert.strictEqual(W.pickProvider({ ANTHROPIC_API_KEY: 'a', GEMINI_API_KEY: 'g' }), 'claude');
+  assert.strictEqual(W.pickProvider({ ANTHROPIC_API_KEY: 'a', GEMINI_API_KEY: 'g', ESTIMATE_PROVIDER: 'gemini' }), 'gemini');
+  assert.strictEqual(W.pickProvider({ GEMINI_API_KEY: 'g', ESTIMATE_PROVIDER: 'claude' }), null, 'a chosen provider without its key is not set up');
+});
+
+test('gemini: the request carries the key in a header only, the schema, the fenced text, and no Claude-only fields', async () => {
+  const G = await import('../src/gemini.mjs');
+  const f = fakeGemini(() => ({ body: geminiOk() }));
+  const r = await G.callGemini(input(), { apiKey: 'AIza-secret-key', fetchFn: f });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.estimate.minutes, 90);
+  assert.deepStrictEqual(r.usage, { input: 1500, output: 500 });
+  const { url, init, body } = f.calls[0];
+  assert.ok(url.endsWith('/models/gemini-3.5-flash-lite:generateContent'));
+  assert.ok(!url.includes('AIza'), 'the key is never in the URL');
+  assert.strictEqual(init.headers['x-goog-api-key'], 'AIza-secret-key');
+  assert.strictEqual(body.generationConfig.responseMimeType, 'application/json');
+  assert.deepStrictEqual(body.generationConfig.responseJsonSchema, E.SCHEMA);
+  assert.deepStrictEqual(body.generationConfig.thinkingConfig, { thinkingLevel: 'low' });
+  assert.strictEqual(body.systemInstruction.parts[0].text, E.SYSTEM_PROMPT);
+  const text = body.contents[0].parts.at(-1).text;
+  assert.ok(text.startsWith('<assignment>') && text.endsWith('</assignment>'));
+  assert.ok(!JSON.stringify(body).includes('AIza'), 'the key is never in the body');
+});
+
+test('gemini: PDFs go first as inline data; an older model gets no thinking level', async () => {
+  const G = await import('../src/gemini.mjs');
+  const f = fakeGemini(() => ({ body: geminiOk() }));
+  await G.callGemini(input(), { apiKey: 'k', model: 'gemini-2.5-flash-lite', documents: [{ name: 'a.pdf', data: 'QUJD' }], fetchFn: f });
+  const body = f.calls[0].body;
+  assert.deepStrictEqual(body.contents[0].parts[0], { inlineData: { mimeType: 'application/pdf', data: 'QUJD' } });
+  assert.strictEqual(body.generationConfig.thinkingConfig, undefined);
+});
+
+test('gemini: every failure becomes a plain code and never throws', async () => {
+  const G = await import('../src/gemini.mjs');
+  const run = (r, opts = {}) => G.callGemini(input(), { apiKey: 'k', fetchFn: fakeGemini(() => r), ...opts });
+  assert.strictEqual((await G.callGemini(input(), { fetchFn: fakeGemini(() => ({ body: {} })) })).error, 'server_misconfigured', 'no key');
+  assert.strictEqual((await run({ status: 429, body: { error: { message: 'quota' } } })).error, 'busy');
+  assert.strictEqual((await run({ status: 503, body: {} })).error, 'busy');
+  assert.strictEqual((await run({ status: 403, body: {} })).error, 'server_misconfigured');
+  assert.strictEqual((await run({ status: 400, body: { error: { message: 'API key not valid. Please pass a valid API key.' } } })).error, 'server_misconfigured');
+  assert.strictEqual((await run({ status: 400, body: { error: { message: 'schema too deep' } } })).error, 'model_error');
+  assert.strictEqual((await run({ status: 500, body: {} })).error, 'model_error');
+  assert.strictEqual((await run({ body: { promptFeedback: { blockReason: 'SAFETY' } } })).error, 'refused');
+  assert.strictEqual((await run({ body: geminiOk(goodObj(), { candidates: [{ finishReason: 'SAFETY' }] }) })).error, 'refused');
+  assert.strictEqual((await run({ body: { candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [{ text: '{"minu' }] } }] } })).error, 'truncated');
+  assert.strictEqual((await run({ body: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'not json' }] } }] } })).error, 'bad_output');
+  assert.strictEqual((await run({ body: { candidates: [] } })).error, 'bad_output');
+  assert.strictEqual((await run({ body: geminiOk({ ...goodObj(), minutes: 'lots' }) })).error, 'bad_output', 'the same validation as Claude answers');
+  const boom = await G.callGemini(input(), { apiKey: 'k', fetchFn: async () => { throw new Error('network'); } });
+  assert.strictEqual(boom.error, 'model_error');
+});
+
+test('gemini: thinking text is ignored when reading the answer', async () => {
+  const G = await import('../src/gemini.mjs');
+  const parts = [{ thought: true, text: 'let me think... {' }, { text: JSON.stringify(goodObj()) }];
+  const r = await G.callGemini(input(), { apiKey: 'k', fetchFn: fakeGemini(() => ({ body: { candidates: [{ finishReason: 'STOP', content: { parts } }] } })) });
+  assert.strictEqual(r.ok, true);
+});
+
+test('route: with only a Gemini key the Worker answers through Gemini, caches, and never builds a Claude client', async () => {
+  const env = await newEnv({ GEMINI_API_KEY: 'AIza-test' });
+  delete env.ANTHROPIC_API_KEY;
+  const f = fakeGemini(() => ({ body: geminiOk() }));
+  const noClaude = () => { throw new Error('Claude client must not be created'); };
+  A.resetJwksCache();
+  const mk = async () => new Request('https://beta.example.test/api/estimate', { method: 'POST', headers: { authorization: 'Bearer ' + (await token()), 'content-type': 'application/json' }, body: JSON.stringify({ items: [item(1)] }) });
+  const go = async () => { A.resetJwksCache(); const res = await W.handleApi(await mk(), env, { fetchFn: googleFetch, geminiFetch: f, now: () => NOW, makeClient: noClaude }); return { res, json: await res.json() }; };
+  const a = await go();
+  assert.strictEqual(a.res.status, 200);
+  assert.strictEqual(a.json.results[0].ok, true);
+  assert.strictEqual(a.json.results[0].estimate.minutes, 90);
+  assert.strictEqual(a.json.model, 'gemini-3.5-flash-lite');
+  const b = await go();
+  assert.strictEqual(b.json.results[0].cached, true);
+  assert.strictEqual(f.calls.length, 1, 'the second ask is served from the cache');
+});
+
+test('route: a wrong Gemini key stops the batch with server_misconfigured', async () => {
+  const env = await newEnv({ GEMINI_API_KEY: 'bad' });
+  delete env.ANTHROPIC_API_KEY;
+  const f = fakeGemini(() => ({ status: 400, body: { error: { message: 'API key not valid' } } }));
+  const { json } = await call({ items: [item(1), item(2)] }, { env, geminiFetch: f });
+  assert.deepStrictEqual(json.results.map((r) => r.error), ['server_misconfigured']);
+  assert.strictEqual(f.calls.length, 1);
 });
