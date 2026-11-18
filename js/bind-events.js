@@ -353,15 +353,6 @@
     const clearCompletedBtn = document.getElementById('tp-clear-completed');
     if (clearCompletedBtn) clearCompletedBtn.onclick = api.clearCompleted;
 
-    /* ---- Courses tab + Course detail ---- */
-    root.querySelectorAll('.tp-g-card[data-course]').forEach(b => b.onclick = () => api.openCourse(b.dataset.course));
-    const gToSettings = document.getElementById('tp-g-to-settings');
-    if (gToSettings) gToSettings.onclick = () => { api.tab = 'settings'; api.savePrefs(); api.render(); };
-    const gBack = document.getElementById('tp-g-back');
-    if (gBack) gBack.onclick = () => { api.tab = 'courses'; api.savePrefs(); api.render(); };
-    const clsInput = document.getElementById('tp-cls-input');
-    if (clsInput) clsInput.onchange = (e) => { if (!api.setMeets(clsInput.dataset.course, e.target.value)) e.target.value = ''; };
-
     /* ---- Moodle (Settings group + Connect sheet) ---- */
     const moodleConnectBtn = document.getElementById('tp-moodle-connect');
     if (moodleConnectBtn) moodleConnectBtn.onclick = () => { api.openConnectSheet(); api.render(); };

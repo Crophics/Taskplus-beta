@@ -116,21 +116,6 @@ test('All groups: ignored and undated work get their own groups and are never "O
   assert.deepStrictEqual(g.map((x) => x.key), ['overdue', 'noDue', 'ignored', 'completed']);
 });
 
-test('Courses: ignored work leaves the open and overdue counts and is listed separately', () => {
-  const C = global.TPCourses;
-  const items = [
-    item({ id: 'late', title: 'Late', due: '2026-11-10' }),
-    item({ id: 'ign', title: 'Ignored late', due: '2026-11-01', ignored: true }),
-    item({ id: 'nodue', title: 'Undated', due: '' }),
-  ];
-  const row = C.overview([{ name: 'MATH 2400' }], items, TODAY, () => '#111')[0];
-  assert.strictEqual(row.open, 2);
-  assert.strictEqual(row.overdue, 1);
-  assert.deepStrictEqual(C.openItemsForCourse(items, 'MATH 2400').map((i) => i.title), ['Late', 'Undated']);
-  assert.deepStrictEqual(C.ignoredItemsForCourse(items, 'MATH 2400').map((i) => i.title), ['Ignored late']);
-  assert.strictEqual(C.openCountForCourse(items, 'MATH 2400'), 2);
-});
-
 test('needsModel never asks Claude about ignored work', () => {
   const it = { id: 'moodle:1', title: 'A', due: '2026-11-01', ignored: true, source: { type: 'moodle', kind: 'assign' }, estimate: { basis: 'heuristic', minutes: 60 } };
   assert.strictEqual(M.needsModel(it, TODAY, false, false), false);

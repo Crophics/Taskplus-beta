@@ -44,10 +44,21 @@
   }
 
   function groupHtml(group, ctx) {
-    const heading = group.label ? `<div class="tp-section-heading${group.key === 'overdue' ? ' tp-a-heading-danger' : ''}${(group.key === 'completed' || group.key === 'ignored') ? ' tp-a-heading-dim' : ''}">
-      <span>${group.label}</span><span class="tp-section-rule"></span>
-    </div>` : '';
-    return heading + group.rows.map(r => rowHtml(r, ctx)).join('');
+    const esc = ctx.escapeHtml;
+    let heading = '';
+    if (group.course) {
+      // Course sort: a section per course with a colour dot and how much is open.
+      const count = group.empty ? '' : group.open ? `${group.open} open` : 'all done';
+      heading = `<div class="tp-section-heading">
+        <span class="tp-a-course-title"><span class="tp-g-dot" style="background:${ctx.courseColorFor(group.label)}"></span>${esc(group.label)}</span><span class="tp-section-rule"></span>${count ? `<span class="tp-section-count">${count}</span>` : ''}
+      </div>`;
+    } else if (group.label) {
+      heading = `<div class="tp-section-heading${group.key === 'overdue' ? ' tp-a-heading-danger' : ''}${(group.key === 'completed' || group.key === 'ignored') ? ' tp-a-heading-dim' : ''}">
+        <span>${esc(group.label)}</span><span class="tp-section-rule"></span>
+      </div>`;
+    }
+    const empty = group.empty ? '<div class="tp-a-course-empty">No assignments yet</div>' : '';
+    return heading + empty + group.rows.map(r => rowHtml(r, ctx)).join('');
   }
 
   // Everything that depends on the search text: the grouped rows (or the
@@ -57,7 +68,7 @@
   // never loses focus.
   function resultsHtml(ctx) {
     const { escapeHtml, searchTerm, groups, itemsLength } = ctx;
-    const totalShown = groups.reduce((s, g) => s + g.rows.length, 0);
+    const totalShown = groups.reduce((s, g) => s + g.rows.length, 0) + groups.filter(g => g.empty).length;
 
     const body = totalShown === 0
       ? `<div class="tp-a-empty">${window.TPIcons.svg('file_search_outline')}

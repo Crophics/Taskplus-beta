@@ -47,7 +47,7 @@ for the one-time Cloudflare setup. What matters when touching code:
   tested in `test/moodle-import.test.js`) and the API wrapper. It loads right
   after `courses.js`. Moodle owns title/course/due/`source`; the user owns the
   rest.
-- **Navigation is four tabs** (Today, Week, All, Courses). The app is built around Moodle, so
+- **Navigation is three tabs** (Today, Week, All; courses live inside All, see below). The app is built around Moodle, so
   manual add is a quiet fallback with no button of its own: a link at the bottom of All and a row in
   Settings (`[data-add-manual]`, bound in `bind-events.js`). What's new (bell, only when Moodle is
   connected) and Settings are in every main screen's header (`TPViews.headerActionsHtml` /
@@ -95,9 +95,10 @@ for the one-time Cloudflare setup. What matters when touching code:
   removed: this school's Moodle omits `grademax` and reports weights renormalised over the items graded so far, so
   its numbers cannot match the syllabus, and the goal is organising work, not replacing Moodle. The Worker never
   calls `gradereport_user_get_grade_items`; don't add it back, and don't bring back the `tp-moodle-grades` /
-  `tp-grade-settings` keys (the app deletes them on load). Tabs: `courses` = one card per course (open count, next
-  due; `TPCourses.overview`), `course` = detail (open work + class times, `TPCourses.openItemsForCourse`; never
-  persisted as the saved tab), `manage` = the course manager. Views: `js/views/courses-overview-html.js`.
+  `tp-grade-settings` keys (the app deletes them on load). Tabs: there is no Courses tab or course detail screen any more (merged into All, 2026-11-18): All's **Course** sort
+  (`TPAllLogic.buildGroups`, given `courses`) shows a section per course, including courses with no
+  assignments yet; the course dropdown filters to one course; `manage` = the course manager (Settings). A saved
+  `courses`/`course` tab preference opens All.
 - **Undated work and Ignore (2026-11-17).** An assignment or quiz with no due date is imported with `dueTs: null`
   and `item.due === ''` (the Worker no longer drops it, and there is no `skipped_no_due_date` warning). **`due`
   can be empty: never call `daysBetween`/`localeCompare` on it without checking.** `TPItemLogic.isPlanned(it)`
@@ -120,11 +121,7 @@ for the one-time Cloudflare setup. What matters when touching code:
   `firebase-sync.js`) registers the FCM token with the Worker; `tp-feed` is the device-local feed; tab `changes`
   (bell on Today) is never persisted. Disconnect deletes `snap:`/`evt:`. Tests use fake KV/FCM; real FCM and cron
   are only verifiable on a deployed Worker with a real device. Production's `functions/` digest stays separate.
-- **Class schedule (Phase 6a).** `js/schedule-logic.js` (`TPSchedule`, pure, tested) parses one line of text per
-  course (`MWF 10:00-10:50 Room 101`; `R` = Thursday, `U` = Sunday) and never guesses: unreadable text is rejected.
-  Stored device-local in `tp-schedule` as `{courseName: text}`; edited on Course detail (`#tp-cls-input`, saves on
-  `change`, never renders while typing); shown on Today ("Classes today") and in Week's selected-day card.
-  Keyed by course name string, so renaming a course orphans its entry (same as other course-keyed stores).
+- **No class times (removed 2026-11-18).** The per-course class schedule (`js/schedule-logic.js`, `tp-schedule`, Today's "Classes today", Week's day card) was manual, device-local and fed nothing, so it was deleted; the app clears a leftover `tp-schedule` key on load. Don't bring it back without asking.
 - **Cutover (Phase 7).** `docs/CUTOVER.md` is the checklist; `tools/compare-vault.mjs` compares the vault's
   Coursework notes (`link: ...id=<cmid>`, `due`, `status`) with a Backup export, matching on cmid. Read-only.
   It reads notes with `tools/vault-frontmatter.mjs`.

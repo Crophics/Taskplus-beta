@@ -41,12 +41,11 @@
   const MOODLE_STATE_KEY='tp-moodle';
   const MOODLE_EVENTS_KEY='tp-moodle-events';
   const FEED_KEY='tp-feed';
-  const SCHEDULE_KEY='tp-schedule';
   const MOODLE_SITE_KEY='tp-moodle-last-site';
   const LLM_KEY='tp-llm-on';
   const LLM_FILES_KEY='tp-llm-files';
   // Grades were dropped (Moodle stays the place for them): forget what an older version stored.
-  ['tp-moodle-grades','tp-grade-settings'].forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
+  ['tp-moodle-grades','tp-grade-settings','tp-schedule'].forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
   const DEV_MODE_KEY='tp-dev-mode';
   const DEV_PANEL_KEY='tp-dev-panel-open';
   const DAY_OFFSET_KEY='tp-day-offset';
@@ -152,8 +151,9 @@
   try{ prefs = JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; }catch(e){ prefs = {}; }
   let searchTerm = prefs.searchTerm || ''; // All-tab search text
   let theme = ['dark','light','blue','auto'].includes(prefs.theme) ? prefs.theme : 'dark';
-  const TABS = ['today','all','week','settings','courses','course','manage','item','changes'];
-  let tab = TABS.includes(prefs.tab) && prefs.tab !== 'course' && prefs.tab !== 'item' && prefs.tab !== 'changes' ? prefs.tab : 'today';
+  const TABS = ['today','all','week','settings','manage','item','changes'];
+  // A saved 'courses' tab (removed: Courses is part of All now) opens All.
+  let tab = prefs.tab === 'courses' || prefs.tab === 'course' ? 'all' : TABS.includes(prefs.tab) && prefs.tab !== 'item' && prefs.tab !== 'changes' ? prefs.tab : 'today';
   let addOpen = false;
   let pickerOpen = false;
   let moreOpen = false; // add-sheet "Notes, subtasks, repeat, dependency" disclosure
@@ -237,7 +237,7 @@
   pruneDeletedLog();
 
   function savePrefs(){
-    localStorage.setItem(PREFS_KEY, JSON.stringify({searchTerm,theme,notifyHour,notifyDigest,tab: tab==='course' ? 'courses' : tab==='item' ? itemDetailFrom : tab==='changes' ? changesFrom : tab,allSortMode}));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({searchTerm,theme,notifyHour,notifyDigest,tab: tab==='item' ? itemDetailFrom : tab==='changes' ? changesFrom : tab,allSortMode}));
     syncPush();
   }
 
@@ -577,41 +577,13 @@
 
   function allGroups(){
     return window.TPAllLogic.buildGroups({
-      items, query: searchTerm, sortMode: allSortMode, filterCourse: allFilterCourse,
+      items, courses, query: searchTerm, sortMode: allSortMode, filterCourse: allFilterCourse,
       isLocked, today, daysBetween,
     });
   }
 
-  /* ---- Courses tab and Course detail (js/views/courses-overview-html.js) ---- */
   function readJsonObject(key, fallback){
     try{ const v = JSON.parse(localStorage.getItem(key)); return v && typeof v === 'object' && !Array.isArray(v) ? v : fallback; }catch(e){ return fallback; }
-  }
-  let courseDetailName = null;
-
-  function courseDetailCtx(name){
-    return {
-      escapeHtml: window.TPHtml.escapeHtml, name, color: courseColorFor(name), relativeDueLabel,
-      meets: schedule[name] || '', upcoming: window.TPCourses.openItemsForCourse(items, name), ignored: window.TPCourses.ignoredItemsForCourse(items, name),
-    };
-  }
-  // Class meeting times: device-local text per course (see js/schedule-logic.js).
-  let schedule = readJsonObject(SCHEDULE_KEY, {});
-  function setMeets(course, text){
-    const t = String(text||'').trim().slice(0, 200);
-    const r = window.TPSchedule.parseMeets(t);
-    if(!r.ok){ showToast('Could not read that. Try: MWF 10:00-10:50'); return false; }
-    if(t) schedule[course] = t; else delete schedule[course];
-    try{ localStorage.setItem(SCHEDULE_KEY, JSON.stringify(schedule)); }catch(e){}
-    return true;
-  }
-  function classesForDay(offset){ return window.TPSchedule.classesOn(window.TP.asDate(addDays(today(), offset)), schedule); }
-  function openCourse(name){
-    courseDetailName = name;
-    if(tab !== 'course') screenJustSwitched = true;
-    tab = 'course';
-    if(typeof window.scrollTo === 'function') window.scrollTo(0, 0);
-    savePrefs();
-    render();
   }
   /* ---- Claude estimates (src/estimate.mjs via /api/estimate) ---- */
   // Opt-out switch in Settings. On by default: the assignment's title, points and description go to
@@ -1076,7 +1048,7 @@
         weekdayLabel: d.toLocaleDateString(undefined,{weekday:'long'}),
         courseColorFor, relativeDueLabel, unitLabel, capUnit, plan,
         TPTodayLogic: window.TPTodayLogic,
-        classes: classesForDay(0), showBell: !!moodleState.connected, unread: window.TPMoodle.unreadCount(feed),
+        showBell: !!moodleState.connected, unread: window.TPMoodle.unreadCount(feed),
       });
     } else if(tab==='all'){
       screenHtml = V.allScreenHtml(allCtx());
@@ -1107,7 +1079,7 @@
         escapeHtml, days, dayLabels, selDay: weekSelDay, stats, heaviestLabel,
         courseColorFor, courseStats, advice, relativeDueLabel, animateChart,
         items, today, daysBetween, TPWeekLogic: window.TPWeekLogic, minutes: minutesCtx,
-        classes: classesForDay(weekSelDay), hdr: headerCtx(),
+        hdr: headerCtx(),
       });
     } else if(tab==='settings'){
       screenHtml = V.settingsScreenHtml({
@@ -1116,14 +1088,10 @@
         syncLabel: window.tpSyncLabel || 'Sign in to sync',
         moodle: { state: moodleState, busy: moodleBusy, signedIn: moodleSignedIn() }, llmOn, filesOn, alerts,
       }) + V.devToolbarHtml({ devMode, devPanelOpen });
-    } else if(tab==='courses'){
-      screenHtml = V.coursesOverviewHtml({ escapeHtml, hdr: headerCtx(), rows: window.TPCourses.overview(courses, items, today(), courseColorFor), connected: !!moodleState.connected, relativeDueLabel });
-    } else if(tab==='course' && courseDetailName){
-      screenHtml = V.courseDetailHtml(courseDetailCtx(courseDetailName));
     } else if(tab==='item'){
       screenHtml = V.itemDetailHtml(itemDetailCtx());
     } else if(tab==='changes'){
-      screenHtml = V.changesScreenHtml({ feed, escapeHtml, now: Date.now(), fromLabel: ({week:'Week', courses:'Courses', all:'All'})[changesFrom] || 'Today', colorFor: courseColorFor });
+      screenHtml = V.changesScreenHtml({ feed, escapeHtml, now: Date.now(), fromLabel: ({week:'Week', all:'All'})[changesFrom] || 'Today', colorFor: courseColorFor });
     } else if(tab==='manage'){
       screenHtml = V.coursesScreenHtml({
         escapeHtml, courses, openCountFor: (name)=> window.TPCourses.openCountForCourse(items, name),
@@ -1233,14 +1201,11 @@
       openConnectSheet, closeConnectSheet, moodleConnect, moodleSync, moodleDisconnect, moodleSetCourse,
       get connectDraft(){ return connectDraft; },
       get connectBusy(){ return connectBusy; },
-      openCourse,
-      setMeets,
       openChanges, closeChanges, savePrefsToServer, sendTestAlert, get alerts(){ return alerts; },
       setIgnored, canIgnore, recordCourseDeleted, openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate, askClaude, setLlmOn, setFilesOn,
       get llmOn(){ return llmOn; }, get filesOn(){ return filesOn; },
       get itemDetailId(){ return itemDetailId; },
       get itemDescOpen(){ return itemDescOpen; }, set itemDescOpen(v){ itemDescOpen = v; },
-      get courseDetailName(){ return courseDetailName; },
     };
   }
   render();

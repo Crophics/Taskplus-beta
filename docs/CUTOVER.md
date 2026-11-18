@@ -7,7 +7,7 @@ Windows scheduled tasks. Nothing here deletes the vault; it can stay as plain no
 
 Finish `docs/SETUP-moodle-worker.md`: KV, `TOKEN_ENC_KEY`, optionally `ANTHROPIC_API_KEY` and
 `FCM_SERVICE_ACCOUNT`. Then in the app: Settings > Connect Moodle, pick courses, turn on notification
-permission and send a test alert. Type each course's class times on its Course detail screen. Taskplus has no
+permission and send a test alert. Taskplus has no
 grades (Moodle stays the place for those), so the vault's grade views are not replaced.
 
 ## Each week of the overlap

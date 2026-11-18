@@ -55,34 +55,6 @@ test('nextPaletteColor skips colors already assigned to another course', () => {
   assert.strictEqual(TPCourses.nextPaletteColor(courses), TPCourses.PALETTE[1]);
 });
 
-test('openItemsForCourse: open work only, soonest first, undated last, name matching ignores case', () => {
-  const items = [
-    { title: 'B', course: 'math 2400', due: '2026-11-20' },
-    { title: 'A', course: 'MATH 2400', due: '2026-11-18' },
-    { title: 'Z', course: 'MATH 2400', due: '' },
-    { title: 'done', course: 'MATH 2400', due: '2026-11-17', completed: true },
-    { title: 'old', course: 'MATH 2400', due: '2026-11-01', archived: true },
-    { title: 'other', course: 'PHIL 2202', due: '2026-11-19' },
-  ];
-  assert.deepStrictEqual(TPCourses.openItemsForCourse(items, 'MATH 2400').map((i) => i.title), ['A', 'B', 'Z']);
-});
-
-test('overview: counts open and overdue work and finds the next due item, sorted by name', () => {
-  const items = [
-    { title: 'late', course: 'PHIL', due: '2026-11-10' },
-    { title: 'soon', course: 'PHIL', due: '2026-11-18' },
-    { title: 'later', course: 'PHIL', due: '2026-11-25' },
-    { title: 'x', course: 'ART', due: '2026-11-17', completed: true },
-  ];
-  const rows = TPCourses.overview([{ name: 'PHIL', color: '#111' }, { name: 'ART', color: '#222' }], items, '2026-11-17', (n) => 'c-' + n);
-  assert.deepStrictEqual(rows.map((r) => r.name), ['ART', 'PHIL']);
-  assert.deepStrictEqual([rows[0].open, rows[0].next], [0, null]);
-  assert.strictEqual(rows[1].open, 3);
-  assert.strictEqual(rows[1].overdue, 1);
-  assert.strictEqual(rows[1].next.title, 'soon');
-  assert.strictEqual(rows[1].color, 'c-PHIL');
-});
-
 test('dedupeByName keeps one entry per course name (case and spacing ignored), first wins, colour is lent', () => {
   const list = [
     { id: 'a', name: 'MATH 2400', color: null },
@@ -95,16 +67,6 @@ test('dedupeByName keeps one entry per course name (case and spacing ignored), f
   assert.strictEqual(out[0].color, '#123456');
   assert.strictEqual(out[1].color, '#abcdef');
   assert.deepStrictEqual(TPCourses.dedupeByName(null), []);
-});
-
-test('overview shows a course once even if the list holds two entries for it', () => {
-  const rows = TPCourses.overview([{ id: 'a', name: 'MATH 2400' }, { id: 'b', name: 'MATH 2400' }, { id: 'c', name: 'ART' }], [], '2026-11-17', () => '#111');
-  assert.deepStrictEqual(rows.map((r) => r.name), ['ART', 'MATH 2400']);
-});
-
-test('overview counts each course\'s items so an empty course can say no assignments yet', () => {
-  const rows = TPCourses.overview([{ name: 'BIBL 1020' }, { name: 'MATH' }], [{ title: 'x', course: 'math', due: '2026-12-01', completed: true }], '2026-11-17', () => '#111');
-  assert.deepStrictEqual(rows.map((r) => [r.name, r.total, r.open]), [['BIBL 1020', 0, 0], ['MATH', 1, 0]]);
 });
 
 test('a deleted course is removed by its tombstone, even when another device sends it back', () => {

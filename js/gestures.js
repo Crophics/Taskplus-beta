@@ -1,11 +1,11 @@
 /* gestures.js - touch gestures for the mobile app.
-   - Swipe left/right on a main screen: next/previous tab (Today, Week, All, Courses).
+   - Swipe left/right on a main screen: next/previous tab (Today, Week, All).
    - Swipe right from the left edge: back (clicks the screen's own back button).
    - Pull down from the top of a main screen: sync with Moodle.
    classifySwipe is pure and tested (test/gestures.test.js); init wires it to the page. All listeners are
    passive, so scrolling is never blocked. */
 (function (global) {
-  const TAB_ORDER = ['today', 'week', 'all', 'courses'];
+  const TAB_ORDER = ['today', 'week', 'all'];
   const EDGE = 24;      // px from the left edge that counts as a back swipe
   const MIN_X = 70;     // px of horizontal travel for a swipe
   const MIN_PULL = 80;  // px of downward travel for pull-to-sync

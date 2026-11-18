@@ -26,11 +26,10 @@ test('pulling down from the top syncs; pulling down mid-page does not', () => {
   assert.strictEqual(G.classifySwipe(g({ dy: 50 })), null);
 });
 
-test('neighbourTab walks Today, Week, All, Courses and stops at the ends', () => {
+test('neighbourTab walks Today, Week, All and stops at the ends', () => {
   assert.strictEqual(G.neighbourTab('today', 'next'), 'week');
   assert.strictEqual(G.neighbourTab('week', 'next'), 'all');
-  assert.strictEqual(G.neighbourTab('all', 'next'), 'courses');
-  assert.strictEqual(G.neighbourTab('courses', 'next'), null);
+  assert.strictEqual(G.neighbourTab('all', 'next'), null);
   assert.strictEqual(G.neighbourTab('today', 'prev'), null);
   assert.strictEqual(G.neighbourTab('settings', 'next'), null);
 });

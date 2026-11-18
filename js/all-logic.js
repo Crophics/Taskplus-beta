@@ -48,9 +48,21 @@
         if (!byCourse.has(key)) byCourse.set(key, []);
         byCourse.get(key).push(r);
       });
+      // Every course gets its section, even one with no assignments yet (unless a search or course filter narrows the list).
+      if (!query && !filterCourse) {
+        const have = new Set([...byCourse.keys()].map(k => k.toLowerCase()));
+        (ctx.courses || []).forEach(c => {
+          const name = String(c.name || '').trim();
+          if (name && !have.has(name.toLowerCase())) { byCourse.set(name, []); have.add(name.toLowerCase()); }
+        });
+      }
       return [...byCourse.entries()]
         .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([key, groupRows]) => ({ key, label: key, rows: groupRows.sort(byStatusThenDue) }));
+        .map(([key, groupRows]) => ({
+          key, label: key, course: true, empty: groupRows.length === 0,
+          open: groupRows.filter(r => !r.it.completed && !r.it.ignored).length,
+          rows: groupRows.sort(byStatusThenDue),
+        }));
     }
 
     // Urgency / Due date: group into Overdue / This week / Later / Blocked / Completed.

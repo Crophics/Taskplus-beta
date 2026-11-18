@@ -171,46 +171,11 @@
     return (items || []).filter((it) => !it.completed && !it.archived && !it.ignored && normalize(it.course) === key).length;
   }
 
-  /** A course's open work (not done, not archived, not ignored), soonest due first; no due date goes last. */
-  function openItemsForCourse(items, courseName) {
-    const key = normalize(courseName);
-    return (items || [])
-      .filter((it) => !it.completed && !it.archived && !it.ignored && normalize(it.course) === key)
-      .sort((a, b) => (a.due || '9999-99-99').localeCompare(b.due || '9999-99-99') || String(a.title).localeCompare(String(b.title)));
-  }
-
-  /** Overdue work the user chose to ignore, for the course detail's "Ignored" section. */
-  function ignoredItemsForCourse(items, courseName) {
-    const key = normalize(courseName);
-    return (items || [])
-      .filter((it) => !it.completed && !it.archived && it.ignored && normalize(it.course) === key)
-      .sort((a, b) => String(a.title).localeCompare(String(b.title)));
-  }
-
-  /** The Courses tab: one row per course with how much is open, how much is overdue, and what is next. */
-  function overview(courses, items, today, colorFor) {
-    return dedupeByName(courses).map((c) => {
-      const open = openItemsForCourse(items, c.name);
-      const key = normalize(c.name);
-      return {
-        name: c.name,
-        total: (items || []).filter((it) => !it.archived && normalize(it.course) === key).length,
-        color: colorFor ? colorFor(c.name) : c.color,
-        open: open.length,
-        overdue: open.filter((it) => it.due && it.due < today).length,
-        next: open.find((it) => it.due && it.due >= today) || null,
-      };
-    }).sort((a, b) => a.name.localeCompare(b.name));
-  }
-
   global.TPCourses = {
     dedupeByName,
     recordDeletion,
     mergeTombstones,
     applyTombstones,
-    openItemsForCourse,
-    ignoredItemsForCourse,
-    overview,
     PALETTE,
     FALLBACK_COLOR,
     newCourseId,

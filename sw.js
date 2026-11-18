@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v58'; // bumped: four tabs, shared header, gestures, restyled All
+const CACHE_NAME = 'taskplus-cache-v59'; // bumped: Courses merged into All; class times removed
 const urlsToCache = [
   './',
   './index.html',
@@ -77,7 +77,6 @@ const urlsToCache = [
   './js/plan-logic.js',
   './js/all-logic.js',
   './js/week-logic.js',
-  './js/schedule-logic.js',
   './js/html.js',
   './js/toast.js',
   './js/theme.js',
@@ -92,7 +91,6 @@ const urlsToCache = [
   './js/views/courses-html.js',
   './js/views/add-sheet-html.js',
   './js/views/connect-sheet-html.js',
-  './js/views/courses-overview-html.js',
   './js/views/item-detail-html.js',
   './js/views/changes-html.js',
   './js/views/quick-menu-html.js',

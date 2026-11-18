@@ -408,28 +408,7 @@ body::-webkit-scrollbar{display:none;}
 /* ---- Courses tab + Course detail (js/views/grades-html.js) ----
    Buttons and inputs are prefixed #tp-app: the page-shell reset rules there
    (#tp-app button{margin:0...}) beat plain class selectors. */
-.tp-g-list{display:flex;flex-direction:column;gap:12px;}
-#tp-app .tp-g-card{width:100%;text-align:left;margin:0;padding:14px 16px;background:var(--surface);border:1px solid var(--card-ring);border-radius:14px;color:var(--text);font-family:inherit;cursor:pointer;display:block;transition:transform .3s cubic-bezier(.34,1.56,.64,1);}
-#tp-app .tp-g-card:active{transform:scale(0.98);transition:transform .05s ease;}
-.tp-g-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
-.tp-g-card-main{min-width:0;}
-.tp-g-card-name{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:500;}
-.tp-g-card-sub{font-size:12.5px;color:var(--text-muted);margin-top:4px;}
-.tp-g-card-grade{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto;}
-.tp-g-pct{font-size:22px;font-weight:600;line-height:1;}
-.tp-g-nograde{font-size:12.5px;color:var(--text-dim);}
 .tp-g-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
-.tp-g-dot-lg{width:14px;height:14px;}
-.tp-g-empty{padding:40px 8px;text-align:center;color:var(--text-muted);font-size:14px;line-height:1.5;}
-.tp-g-empty-title{font-size:17px;color:var(--text);margin-bottom:8px;}
-.tp-g-empty-inline{font-size:13px;color:var(--text-dim);padding:16px 0;}
-#tp-app .tp-g-link{background:none;border:none;color:var(--accent-bright);font-family:inherit;font-size:14px;cursor:pointer;padding:12px 0;margin:6px 0 0;min-height:44px;}
-#tp-app .tp-g-link:active{opacity:.6;}
-.tp-g-detail-title{display:flex;align-items:center;gap:10px;font-size:26px;font-weight:500;letter-spacing:-.02em;margin-bottom:14px;}
-.tp-g-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-soft);}
-.tp-g-row-main{flex:1;min-width:0;}
-.tp-g-row-name{font-size:15px;line-height:1.3;}
-.tp-g-row-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--text-muted);margin-top:3px;}
 
 /* ---- Time estimates on Today (js/views/today-html.js, js/plan-logic.js) ---- */
 .tp-t-plan{margin:2px 0 14px;}
@@ -514,17 +493,6 @@ body::-webkit-scrollbar{display:none;}
 .tp-ch-sub{font-size:12px;color:var(--text-dim);margin-top:2px;}
 .tp-ch-empty{padding:32px 4px;font-size:14px;color:var(--text-dim);line-height:1.5;}
 
-/* Class schedule (Phase 6) */
-.tp-cls-list{margin:6px 0 10px;}
-.tp-cls-row{display:flex;gap:12px;font-size:13px;padding:3px 0;color:var(--text-muted);}
-.tp-cls-time{flex:0 0 68px;color:var(--text-dim);font-variant-numeric:tabular-nums;}
-.tp-cls-name{min-width:0;overflow-wrap:anywhere;}
-.tp-cls-today{margin:6px 0 4px;}
-.tp-cls-today-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);}
-.tp-cls-edit{margin:14px 0 6px;}
-.tp-cls-edit-label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;}
-#tp-app .tp-cls-input{width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 12px;color:var(--text);font-family:inherit;font-size:15px;}
-.tp-cls-hint{font-size:11px;color:var(--text-faint);margin-top:6px;}
 
 .tp-s-warn{color:var(--warn,#e0a93a);}
 
@@ -541,3 +509,7 @@ body::-webkit-scrollbar{display:none;}
 #tp-ptr{position:fixed;top:calc(8px + env(safe-area-inset-top));left:50%;transform:translate(-50%,0);z-index:950;padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text-muted);font-size:13px;pointer-events:none;opacity:0;transition:opacity .15s ease;}
 #tp-ptr.tp-ptr-show{opacity:1;}
 #tp-ptr.tp-ptr-ready{color:var(--accent-bright);border-color:var(--accent);}
+
+/* Course sort on All: section title with the course colour, and a quiet line for a course with nothing yet. */
+.tp-a-course-title{display:inline-flex;align-items:center;gap:8px;}
+.tp-a-course-empty{font-size:13px;color:var(--text-dim);padding:2px 2px 14px;}
