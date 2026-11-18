@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v67'; // bumped: apply synced ignore list after a Moodle import
+const CACHE_NAME = 'taskplus-cache-v68'; // bumped: slimmer tab bar, more room under the status bar
 const urlsToCache = [
   './',
   './index.html',
