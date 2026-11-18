@@ -11,7 +11,7 @@
   function basisCaption(est) {
     if (est.basis === 'user') return 'You set this';
     if (est.basis === 'quiz-limit') return 'From the quiz time limit';
-    if (est.basis === 'model') return `Claude's estimate · ${SURE[est.confidence] || 'not very sure'}`;
+    if (est.basis === 'model') return `AI estimate · ${SURE[est.confidence] || 'not very sure'}`;
     return 'A rough guess';
   }
 
@@ -26,7 +26,7 @@
     const read = est.filesRead || [];
     const skipped = (est.filesSkipped || []).filter((s) => s.reason !== 'not_pdf');
     const parts = [];
-    if (read.length) parts.push(`Claude also read ${read.map(escapeHtml).join(' and ')}.`);
+    if (read.length) parts.push(`The AI also read ${read.map(escapeHtml).join(' and ')}.`);
     skipped.slice(0, 2).forEach((s) => parts.push(`${escapeHtml(s.name)} ${SKIP_WHY[s.reason] || 'was not read'}.`));
     return parts.length ? `<div class="tp-i-est-why tp-i-read">${parts.join(' ')}</div>` : '';
   }
@@ -42,10 +42,10 @@
     const why = est.basis === 'user'
       ? ''
       : est.basis === 'model'
-        ? `<div class="tp-i-est-why">${escapeHtml((est.factors || [])[0] || 'Claude read the assignment description.')} Change it if you know better.</div>${readLineHtml(est, escapeHtml)}`
+        ? `<div class="tp-i-est-why">${escapeHtml((est.factors || [])[0] || 'The AI read the assignment description.')} Change it if you know better.</div>${readLineHtml(est, escapeHtml)}`
         : `<div class="tp-i-est-why">Based on: ${escapeHtml((est.factors || []).join(', ') || 'the details from Moodle')}. ${est.basis === 'heuristic' ? 'It is a rule of thumb, so change it if you know better.' : 'Study time is a guess; change it if you know better.'}</div>`;
     const ask = ctx.llm && ctx.llm.available
-      ? `<button type="button" class="tp-i-ask" id="tp-i-ask"${ctx.llm.busy ? ' disabled' : ''}>${ctx.llm.busy ? 'Asking Claude…' : (est.basis === 'model' ? 'Ask Claude again' : 'Ask Claude to estimate')}</button>`
+      ? `<button type="button" class="tp-i-ask" id="tp-i-ask"${ctx.llm.busy ? ' disabled' : ''}>${ctx.llm.busy ? 'Asking…' : (est.basis === 'model' ? 'Ask again' : 'Ask AI to estimate')}</button>`
       : '';
     return `<section class="tp-i-card" id="tp-i-estimate">
       <div class="tp-i-card-label"><span>Time estimate</span><span class="tp-i-basis">${escapeHtml(basisCaption(est))}</span></div>

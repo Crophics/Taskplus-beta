@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v68'; // bumped: slimmer tab bar, more room under the status bar
+const CACHE_NAME = 'taskplus-cache-v69'; // bumped: provider-neutral AI estimate wording
 const urlsToCache = [
   './',
   './index.html',

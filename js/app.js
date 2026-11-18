@@ -644,11 +644,11 @@
       modelBusy = false;
     }
     if(force){
-      showToast(applied ? 'Updated with Claude\'s estimate'
-        : limited ? 'Today\'s limit for Claude estimates is used up'
-        : (errorMessage || 'Claude could not estimate that. Keeping the current estimate.'));
+      showToast(applied ? 'Updated with an AI estimate'
+        : limited ? 'Today\'s limit for AI estimates is used up'
+        : (errorMessage || 'The AI could not estimate that. Keeping the current estimate.'));
     } else if(applied){
-      showToast(`Claude improved ${applied} estimate${applied === 1 ? '' : 's'}`);
+      showToast(`AI improved ${applied} estimate${applied === 1 ? '' : 's'}`);
     }
     if(!userIsTyping()) render();
   }
