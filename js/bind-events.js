@@ -448,6 +448,7 @@
       const id = b.dataset.deleteCourse;
       const course = window.TPCourses.byId(api.courses, id);
       if (course && (api.allFilterCourse || '').toLowerCase() === course.name.toLowerCase()) api.allFilterCourse = '';
+      if (course) api.recordCourseDeleted(course.name);
       window.TPCourses.deleteCourse(api.courses, id);
       api.saveCourses();
       api.render();

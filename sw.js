@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v52'; // bumped: js/utils.js local-date fix (toISOString UTC bug)
+const CACHE_NAME = 'taskplus-cache-v53'; // bumped: course deletions and ignored items sync
 const urlsToCache = [
   './',
   './index.html',

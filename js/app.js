@@ -15,6 +15,8 @@
       items: items.filter(it=>!window.TPMoodle.isImported(it)),
       courseColors,
       courses,
+      deletedCourses,
+      ignored: ignoredMap,
       dayCompleteLog,
       deletedLog,
       prefs: syncPrefs
@@ -23,6 +25,8 @@
   const PREFS_KEY='tp-prefs';
   const COURSE_COLORS_KEY='tp-course-colors';
   const COURSES_KEY='tp-courses';
+  const DELETED_COURSES_KEY='tp-deleted-courses';
+  const IGNORED_KEY='tp-ignored';
   const LAST_ACTIVE_DATE_KEY='tp-last-active-date';
   const DAY_COMPLETE_LOG_KEY='tp-day-complete-log';
   const DELETED_LOG_KEY='tp-deleted-log';
@@ -96,9 +100,18 @@
     try{ return JSON.parse(localStorage.getItem(COURSE_COLORS_KEY)) || {}; }catch(e){ return {}; }
   }
   function saveCourses(){ localStorage.setItem(COURSES_KEY, JSON.stringify(courses)); syncPush(); }
-  // A course synced in from another device can duplicate one made here (same name, different id): keep one.
+  // Courses deleted here or on another device ({key: name, deletedAt}); see TPCourses.applyTombstones.
+  let deletedCourses = readJsonArray(DELETED_COURSES_KEY);
+  function saveDeletedCourses(){ try{ localStorage.setItem(DELETED_COURSES_KEY, JSON.stringify(deletedCourses)); }catch(e){} }
+  // The user deleted a course: remember it, or the next sync brings it back from another copy of the data.
+  function recordCourseDeleted(name){
+    deletedCourses = window.TPCourses.recordDeletion(deletedCourses, name, Date.now());
+    saveDeletedCourses();
+  }
+  // A course synced in from another device can duplicate one made here (same name, different id), or
+  // be one deleted since: keep one per name and drop the deleted.
   function dedupeCourses(){
-    const clean = window.TPCourses.dedupeByName(courses);
+    const clean = window.TPCourses.applyTombstones(window.TPCourses.dedupeByName(courses), deletedCourses);
     if(clean.length === courses.length) return;
     courses = clean;
     try{ localStorage.setItem(COURSES_KEY, JSON.stringify(courses)); }catch(e){}
@@ -109,7 +122,10 @@
     items = loadItems();
     try{ courseColors = JSON.parse(localStorage.getItem(COURSE_COLORS_KEY)) || {}; }catch(e){ courseColors = {}; }
     try{ courses = JSON.parse(localStorage.getItem(COURSES_KEY)) || []; }catch(e){ courses = []; }
+    deletedCourses = readJsonArray(DELETED_COURSES_KEY);
     dedupeCourses();
+    ignoredMap = readJsonObject(IGNORED_KEY, {});
+    if(applyIgnoredFromMap()) persistItems();
     try{ dayCompleteLog = JSON.parse(localStorage.getItem(DAY_COMPLETE_LOG_KEY)) || []; }catch(e){ dayCompleteLog = []; }
     try{ deletedLog = JSON.parse(localStorage.getItem(DELETED_LOG_KEY)) || []; }catch(e){ deletedLog = []; }
     let p = {};
@@ -673,11 +689,27 @@
   function canIgnore(it){
     return !!it && !it.completed && !it.ignored && !!it.due && daysBetween(today(), it.due) < 0;
   }
+  // Imported items never reach the cloud, so the ignored flag travels as its own small map (item id -> {on, at}).
+  let ignoredMap = readJsonObject(IGNORED_KEY, {});
+  function applyIgnoredFromMap(){
+    return window.TPItemLogic.applyIgnored(items, ignoredMap, today(), daysBetween);
+  }
+  if(applyIgnoredFromMap()) persistItems();
+  // Items ignored before the map existed have no record yet: add one so they reach other devices too.
+  (function seedIgnoredMap(){
+    let seeded = false;
+    items.forEach(it=>{
+      if(it.ignored && it.id && !ignoredMap[it.id]){ ignoredMap = window.TPItemLogic.setIgnoredEntry(ignoredMap, it.id, true, Date.now()); seeded = true; }
+    });
+    if(seeded){ try{ localStorage.setItem(IGNORED_KEY, JSON.stringify(ignoredMap)); }catch(e){} }
+  })();
   function setIgnored(idx, on){
     const it = items[idx];
     if(!it) return;
     if(on && !canIgnore(it)) return;
     if(on) it.ignored = true; else delete it.ignored;
+    ignoredMap = window.TPItemLogic.setIgnoredEntry(ignoredMap, it.id, on, Date.now());
+    try{ localStorage.setItem(IGNORED_KEY, JSON.stringify(ignoredMap)); }catch(e){}
     touchItem(it);
     menuFor = null;
     save();
@@ -819,7 +851,7 @@
       items = merged.items;
       // A course with no assignments yet still gets its card: every course picked for syncing is listed.
       const names = (res.records||[]).map(r=>r.course).concat((res.courses||[]).filter(c=>c.selected).map(c=>c.code));
-      if(window.TPMoodle.ensureCourseNames(courses, names)) saveCourses();
+      if(window.TPMoodle.ensureCourseNames(courses, names, undefined, deletedCourses)) saveCourses();
       appendMoodleEvents(merged.events);
       addToFeed(res.events);
       moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt, warnings: (res.warnings||[]).slice(0, 40) };
@@ -1149,7 +1181,7 @@
       openCourse,
       setMeets,
       openChanges, closeChanges, savePrefsToServer, sendTestAlert, get alerts(){ return alerts; },
-      setIgnored, canIgnore, openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate, askClaude, setLlmOn, setFilesOn,
+      setIgnored, canIgnore, recordCourseDeleted, openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate, askClaude, setLlmOn, setFilesOn,
       get llmOn(){ return llmOn; }, get filesOn(){ return filesOn; },
       get itemDetailId(){ return itemDetailId; },
       get itemDescOpen(){ return itemDescOpen; }, set itemDescOpen(v){ itemDescOpen = v; },
