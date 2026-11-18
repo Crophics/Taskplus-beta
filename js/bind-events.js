@@ -47,8 +47,15 @@
         it.done = it.total;
         it.today = (it.today || 0) + Math.max(it.done - prevDone, 0);
         it.completedAt = api.today();
+        it.prevDone = prevDone; // so Reopen can put the progress back
         if (it.recurring) api.items.push(api.makeRecurringClone(it));
       } else {
+        // Reopen: progress goes back to what it was, or the item would stay "all parts done" and never
+        // return to Today or the plan.
+        const back = Number.isFinite(it.prevDone) && it.prevDone < it.total ? it.prevDone : Math.max((it.total || 1) - 1, 0);
+        if (it.completedAt === api.today()) it.today = Math.max((it.today || 0) - Math.max(it.done - back, 0), 0);
+        it.done = back;
+        delete it.prevDone;
         it.completedAt = null;
         it.archived = false;
       }

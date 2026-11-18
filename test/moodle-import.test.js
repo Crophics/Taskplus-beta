@@ -465,3 +465,14 @@ test('an item first imported on a device where it was already finished on anothe
   assert.strictEqual(r.items[0].completed, true);
   assert.strictEqual(r.items[0].completedAt, '2026-11-17');
 });
+
+test('a sync completes an item once, when Moodle first reports it submitted; reopening it sticks', () => {
+  const dueTs = Math.floor(Date.now() / 1000) + 86400;
+  const rec = (state) => ({ id: 'moodle:3', cmid: 3, courseId: 1, course: 'MATH', kind: 'assign', title: 'HW', dueTs, state, link: 'x' });
+  const first = M.mergeImported([], [rec('none')], { today: '2026-11-18', now: 1 }).items;
+  const done = M.mergeImported(first, [rec('submitted')], { today: '2026-11-18', now: 2 }).items;
+  assert.strictEqual(done[0].completed, true);
+  const reopened = [{ ...done[0], completed: false, done: 0, completedAt: null }];
+  const again = M.mergeImported(reopened, [rec('submitted')], { today: '2026-11-19', now: 3 }).items;
+  assert.strictEqual(again[0].completed, false);
+});

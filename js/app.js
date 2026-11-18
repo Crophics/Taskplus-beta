@@ -703,6 +703,14 @@
       try{ localStorage.setItem(PROGRESS_KEY, JSON.stringify(progressMap)); }catch(e){}
     }
   }
+  // Repair items an earlier version left reopened but with every part still counted done (they never came back).
+  (function repairReopened(){
+    let fixed = false;
+    items.forEach(it=>{
+      if(!it.completed && it.total > 0 && it.done >= it.total){ it.done = it.total - 1; it.updatedAt = Date.now(); fixed = true; }
+    });
+    if(fixed){ persistItems(); refreshProgressMap(); }
+  })();
   if(window.TPMoodle.applyProgress(items, progressMap)) persistItems();
   let ignoredMap = readJsonObject(IGNORED_KEY, {});
   function applyIgnoredFromMap(){

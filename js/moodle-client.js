@@ -134,7 +134,9 @@
           if (!global.TPEstimate.sameEstimate(prev.estimate, est)) { next = global.TPEstimate.withEstimate(next, est); changed = true; }
         }
       }
-      if (rec.state === 'submitted' && !prev.completed) {
+      // Moodle completes an item once, when it first reports it submitted. After that the user's own
+      // choice stands: reopening it must not be undone by the next sync.
+      if (rec.state === 'submitted' && !prev.completed && !(prev.source && prev.source.state === 'submitted')) {
         next.completed = true;
         next.done = next.total || 1;
         next.completedAt = today;

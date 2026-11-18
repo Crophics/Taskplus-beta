@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v54'; // bumped: done state syncs; app imports when opened from an alert
+const CACHE_NAME = 'taskplus-cache-v55'; // bumped: reopening an item restores its progress; Moodle completes once
 const urlsToCache = [
   './',
   './index.html',
