@@ -101,3 +101,8 @@ test('overview shows a course once even if the list holds two entries for it', (
   const rows = TPCourses.overview([{ id: 'a', name: 'MATH 2400' }, { id: 'b', name: 'MATH 2400' }, { id: 'c', name: 'ART' }], [], '2026-11-17', () => '#111');
   assert.deepStrictEqual(rows.map((r) => r.name), ['ART', 'MATH 2400']);
 });
+
+test('overview counts each course\'s items so an empty course can say no assignments yet', () => {
+  const rows = TPCourses.overview([{ name: 'BIBL 1020' }, { name: 'MATH' }], [{ title: 'x', course: 'math', due: '2026-12-01', completed: true }], '2026-11-17', () => '#111');
+  assert.deepStrictEqual(rows.map((r) => [r.name, r.total, r.open]), [['BIBL 1020', 0, 0], ['MATH', 1, 0]]);
+});

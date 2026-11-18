@@ -6,10 +6,10 @@
 
   function courseCardHtml(r, ctx) {
     const { escapeHtml, relativeDueLabel } = ctx;
-    const next = r.next ? `Next: ${escapeHtml(r.next.title)} · ${escapeHtml(relativeDueLabel(r.next.due))}` : (r.open ? 'Nothing due soon' : 'All caught up');
+    const next = r.next ? `Next: ${escapeHtml(r.next.title)} · ${escapeHtml(relativeDueLabel(r.next.due))}` : (r.open ? 'Nothing due soon' : r.total ? 'All caught up' : 'No assignments yet');
     const status = r.open
       ? `<span class="tp-g-pct">${r.open}</span><span class="tp-g-nograde">${r.overdue ? r.overdue + ' overdue' : 'open'}</span>`
-      : '<span class="tp-g-nograde">Done</span>';
+      : (r.total ? '<span class="tp-g-nograde">Done</span>' : '');
     return `<button type="button" class="tp-g-card" data-course="${escapeHtml(r.name)}">
       <div class="tp-g-card-top">
         <div class="tp-g-card-main">

@@ -158,8 +158,10 @@
   function overview(courses, items, today, colorFor) {
     return dedupeByName(courses).map((c) => {
       const open = openItemsForCourse(items, c.name);
+      const key = normalize(c.name);
       return {
         name: c.name,
+        total: (items || []).filter((it) => !it.archived && normalize(it.course) === key).length,
         color: colorFor ? colorFor(c.name) : c.color,
         open: open.length,
         overdue: open.filter((it) => it.due && it.due < today).length,

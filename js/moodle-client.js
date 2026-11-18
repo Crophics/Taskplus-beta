@@ -148,10 +148,15 @@
 
   /** Makes sure every imported course code exists in the courses collection (so it gets a colour). */
   function ensureCourses(courses, records, TPCourses) {
+    return ensureCourseNames(courses, (records || []).map((rec) => rec.course), TPCourses);
+  }
+
+  /** Adds an entry for every name that has none yet. Returns how many were added. */
+  function ensureCourseNames(courses, names, TPCourses) {
     const lib = TPCourses || global.TPCourses;
     let added = 0;
-    (records || []).forEach((rec) => {
-      if (rec.course && !lib.byName(courses, rec.course) && lib.addCourse(courses, rec.course)) added++;
+    (names || []).forEach((name) => {
+      if (name && !lib.byName(courses, name) && lib.addCourse(courses, name)) added++;
     });
     return added;
   }
@@ -335,5 +340,5 @@
     }
   }
 
-  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, shouldAutoSync, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_HOURS, mergeFeed, unreadCount, markFeedSeen, feedLine };
+  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_HOURS, mergeFeed, unreadCount, markFeedSeen, feedLine };
 })(typeof window !== 'undefined' ? window : globalThis);
