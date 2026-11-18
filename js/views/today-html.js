@@ -1,4 +1,4 @@
-/* views/today-html.js — Today screen: header, target rows/pips, Get ahead, footer */
+/* views/today-html.js — Today screen: header, target rows/pips, Get ahead */
 (function (global) {
   // Red = overdue, yellow = due today or tomorrow (or marked tight), green = later. "Tight" alone is not
   // enough: a single-part item due tomorrow is tight but a multi-part one is only tight once due today,
@@ -124,7 +124,7 @@
   function todayScreenHtml(ctx) {
     const {
       streak, dateLabel, weekdayLabel, screen, escapeHtml,
-      totalLoggedToday, plan,
+      plan,
     } = ctx;
     const targets = screen.targets;
     const getAhead = screen.getAhead;
@@ -151,7 +151,6 @@
       ? targets.map(t => targetRowHtml(t, ctx)).join('')
       : `<div class="tp-t-all-met">
           <div class="tp-t-all-met-title">Today's targets are met.</div>
-          <div class="tp-t-all-met-sub">Every assignment has had its daily share. Anything below is you getting ahead of the pace.</div>
         </div>`;
 
     const getAheadSection = getAhead.length ? `<div class="tp-section-heading">
@@ -162,11 +161,7 @@
         ${getAhead.map(e => (e.met ? getAheadDoneRowHtml(e, ctx) : getAheadOpenRowHtml(e, ctx))).join('')}
       </div>` : '';
 
-    const footer = `<div class="tp-t-footer">${totalLoggedToday > 0
-      ? `Logged ${totalLoggedToday} unit${totalLoggedToday === 1 ? '' : 's'} today · anything below the targets is you getting ahead`
-      : 'Nothing logged yet today'}</div>`;
-
-    return `<div class="tp-screen tp-screen-today">${header}${planSummaryHtml(plan, escapeHtml)}${targetsHeading}${targetsBody}${getAheadSection}${footer}</div>`;
+    return `<div class="tp-screen tp-screen-today">${header}${planSummaryHtml(plan, escapeHtml)}${targetsHeading}${targetsBody}${getAheadSection}</div>`;
   }
 
   global.TPViews = global.TPViews || {};
