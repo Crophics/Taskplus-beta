@@ -14,7 +14,7 @@
   const RECENT_SUBMITTED_DAYS = 14;
   // How stale this device's own copy may get before opening the app imports again. The server limits
   // calls itself (30 s), so this can be short: the server's alerts arrive within about half an hour.
-  const AUTO_SYNC_MIN_MS = 10 * 60 * 1000;
+  const AUTO_SYNC_MIN_MS = 2 * 60 * 1000;
   // Bump this whenever an import starts storing something new on items (2 = due times). A device whose last
   // import used an older shape syncs again on its next open, however recent that import was, so the new data
   // does not wait for a manual sync.

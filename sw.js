@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v65'; // bumped: sync retries when offline; API calls bypass the cache
+const CACHE_NAME = 'taskplus-cache-v66'; // bumped: open-time sync throttle 2 min
 const urlsToCache = [
   './',
   './index.html',

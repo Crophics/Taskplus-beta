@@ -154,8 +154,8 @@ test('shouldAutoSync waits for the interval and needs a connection', () => {
   assert.strictEqual(M.shouldAutoSync(null, NOW), false);
   assert.strictEqual(M.shouldAutoSync({ connected: false }, NOW), false);
   assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: null }, NOW), true);
-  assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 5 * 60000, importShape: M.IMPORT_SHAPE }, NOW), false);
-  assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 11 * 60000, importShape: M.IMPORT_SHAPE }, NOW), true);
+  assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 1 * 60000, importShape: M.IMPORT_SHAPE }, NOW), false);
+  assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 3 * 60000, importShape: M.IMPORT_SHAPE }, NOW), true);
   // An import made before the current data format (e.g. before due times were stored) is redone at once, however recent.
   assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 60000 }, NOW), true);
   assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 60000, importShape: M.IMPORT_SHAPE - 1 }, NOW), true);
