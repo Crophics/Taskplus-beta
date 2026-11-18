@@ -82,3 +82,22 @@ test('overview: counts open and overdue work and finds the next due item, sorted
   assert.strictEqual(rows[1].next.title, 'soon');
   assert.strictEqual(rows[1].color, 'c-PHIL');
 });
+
+test('dedupeByName keeps one entry per course name (case and spacing ignored), first wins, colour is lent', () => {
+  const list = [
+    { id: 'a', name: 'MATH 2400', color: null },
+    { id: 'b', name: ' math 2400 ', color: '#123456' },
+    { id: 'c', name: 'PHIL 2202', color: '#abcdef' },
+    { id: 'd', name: 'PHIL 2202', color: '#000000' },
+  ];
+  const out = TPCourses.dedupeByName(list);
+  assert.deepStrictEqual(out.map((c) => c.id), ['a', 'c']);
+  assert.strictEqual(out[0].color, '#123456');
+  assert.strictEqual(out[1].color, '#abcdef');
+  assert.deepStrictEqual(TPCourses.dedupeByName(null), []);
+});
+
+test('overview shows a course once even if the list holds two entries for it', () => {
+  const rows = TPCourses.overview([{ id: 'a', name: 'MATH 2400' }, { id: 'b', name: 'MATH 2400' }, { id: 'c', name: 'ART' }], [], '2026-11-17', () => '#111');
+  assert.deepStrictEqual(rows.map((r) => r.name), ['ART', 'MATH 2400']);
+});

@@ -191,7 +191,10 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     const map = new Map();
     (remoteCourses || []).forEach((c) => map.set(c.id, c));
     (localCourses || []).forEach((c) => map.set(c.id, c));
-    return [...map.values()];
+    // Two devices can each create the same course (same name, different random id): keep one, local first.
+    const localIds = new Set((localCourses || []).map((c) => c.id));
+    const merged = (localCourses || []).map((c) => map.get(c.id)).concat([...map.values()].filter((c) => !localIds.has(c.id)));
+    return window.TPCourses && window.TPCourses.dedupeByName ? window.TPCourses.dedupeByName(merged) : merged;
   }
 
   function mergePrefs(localPrefs, remotePrefs) {

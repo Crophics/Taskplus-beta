@@ -62,6 +62,24 @@
     return (courses || []).find((c) => normalize(c.name) === key) || null;
   }
 
+  /**
+   * One entry per course name (case and spacing ignored), the first one winning; a later duplicate only
+   * lends its colour if the winner has none. Devices that each create "MATH 2400" from the same imported
+   * items give it different random ids, and syncing merges by id, so the same course shows up twice.
+   */
+  function dedupeByName(courses) {
+    const seen = new Map();
+    const out = [];
+    (courses || []).forEach((c) => {
+      const key = normalize(c && c.name);
+      if (!key) { out.push(c); return; }
+      const first = seen.get(key);
+      if (!first) { seen.set(key, c); out.push(c); return; }
+      if (!first.color && c.color) first.color = c.color;
+    });
+    return out;
+  }
+
   function byId(courses, id) {
     return (courses || []).find((c) => c.id === id) || null;
   }
@@ -138,7 +156,7 @@
 
   /** The Courses tab: one row per course with how much is open, how much is overdue, and what is next. */
   function overview(courses, items, today, colorFor) {
-    return (courses || []).map((c) => {
+    return dedupeByName(courses).map((c) => {
       const open = openItemsForCourse(items, c.name);
       return {
         name: c.name,
@@ -151,6 +169,7 @@
   }
 
   global.TPCourses = {
+    dedupeByName,
     openItemsForCourse,
     ignoredItemsForCourse,
     overview,
