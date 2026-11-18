@@ -93,7 +93,7 @@
     if (openChanges) openChanges.onclick = () => api.openChanges();
     const chBack = document.getElementById('tp-ch-back');
     if (chBack) chBack.onclick = () => api.closeChanges();
-    ['new','moved','grade','feedback','due'].forEach((k) => {
+    ['new','moved','due'].forEach((k) => {
       const t = document.getElementById('tp-al-' + k);
       if (t) t.onclick = () => api.savePrefsToServer({ [k]: !api.alerts.prefs[k] });
     });
@@ -124,6 +124,10 @@
     });
 
     /* ---- Assignment detail ---- */
+    const itemIgnore = document.getElementById('tp-i-ignore');
+    if (itemIgnore) itemIgnore.onclick = () => api.setIgnored(parseInt(itemIgnore.dataset.i), true);
+    const itemUnignore = document.getElementById('tp-i-unignore');
+    if (itemUnignore) itemUnignore.onclick = () => api.setIgnored(parseInt(itemUnignore.dataset.i), false);
     const itemBack = document.getElementById('tp-i-back');
     if (itemBack) itemBack.onclick = () => api.closeItem();
     root.querySelectorAll('.tp-i-part').forEach(b => b.onclick = () => {
@@ -272,6 +276,10 @@
       const it = api.items[parseInt(qmPush.dataset.i)];
       if (it) { it.due = api.addDays(it.due, 1); api.touchItem(it); api.menuFor = null; api.save(); }
     };
+    const qmIgnore = document.getElementById('tp-qm-ignore');
+    if (qmIgnore) qmIgnore.onclick = () => api.setIgnored(parseInt(qmIgnore.dataset.i), true);
+    const qmUnignore = document.getElementById('tp-qm-unignore');
+    if (qmUnignore) qmUnignore.onclick = () => api.setIgnored(parseInt(qmUnignore.dataset.i), false);
     const qmEdit = document.getElementById('tp-qm-edit');
     if (qmEdit) qmEdit.onclick = () => {
       const idx = parseInt(qmEdit.dataset.i);
@@ -337,8 +345,6 @@
     if (exportBtn) exportBtn.onclick = api.exportData;
     const exportIcsBtn = document.getElementById('tp-export-ics');
     if (exportIcsBtn) exportIcsBtn.onclick = api.exportIcs;
-    const importGradesEl = document.getElementById('tp-import-grades');
-    if (importGradesEl) importGradesEl.onchange = (e) => { if (e.target.files[0]) api.importGradeSettings(e.target.files[0]); };
     const importEl = document.getElementById('tp-import');
     if (importEl) importEl.onchange = (e) => { if (e.target.files[0]) api.importData(e.target.files[0]); };
     const clearCompletedBtn = document.getElementById('tp-clear-completed');
@@ -350,18 +356,8 @@
     if (gToSettings) gToSettings.onclick = () => { api.tab = 'settings'; api.savePrefs(); api.render(); };
     const gBack = document.getElementById('tp-g-back');
     if (gBack) gBack.onclick = () => { api.tab = 'courses'; api.savePrefs(); api.render(); };
-    // Weights: model only + patch the one summary node (never rebuild the focused input).
-    root.querySelectorAll('.tp-g-weight[data-weight-id]').forEach(inp => inp.oninput = (e) => {
-      api.setWeight(inp.dataset.weightId, e.target.value);
-      api.patch('tp-g-summary', api.gradeSummaryHtml());
-    });
-    root.querySelectorAll('.tp-g-step[data-g-step]').forEach(b => b.onclick = () => {
-      api.stepCourseSetting(api.courseDetailName, b.dataset.gStep, Number(b.dataset.dir));
-    });
     const clsInput = document.getElementById('tp-cls-input');
     if (clsInput) clsInput.onchange = (e) => { if (!api.setMeets(clsInput.dataset.course, e.target.value)) e.target.value = ''; };
-    const gUseSuggested = document.getElementById('tp-g-use-suggested');
-    if (gUseSuggested) gUseSuggested.onclick = () => api.useSuggestedWeights(api.courseDetailName);
 
     /* ---- Moodle (Settings group + Connect sheet) ---- */
     const moodleConnectBtn = document.getElementById('tp-moodle-connect');

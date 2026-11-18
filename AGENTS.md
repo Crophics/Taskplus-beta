@@ -86,16 +86,23 @@ for the one-time Cloudflare setup. What matters when touching code:
   cross-checks the planner against `today-logic.js`; keep that test passing if
   either pacing rule changes. Assignment detail is `tab === 'item'` (never saved
   as the tab preference); it opens only for imported items that have an estimate.
-- **Grades (Phase 2).** `js/grades-logic.js` (`TPGrades`) is the pure grade
-  math, settings and overview, tested in `test/grades-logic.test.js`;
-  `js/views/grades-html.js` lays out the Courses tab and Course detail. State
-  lives in `app.js`: `gradesStore` (`tp-moodle-grades`, replaced each sync) and
-  `gradeSettings` (`tp-grade-settings`: weights by entry id, targets, credits),
-  both device-local. Entry ids are `moodle:<cmid>` for activities and
-  `gi:<gradeitem id>` for manual items. Tabs: `courses` = overview, `course` =
-  detail (never persisted as the saved tab), `manage` = the course manager.
-  Weight inputs follow the render-loop rule: model update + patch of
-  `#tp-g-summary` only.
+- **There are no grades in the app (decided 2026-11-17).** Phase 2 (grades, weights, GPA) was built and then
+  removed: this school's Moodle omits `grademax` and reports weights renormalised over the items graded so far, so
+  its numbers cannot match the syllabus, and the goal is organising work, not replacing Moodle. The Worker never
+  calls `gradereport_user_get_grade_items`; don't add it back, and don't bring back the `tp-moodle-grades` /
+  `tp-grade-settings` keys (the app deletes them on load). Tabs: `courses` = one card per course (open count, next
+  due; `TPCourses.overview`), `course` = detail (open work + class times, `TPCourses.openItemsForCourse`; never
+  persisted as the saved tab), `manage` = the course manager. Views: `js/views/courses-overview-html.js`.
+- **Undated work and Ignore (2026-11-17).** An assignment or quiz with no due date is imported with `dueTs: null`
+  and `item.due === ''` (the Worker no longer drops it, and there is no `skipped_no_due_date` warning). **`due`
+  can be empty: never call `daysBetween`/`localeCompare` on it without checking.** `TPItemLogic.isPlanned(it)`
+  (has a due date and not `ignored`) is the rule; Today, Week and the minutes plan skip unplanned items, and
+  `today-logic`, `week-logic` and `plan-logic` carry a one-line copy of it because they load without
+  `item-logic.js` (keep the copies in sync). Undated items are never split into parts (`withEstimate`) and are
+  listed under "No due date" on All and in Course detail only. **Ignore** (`item.ignored = true`, `app.js`
+  `setIgnored`) is offered only for overdue, unfinished work (quick menu and item detail); ignored items leave
+  the overdue counts, Today, Week, Courses' open count and Claude asks, and sit in All's "Ignored" group. It is
+  user-owned (a sync keeps it) but ends if Moodle gives the item a due date that is not in the past.
 - **Moodle `accessexception` is not an auth failure** (`src/moodle-client.mjs`):
   it means the school has not enabled a function for the mobile service. Only
   `invalidtoken` disconnects a user.
@@ -115,7 +122,7 @@ for the one-time Cloudflare setup. What matters when touching code:
   Keyed by course name string, so renaming a course orphans its entry (same as other course-keyed stores).
 - **Cutover (Phase 7).** `docs/CUTOVER.md` is the checklist; `tools/compare-vault.mjs` compares the vault's
   Coursework notes (`link: ...id=<cmid>`, `due`, `status`) with a Backup export, matching on cmid. Read-only.
-  It reuses `parseFrontmatter` from `tools/import-vault-grades.mjs`.
+  It reads notes with `tools/vault-frontmatter.mjs`.
 - **`.assetsignore` already hid repo internals** (`*.md`, `test/`, etc.); `src/`
   was added to it. Don't rewrite that file wholesale.
 

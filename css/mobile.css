@@ -402,10 +402,6 @@ body::-webkit-scrollbar{display:none;}
 /* ---- Courses tab + Course detail (js/views/grades-html.js) ----
    Buttons and inputs are prefixed #tp-app: the page-shell reset rules there
    (#tp-app button{margin:0...}) beat plain class selectors. */
-.tp-g-gpa{display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--surface);border:1px solid var(--card-ring);border-radius:14px;padding:16px;margin-bottom:14px;}
-.tp-g-gpa-label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);}
-.tp-g-gpa-value{font-size:34px;font-weight:600;letter-spacing:-.02em;margin-top:4px;}
-.tp-g-gpa-note{font-size:12px;color:var(--text-dim);max-width:150px;text-align:right;line-height:1.45;}
 .tp-g-list{display:flex;flex-direction:column;gap:12px;}
 #tp-app .tp-g-card{width:100%;text-align:left;margin:0;padding:14px 16px;background:var(--surface);border:1px solid var(--card-ring);border-radius:14px;color:var(--text);font-family:inherit;cursor:pointer;display:block;transition:transform .3s cubic-bezier(.34,1.56,.64,1);}
 #tp-app .tp-g-card:active{transform:scale(0.98);transition:transform .05s ease;}
@@ -415,50 +411,19 @@ body::-webkit-scrollbar{display:none;}
 .tp-g-card-sub{font-size:12.5px;color:var(--text-muted);margin-top:4px;}
 .tp-g-card-grade{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto;}
 .tp-g-pct{font-size:22px;font-weight:600;line-height:1;}
-.tp-g-letter{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--text-muted);}
-.tp-g-letter-ok{border-color:var(--accent);color:var(--accent-bright);}
 .tp-g-nograde{font-size:12.5px;color:var(--text-dim);}
 .tp-g-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
 .tp-g-dot-lg{width:14px;height:14px;}
-.tp-g-bar{position:relative;height:8px;border-radius:4px;background:var(--surface-alt);margin-top:14px;overflow:visible;}
-.tp-g-bar-fill{height:100%;border-radius:4px;}
-.tp-g-bar-target{position:absolute;top:-4px;width:2px;height:16px;background:var(--text);border-radius:1px;}
-.tp-g-footnote{font-size:12px;color:var(--text-dim);text-align:center;margin-top:16px;}
 .tp-g-empty{padding:40px 8px;text-align:center;color:var(--text-muted);font-size:14px;line-height:1.5;}
 .tp-g-empty-title{font-size:17px;color:var(--text);margin-bottom:8px;}
 .tp-g-empty-inline{font-size:13px;color:var(--text-dim);padding:16px 0;}
 #tp-app .tp-g-link{background:none;border:none;color:var(--accent-bright);font-family:inherit;font-size:14px;cursor:pointer;padding:12px 0;margin:6px 0 0;min-height:44px;}
 #tp-app .tp-g-link:active{opacity:.6;}
 .tp-g-detail-title{display:flex;align-items:center;gap:10px;font-size:26px;font-weight:500;letter-spacing:-.02em;margin-bottom:14px;}
-.tp-g-summary{background:var(--surface);border:1px solid var(--card-ring);border-radius:14px;padding:16px;}
-.tp-g-summary-top{display:flex;justify-content:space-between;align-items:flex-start;}
-.tp-g-summary-label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);}
-.tp-g-summary-pct{font-size:36px;font-weight:600;letter-spacing:-.02em;margin-top:4px;line-height:1.1;}
-.tp-g-summary-letter{font-size:22px;color:var(--accent-bright);font-weight:500;}
-.tp-g-outlook{margin-top:12px;padding:12px;border-radius:10px;background:var(--accent-wash);font-size:13.5px;line-height:1.5;}
-.tp-g-outlook b{font-weight:600;color:var(--accent-bright);}
-.tp-g-warn{margin-top:8px;font-size:12.5px;line-height:1.45;color:var(--warn);}
-.tp-g-settings{margin-top:12px;background:var(--surface);border:1px solid var(--card-ring);border-radius:14px;padding:4px 16px;}
-.tp-g-stepper-row{display:flex;justify-content:space-between;align-items:center;min-height:52px;border-top:1px solid var(--border-soft);}
-.tp-g-stepper-row:first-child{border-top:none;}
-.tp-g-stepper-label{font-size:14px;}
-.tp-g-stepper{display:flex;align-items:center;gap:6px;}
-#tp-app .tp-g-step{width:44px;height:44px;margin:0;padding:0;border-radius:10px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);font-size:20px;cursor:pointer;}
-#tp-app .tp-g-step:active{background:var(--accent-wash);}
-.tp-g-step-val{min-width:56px;text-align:center;font-size:16px;font-weight:500;}
-.tp-g-weights-note{font-size:12px;color:var(--text-dim);line-height:1.5;margin:14px 0 0;}
 .tp-g-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-soft);}
 .tp-g-row-main{flex:1;min-width:0;}
 .tp-g-row-name{font-size:15px;line-height:1.3;}
 .tp-g-row-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--text-muted);margin-top:3px;}
-.tp-g-score{color:var(--accent-bright);font-weight:600;}
-.tp-g-chip{padding:1px 7px;border-radius:999px;border:1px solid var(--border);font-size:11px;}
-.tp-g-weight-wrap{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;}
-#tp-app .tp-g-weight{width:64px;min-height:44px;margin:0;padding:0 8px;text-align:right;box-sizing:border-box;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:16px;}
-#tp-app .tp-g-weight::placeholder{color:var(--text-faint);}
-.tp-g-weight-pct{font-size:13px;color:var(--text-dim);}
-.tp-g-feedback{background:var(--surface);border:1px solid var(--card-ring);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.55;margin-bottom:10px;white-space:pre-line;}
-.tp-g-feedback-title{font-size:12px;color:var(--text-muted);margin-bottom:6px;}
 
 /* ---- Time estimates on Today (js/views/today-html.js, js/plan-logic.js) ---- */
 .tp-t-plan{margin:2px 0 14px;}

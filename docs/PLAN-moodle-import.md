@@ -1,5 +1,9 @@
 # Plan — Moodle import, time estimates, and replacing the Obsidian vault
 
+> **Update 2026-11-17: grades were dropped.** Everything below about grades, weights, GPA, targets and teacher
+> feedback (Phase 2 and its alerts) was built and then removed; see `AGENTS.md`. The rest of this plan still
+> describes what was built. It is kept as history, so read the grade parts as superseded.
+
 Status: **draft for review. No code written yet.**
 Inputs: the user's description, a read-only survey of their vault (Moodle sync
 scripts, note schema, dashboards, plugins — secrets redacted), and a read of

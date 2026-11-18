@@ -8,13 +8,13 @@
 // By default it ignores vault notes that are already finished (status submitted/graded/done) and items
 // due more than 14 days ago, so the report is about what is still live; --all includes everything.
 //
-// Assumed vault note fields (the same ones tools/import-vault-grades.mjs reads): `link:` containing
+// Assumed vault note fields (read with tools/vault-frontmatter.mjs): `link:` containing
 // id=<cmid>, `due:` (a date, optionally with a time), `status:`. Adjust FIELD_* below if yours differ.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseFrontmatter } from './import-vault-grades.mjs';
+import { parseFrontmatter } from './vault-frontmatter.mjs';
 
 const FIELD_DUE = 'due';
 const FIELD_STATUS = 'status';

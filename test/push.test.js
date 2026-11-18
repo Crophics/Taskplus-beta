@@ -45,7 +45,7 @@ function fakeFcm(opts = {}) {
 }
 
 const rec = (id, o = {}) => ({ id, kind: 'assign', title: 'T' + id, course: 'MATH', dueTs: sec + 3 * 86400, state: 'none', ...o });
-const result = (records, grades = []) => ({ records, grades, warnings: [], courses: [{ id: 7, fullname: 'MATH' }] });
+const result = (records) => ({ records, warnings: [], courses: [{ id: 7, fullname: 'MATH' }] });
 
 async function setup(opts = {}) {
   const env = { MOODLE_KV: kv(), TOKEN_ENC_KEY: ENC, FCM_SERVICE_ACCOUNT: await serviceAccount() };
@@ -70,9 +70,9 @@ test('stored push data is encrypted at rest', async () => {
 });
 
 test('cleanPrefs ignores junk', () => {
-  const p = P.cleanPrefs({ new: false, grade: 'yes', quiet: { on: true, start: 23, end: 99 } }, null);
+  const p = P.cleanPrefs({ new: false, moved: 'yes', quiet: { on: true, start: 23, end: 99 } }, null);
   assert.strictEqual(p.new, false);
-  assert.strictEqual(p.grade, true);
+  assert.strictEqual(p.moved, true);
   assert.deepStrictEqual(p.quiet, { on: true, start: 23, end: 8 });
 });
 

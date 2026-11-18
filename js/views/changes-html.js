@@ -1,5 +1,5 @@
 /* views/changes-html.js — "What's new": the feed of changes found in Moodle
-   (new work, moved dates, grades, feedback). Opened from the bell on Today. */
+   (new work, moved dates). Opened from the bell on Today. */
 (function (global) {
   // Hand-drawn (the Nerd Font extraction recipe in AGENTS.md was not needed for one stroke icon).
   const BELL = '<svg class="tp-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>';
@@ -41,7 +41,7 @@
         </div>
       </div>`;
     }).join('');
-    const empty = `<div class="tp-ch-empty">Nothing new yet. New assignments, changed due dates, grades and feedback show up here after each sync.</div>`;
+    const empty = `<div class="tp-ch-empty">Nothing new yet. New assignments, and changed due dates show up here after each sync.</div>`;
     return `<div class="tp-screen tp-screen-changes">
       <button type="button" class="tp-c-back" id="tp-ch-back">${global.TPIcons.svg('chevron_left')} ${escapeHtml(fromLabel)}</button>
       <div class="tp-a-header-top"><span class="tp-a-title-heading">What's new</span></div>

@@ -39,6 +39,7 @@
   }
 
   function relativeDueLabel(dateStr) {
+    if (!dateStr) return 'No due date';
     const d = daysBetween(today(), dateStr);
     if (d === 0) return 'Today';
     if (d === 1) return 'Tomorrow';
@@ -49,6 +50,7 @@
   }
 
   function fullDateLabel(dateStr) {
+    if (!dateStr) return 'No due date';
     return asDate(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 

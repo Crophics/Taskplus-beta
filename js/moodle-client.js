@@ -74,12 +74,12 @@
 
     (records || []).forEach((rec) => {
       if (tombstoned.has(rec.id)) { stats.skippedDeleted++; return; }
-      const due = localDate(rec.dueTs);
+      const due = rec.dueTs ? localDate(rec.dueTs) : ''; // '' = Moodle gave no due date
       const idx = byId.get(rec.id);
 
       if (idx === undefined) {
         const submitted = rec.state === 'submitted';
-        if (submitted && daysBetween(due, today) > RECENT_SUBMITTED_DAYS) { stats.skippedOld++; return; }
+        if (submitted && due && daysBetween(due, today) > RECENT_SUBMITTED_DAYS) { stats.skippedOld++; return; }
         let item = {
           id: rec.id, title: rec.title, course: rec.course, due,
           // `unit` is what Today's pill shows for one-sitting work; empty would read "Reading".
@@ -106,9 +106,14 @@
       if (prev.title !== rec.title) { next.title = rec.title; changed = true; }
       if (prev.course !== rec.course) { next.course = rec.course; changed = true; }
       if (prev.due !== due) {
-        events.push({ kind: 'moved', id: prev.id, title: rec.title, course: rec.course, from: prev.due, to: due });
+        // A date appearing or disappearing is not a "moved" notice; only a real change of date is.
+        if (prev.due && due) {
+          events.push({ kind: 'moved', id: prev.id, title: rec.title, course: rec.course, from: prev.due, to: due });
+          stats.moved++;
+        }
         next.due = due;
-        stats.moved++;
+        // "Ignore" only makes sense for work that is overdue: a new date that is not in the past ends it.
+        if (next.ignored && (!due || due >= today)) delete next.ignored;
         changed = true;
       }
       const src = sourceOf(rec, prev.source);
@@ -171,7 +176,7 @@
   }
 
   function needsModel(item, today, force, filesOn) {
-    if (!isImported(item) || item.completed || item.archived || !item.estimate || !global.TPEstimate) return false;
+    if (!isImported(item) || item.completed || item.archived || item.ignored || !item.estimate || !global.TPEstimate) return false;
     if (force) return true;
     if (item.estimate.basis !== 'heuristic' && !wantsHandoutUpgrade(item, filesOn)) return false;
     const tried = item.modelTry;
@@ -235,22 +240,12 @@
     return nowMs - state.lastSyncAt >= AUTO_SYNC_MIN_HOURS * 3600 * 1000;
   }
 
-  /** Plain-language lines for the Worker's sync warnings (codes like 'grades_failed:7'). courses: [{id, code, name}]. */
-  function explainWarnings(warnings, courses) {
+  /** Plain-language lines for the Worker's sync warnings (codes like 'state_failed:7'). */
+  function explainWarnings(warnings) {
     const list = Array.isArray(warnings) ? warnings : [];
-    const nameOf = (id) => {
-      const c = (courses || []).find((x) => String(x.id) === String(id));
-      return c ? (c.code || c.name) : 'a course';
-    };
     const ids = (code) => list.filter((w) => w.startsWith(code + ':')).map((w) => w.split(':')[1]);
     const num = (code) => ids(code).reduce((n, v) => n + (Number(v) || 0), 0);
     const out = [];
-    const failed = ids('grades_failed');
-    if (failed.length) out.push(`Your school's Moodle refused the grade report for ${failed.map(nameOf).join(', ')}, so there are no grades or Moodle weights for ${failed.length === 1 ? 'it' : 'them'}.`);
-    const skipped = ids('grades_skipped');
-    if (skipped.length) out.push(`Grades for ${skipped.map(nameOf).join(', ')} were left for the next sync (call limit).`);
-    const noDue = num('skipped_no_due_date');
-    if (noDue) out.push(`${noDue} assignment${noDue === 1 ? '' : 's'} or quiz${noDue === 1 ? '' : 'zes'} with no due date in Moodle ${noDue === 1 ? 'was' : 'were'} not imported.`);
     const later = num('state_skipped');
     if (later) out.push(`${later} item${later === 1 ? '' : 's'} will have submission status checked on the next sync (call limit).`);
     const stateFailed = ids('state_failed').length;
@@ -336,8 +331,6 @@
     switch (e.kind) {
       case 'new': return { head: 'New ' + (e.quiz ? 'quiz' : 'assignment'), text: e.title };
       case 'moved': return { head: 'Date moved', text: e.title };
-      case 'grade': return { head: 'Graded ' + (Math.round(e.pct * 10) / 10) + '%', text: e.title };
-      case 'feedback': return { head: 'Feedback', text: e.title };
       default: return { head: 'Update', text: e.title || '' };
     }
   }

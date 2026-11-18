@@ -183,7 +183,8 @@
     const next = { ...item, estimate: est };
     const imported = item.source && item.source.type === 'moodle';
     const untouched = !(item.done > 0) && !(item.today > 0) && !item.completed;
-    if (imported && untouched) {
+    // No due date means no days to spread parts over, so undated work stays one piece.
+    if (imported && untouched && item.due) {
       const n = partsFor(est.minutes, item.source.kind, est.steps);
       next.total = n;
       next.unit = n > 1 ? 'part' : (item.source.kind === 'quiz' ? 'quiz' : 'assignment');

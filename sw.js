@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v47'; // bumped: show Moodle sync warnings
+const CACHE_NAME = 'taskplus-cache-v49'; // bumped: undated work and Ignore
 const urlsToCache = [
   './',
   './index.html',
@@ -70,7 +70,6 @@ const urlsToCache = [
   './js/item-logic.js',
   './js/courses.js',
   './js/moodle-client.js',
-  './js/grades-logic.js',
   './js/estimate-logic.js',
   './js/plan-logic.js',
   './js/all-logic.js',
@@ -90,7 +89,7 @@ const urlsToCache = [
   './js/views/courses-html.js',
   './js/views/add-sheet-html.js',
   './js/views/connect-sheet-html.js',
-  './js/views/grades-html.js',
+  './js/views/courses-overview-html.js',
   './js/views/item-detail-html.js',
   './js/views/changes-html.js',
   './js/views/quick-menu-html.js',

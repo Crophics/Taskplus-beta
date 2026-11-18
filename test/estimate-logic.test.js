@@ -120,7 +120,7 @@ test('partsFor splits work into roughly 50-minute parts, never more than 8, quiz
 });
 
 function imported(over = {}) {
-  return { id: 'moodle:1', title: 'A', total: 1, unit: 'assignment', done: 0, today: 0, completed: false, source: { type: 'moodle', kind: 'assign' }, ...over };
+  return { id: 'moodle:1', title: 'A', total: 1, unit: 'assignment', done: 0, today: 0, completed: false, due: '2026-12-01', source: { type: 'moodle', kind: 'assign' }, ...over };
 }
 
 test('withEstimate re-splits an untouched imported item into parts', () => {

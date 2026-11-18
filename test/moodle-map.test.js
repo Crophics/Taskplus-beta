@@ -45,7 +45,7 @@ test('pickDefaultCourses keeps current, visible courses only', () => {
   assert.deepStrictEqual(M.pickDefaultCourses(courses, now), [1, 3]);
 });
 
-test('mapAssignments maps fields and skips items with no due date', () => {
+test('mapAssignments maps fields and keeps items with no due date as undated', () => {
   const resp = {
     courses: [{
       id: 7,
@@ -60,9 +60,10 @@ test('mapAssignments maps fields and skips items with no due date', () => {
       ],
     }],
   };
-  const { records, skippedNoDue } = M.mapAssignments(course, resp, BASE);
-  assert.strictEqual(skippedNoDue, 1);
-  assert.strictEqual(records.length, 1);
+  const { records } = M.mapAssignments(course, resp, BASE);
+  assert.strictEqual(records.length, 2);
+  assert.strictEqual(records[1].id, 'moodle:5002');
+  assert.strictEqual(records[1].dueTs, null, 'no due date stays null, not 0');
   const r = records[0];
   assert.strictEqual(r.id, 'moodle:5001');
   assert.strictEqual(r.cmid, 5001);
@@ -88,9 +89,9 @@ test('mapQuizzes derives time limit in minutes and uses timeclose as due', () =>
       { id: 57, coursemodule: 6003, course: 7, name: 'No close', timeclose: 0, timelimit: 0 },
     ],
   };
-  const { records, skippedNoDue } = M.mapQuizzes(course, resp, BASE);
-  assert.strictEqual(skippedNoDue, 1);
-  assert.strictEqual(records.length, 2);
+  const { records } = M.mapQuizzes(course, resp, BASE);
+  assert.strictEqual(records.length, 3);
+  assert.strictEqual(records[2].dueTs, null, 'a quiz with no close date is kept, undated');
   assert.strictEqual(records[0].id, 'moodle:6001');
   assert.strictEqual(records[0].kind, 'quiz');
   assert.strictEqual(records[0].timeLimitMin, 20);
@@ -115,63 +116,6 @@ test('submissionState for quizzes', () => {
   assert.strictEqual(M.submissionState('quiz', { attempts: [{ state: 'abandoned' }] }), 'none');
   assert.strictEqual(M.submissionState('quiz', { attempts: [] }), 'none');
   assert.strictEqual(M.submissionState('quiz', undefined), 'none');
-});
-
-test('parsePercent reads "12.50 %" and rejects text without a percent sign', () => {
-  assert.strictEqual(M.parsePercent('12.50 %'), 12.5);
-  assert.strictEqual(M.parsePercent('8%'), 8);
-  assert.strictEqual(M.parsePercent('-'), null);
-  assert.strictEqual(M.parsePercent(''), null);
-  assert.strictEqual(M.parsePercent(null), null);
-});
-
-function gradeResp(extra = {}) {
-  return { usergrades: [{ courseid: 7, maxdepth: 2, gradeitems: [
-    { id: 1, itemtype: 'course', graderaw: 87.4, grademax: 100 },
-    { id: 2, itemtype: 'category', itemname: 'Homework' },
-    { id: 3, itemtype: 'mod', itemmodule: 'assign', cmid: 5002, itemname: ' Assignment 5 ', graderaw: 44, grademax: 50, weightformatted: '10.00 %', feedback: '<p>Good <b>job</b></p>', gradedategraded: 1_799_000_000 },
-    { id: 4, itemtype: 'mod', itemmodule: 'quiz', cmid: 6001, itemname: 'Quiz 4', graderaw: null, grademax: 10, weightformatted: '-' },
-    { id: 5, itemtype: 'manual', itemname: 'Attendance', cmid: 0, graderaw: 9, grademax: 10, weightformatted: '5.00 %' },
-    { id: 6, itemtype: 'mod', itemmodule: 'assign', cmid: 5009, itemname: 'Hidden', graderaw: 90, grademax: 100, gradeishidden: true },
-    { id: 7, itemtype: 'mod', itemmodule: 'forum', cmid: 5010, itemname: 'Scale item', graderaw: 2, grademax: 0 },
-  ], ...extra }] };
-}
-
-test('mapGradeItems separates the course total, skips categories, and keys entries like import records', () => {
-  const g = M.mapGradeItems(course, gradeResp());
-  assert.strictEqual(g.courseId, 7);
-  assert.strictEqual(g.course, 'MATH 2400');
-  assert.strictEqual(g.total, 87.4);
-  assert.deepStrictEqual(g.items.map((i) => i.id), ['moodle:5002', 'moodle:6001', 'gi:5', 'moodle:5009', 'moodle:5010']);
-  const a = g.items[0];
-  assert.strictEqual(a.name, 'Assignment 5');
-  assert.strictEqual(a.pct, 88);
-  assert.strictEqual(a.kind, 'assign');
-  assert.strictEqual(a.feedback, 'Good job');
-  assert.strictEqual(a.gradedTs, 1_799_000_000);
-  assert.strictEqual(a.weightSuggested, 10);
-  assert.strictEqual(g.items[1].pct, null);
-  assert.strictEqual(g.items[1].weightSuggested, null);
-  assert.strictEqual(g.items[2].cmid, null);
-  assert.strictEqual(g.items[2].kind, 'manual');
-  assert.strictEqual(g.items[2].pct, 90);
-});
-
-test('mapGradeItems hides hidden grades and ones it cannot turn into a percent', () => {
-  const g = M.mapGradeItems(course, gradeResp());
-  assert.strictEqual(g.items.find((i) => i.id === 'moodle:5009').pct, null, 'hidden grade');
-  assert.strictEqual(g.items.find((i) => i.id === 'moodle:5010').pct, null, 'grademax 0 (a scale)');
-});
-
-test('mapGradeItems does not suggest weights for nested gradebooks', () => {
-  const g = M.mapGradeItems(course, gradeResp({ maxdepth: 3 }));
-  assert.ok(g.items.every((i) => i.weightSuggested === null));
-});
-
-test('mapGradeItems copes with an empty or missing response', () => {
-  assert.deepStrictEqual(M.mapGradeItems(course, {}).items, []);
-  assert.strictEqual(M.mapGradeItems(course, null).total, null);
-  assert.deepStrictEqual(M.mapGradeItems(course, { usergrades: [] }).items, []);
 });
 
 test('submissionInfo reads enabled submission types and an enabled word limit', () => {

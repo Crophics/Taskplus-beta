@@ -5,10 +5,10 @@
 // Every /api call must carry a valid Firebase ID token; the Moodle token
 // never leaves this Worker.
 
-import { processSync, loadEvents, loadPush, savePush, pushStatus, registerToken, unregisterToken, cleanPrefs, cleanTimeZone, sendTest, runCron } from './push.mjs';
+import { processSync, knownStates, loadEvents, loadPush, savePush, pushStatus, registerToken, unregisterToken, cleanPrefs, cleanTimeZone, sendTest, runCron } from './push.mjs';
 import { parseServiceAccount } from './fcm.mjs';
 import { verifyFirebaseIdToken, AuthError } from './auth.mjs';
-import { MoodleError, normalizeSite, requestToken, getSiteInfo, getCourses, syncCourses, gradeReportShape } from './moodle-client.mjs';
+import { MoodleError, normalizeSite, requestToken, getSiteInfo, getCourses, syncCourses } from './moodle-client.mjs';
 import { pickDefaultCourses, courseCode } from './moodle-map.mjs';
 import { loadRecord, saveRecord, deleteRecord } from './store.mjs';
 import { DEFAULT_MODEL, sanitizeInput, cacheMaterial, sha256Hex, callModel } from './estimate.mjs';
@@ -72,7 +72,7 @@ export async function handleApi(request, env, deps = {}) {
 
   const methods = {
     '/api/moodle/status': 'GET', '/api/moodle/connect': 'POST', '/api/moodle/courses': 'POST', '/api/moodle/sync': 'POST',
-    '/api/moodle/disconnect': 'POST', '/api/moodle/grade-shape': 'POST', '/api/estimate': 'POST',
+    '/api/moodle/disconnect': 'POST', '/api/estimate': 'POST',
     '/api/push/status': 'GET', '/api/push/events': 'GET', '/api/push/register': 'POST', '/api/push/unregister': 'POST',
     '/api/push/prefs': 'POST', '/api/push/test': 'POST',
   };
@@ -150,12 +150,6 @@ export async function handleApi(request, env, deps = {}) {
     const rec = await loadRecord(env, uid);
     if (!rec) return fail('not_connected', 'Connect Moodle first', 409);
 
-    if (route === '/api/moodle/grade-shape') {
-      const cid = Number(body.courseId);
-      if (!rec.courses.some((c) => c.id === cid)) throw new MoodleError('bad_request', 'Unknown course');
-      return json(await gradeReportShape(rec.site, rec.token, rec.userid, cid, fetchFn));
-    }
-
     if (route === '/api/moodle/courses') {
       const valid = new Set(rec.courses.map((c) => c.id));
       const selected = Array.isArray(body.selected) ? body.selected.filter((id) => valid.has(id)) : null;
@@ -175,7 +169,7 @@ export async function handleApi(request, env, deps = {}) {
       const budget = Number(env.SUBREQUEST_BUDGET) > 0 ? Number(env.SUBREQUEST_BUDGET) : 40;
       let result;
       try {
-        result = await syncCourses(rec.site, rec.token, rec.userid, rec.selected, { fetchFn, nowSec: Math.floor(now / 1000), budget });
+        result = await syncCourses(rec.site, rec.token, rec.userid, rec.selected, { fetchFn, nowSec: Math.floor(now / 1000), budget, known: await knownStates(env, uid) });
       } catch (e) {
         if (e instanceof MoodleError && e.code === 'moodle_auth') await deleteRecord(env, uid);
         throw e;
@@ -185,7 +179,7 @@ export async function handleApi(request, env, deps = {}) {
       // Events go to the feed, not to a push: the user is looking at the app right now.
       let events = [];
       try { events = await processSync(env, uid, result, now, { notify: false, deps }); } catch (e) { /* alerts must never break a sync */ }
-      return json({ records: result.records, grades: result.grades, warnings: result.warnings, syncedAt: now, courses: courseView(rec.courses, rec.selected), events });
+      return json({ records: result.records, warnings: result.warnings, syncedAt: now, courses: courseView(rec.courses, rec.selected), events });
     }
 
     return fail('not_found', 'Unknown endpoint', 404);

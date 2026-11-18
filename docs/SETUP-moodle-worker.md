@@ -87,7 +87,7 @@ The Worker now imports the Anthropic SDK, so the GitHub workflow runs `npm ci` b
 
 Without this the app still shows **What's new** (the bell on Today) after every sync. With it, the Worker
 syncs Moodle in the background every 3 hours (a cron runs every 30 minutes) and sends a push for new
-assignments, moved due dates, grades, feedback, and "due tomorrow" / "due within the hour".
+assignments, moved due dates, and "due tomorrow" / "due within the hour".
 
 1. Firebase console > Project settings > Service accounts. Create a **dedicated** service account (Google Cloud
    console > IAM) with only the role **Firebase Cloud Messaging API Admin**, and create a JSON key for it.
@@ -113,8 +113,7 @@ Notes:
 ## Optional
 
 - `SUBREQUEST_BUDGET` (a Worker variable, default 40): the most Moodle calls one
-  sync may make. A sync uses 3 fixed calls, plus one grade report per selected
-  course, plus one submission check per assignment/quiz (soonest due first). Cloudflare's free plan allows 50 outgoing requests per Worker
+  sync may make. A sync uses 3 fixed calls, plus one submission check per assignment/quiz (soonest due first). Cloudflare's free plan allows 50 outgoing requests per Worker
   invocation, so 40 leaves headroom. On a paid plan you can raise it so every
   assignment's submission status is checked on every sync; on the free plan,
   items beyond the budget are checked on the next sync instead.

@@ -54,3 +54,31 @@ test('nextPaletteColor skips colors already assigned to another course', () => {
   const courses = [{ id: 'c1', name: 'A', color: TPCourses.PALETTE[0] }];
   assert.strictEqual(TPCourses.nextPaletteColor(courses), TPCourses.PALETTE[1]);
 });
+
+test('openItemsForCourse: open work only, soonest first, undated last, name matching ignores case', () => {
+  const items = [
+    { title: 'B', course: 'math 2400', due: '2026-11-20' },
+    { title: 'A', course: 'MATH 2400', due: '2026-11-18' },
+    { title: 'Z', course: 'MATH 2400', due: '' },
+    { title: 'done', course: 'MATH 2400', due: '2026-11-17', completed: true },
+    { title: 'old', course: 'MATH 2400', due: '2026-11-01', archived: true },
+    { title: 'other', course: 'PHIL 2202', due: '2026-11-19' },
+  ];
+  assert.deepStrictEqual(TPCourses.openItemsForCourse(items, 'MATH 2400').map((i) => i.title), ['A', 'B', 'Z']);
+});
+
+test('overview: counts open and overdue work and finds the next due item, sorted by name', () => {
+  const items = [
+    { title: 'late', course: 'PHIL', due: '2026-11-10' },
+    { title: 'soon', course: 'PHIL', due: '2026-11-18' },
+    { title: 'later', course: 'PHIL', due: '2026-11-25' },
+    { title: 'x', course: 'ART', due: '2026-11-17', completed: true },
+  ];
+  const rows = TPCourses.overview([{ name: 'PHIL', color: '#111' }, { name: 'ART', color: '#222' }], items, '2026-11-17', (n) => 'c-' + n);
+  assert.deepStrictEqual(rows.map((r) => r.name), ['ART', 'PHIL']);
+  assert.deepStrictEqual([rows[0].open, rows[0].next], [0, null]);
+  assert.strictEqual(rows[1].open, 3);
+  assert.strictEqual(rows[1].overdue, 1);
+  assert.strictEqual(rows[1].next.title, 'soon');
+  assert.strictEqual(rows[1].color, 'c-PHIL');
+});

@@ -6,6 +6,7 @@
    contribute 1 unit on their due day.
 */
 (function (global) {
+  const planned = (it) => !!it.due && !it.ignored; // same rule as TPItemLogic.isPlanned
   function paceItemAcrossDays(it, today, daysBetween) {
     // Returns an array of {dayIndex, load, course} contributions, dayIndex in 0-6.
     const left = Math.max((it.total || 0) - (it.done || 0), 0);
@@ -36,7 +37,7 @@
   function computePacedLoad(ctx) {
     const { items, today, daysBetween } = ctx;
     const days = Array.from({ length: 7 }, (_, i) => ({ dayIndex: i, total: 0, byCourse: {} }));
-    items.filter(it => !it.completed && !it.archived).forEach(it => {
+    items.filter(it => !it.completed && !it.archived && planned(it)).forEach(it => {
       paceItemAcrossDays(it, today(), daysBetween).forEach(({ dayIndex, load, course }) => {
         const day = days[dayIndex];
         day.total += load;
@@ -57,9 +58,9 @@
 
   function statTiles(ctx) {
     const { items, today, daysBetween } = ctx;
-    const dueThisWeek = items.filter(it => !it.completed && !it.archived && daysBetween(today(), it.due) >= 0 && daysBetween(today(), it.due) <= 6).length;
+    const dueThisWeek = items.filter(it => !it.completed && !it.archived && planned(it) && daysBetween(today(), it.due) >= 0 && daysBetween(today(), it.due) <= 6).length;
     const unitsLeft = items.reduce((sum, it) => {
-      if (it.completed || it.archived) return sum;
+      if (it.completed || it.archived || !planned(it)) return sum;
       return sum + Math.max((it.total || 0) - (it.done || 0), 0);
     }, 0);
     return { dueThisWeek, unitsLeft: Math.round(unitsLeft * 10) / 10 };
@@ -69,7 +70,7 @@
   function contributionsForDay(ctx, dayIndex) {
     const { items, today, daysBetween } = ctx;
     const out = [];
-    items.filter(it => !it.completed && !it.archived).forEach(it => {
+    items.filter(it => !it.completed && !it.archived && planned(it)).forEach(it => {
       const contribs = paceItemAcrossDays(it, today(), daysBetween);
       const forDay = contribs.find(c => c.dayIndex === dayIndex);
       if (forDay) out.push({ it, load: forDay.load });

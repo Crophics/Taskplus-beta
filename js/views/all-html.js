@@ -25,15 +25,16 @@
       fmt, courseColorFor,
     } = ctx;
     const locked = isLocked(it);
-    const daysLeft = daysBetween(today(), it.due);
-    const overdue = !it.completed && !locked && daysLeft < 0;
+    const daysLeft = it.due ? daysBetween(today(), it.due) : NaN;
+    const overdue = !it.completed && !locked && !it.ignored && daysLeft < 0;
     const dt = it.dailyTarget;
-    const cls = locked ? 'tp-locked' : urgencyClass(daysLeft, it.completed);
+    const cls = locked ? 'tp-locked' : (it.ignored || !it.due) ? '' : urgencyClass(daysLeft, it.completed);
     const color = it.course ? courseColorFor(it.course) : 'var(--text-faint)';
     const unit = it.unit || 'units';
     const pct = it.total > 0 ? Math.min(100, Math.round((it.done / it.total) * 100)) : 0;
     let statusText, statusClass;
     if (it.completed) { statusText = 'Done'; statusClass = 'tp-a-status-dim'; }
+    else if (it.ignored) { statusText = 'Ignored'; statusClass = 'tp-a-status-dim'; }
     else if (locked) { statusText = 'Blocked'; statusClass = 'tp-a-status-dim'; }
     else if (overdue) { statusText = 'Overdue'; statusClass = 'tp-a-status-danger'; }
     else if (dt && dt.amt > 0) { statusText = `${dt.amt}/day`; statusClass = 'tp-a-status-accent'; }
@@ -55,7 +56,7 @@
   }
 
   function groupHtml(group, ctx) {
-    const heading = group.label ? `<div class="tp-section-heading${group.key === 'overdue' ? ' tp-a-heading-danger' : ''}${group.key === 'completed' ? ' tp-a-heading-dim' : ''}">
+    const heading = group.label ? `<div class="tp-section-heading${group.key === 'overdue' ? ' tp-a-heading-danger' : ''}${(group.key === 'completed' || group.key === 'ignored') ? ' tp-a-heading-dim' : ''}">
       <span>${group.label}</span><span class="tp-section-rule"></span>
     </div>` : '';
     return heading + group.rows.map(r => rowHtml(r, ctx)).join('');
