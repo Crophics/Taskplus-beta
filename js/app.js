@@ -1026,6 +1026,24 @@
     if(document.visibilityState === 'visible') moodleMaybeAutoSync();
   });
 
+  // Touch gestures (js/gestures.js): swipe between tabs, swipe back, pull down to sync with Moodle.
+  if(window.TPGestures){
+    window.TPGestures.init({
+      state: ()=>({ tab, blocked: !!(addOpen || connectOpen || menuFor != null || userIsTyping()) }),
+      goTab: (t)=>{ tab = t; screenJustSwitched = true; savePrefs(); render(); if(typeof window.scrollTo === 'function') window.scrollTo(0, 0); },
+      // Use the screen's own back button so the gesture and the button can never disagree.
+      back: ()=>{
+        const b = document.querySelector('.tp-c-back');
+        if(b) b.click();
+        else if(tab === 'settings'){ tab = 'today'; screenJustSwitched = true; savePrefs(); render(); }
+      },
+      refresh: ()=>{
+        if(!moodleState.connected){ showToast('Connect Moodle in Settings to sync'); return; }
+        return moodleSync({silent:false});
+      }
+    });
+  }
+
   /* ---- Render ---- */
   function render(){
     const V = window.TPViews;
@@ -1089,7 +1107,7 @@
         escapeHtml, days, dayLabels, selDay: weekSelDay, stats, heaviestLabel,
         courseColorFor, courseStats, advice, relativeDueLabel, animateChart,
         items, today, daysBetween, TPWeekLogic: window.TPWeekLogic, minutes: minutesCtx,
-        classes: classesForDay(weekSelDay),
+        classes: classesForDay(weekSelDay), hdr: headerCtx(),
       });
     } else if(tab==='settings'){
       screenHtml = V.settingsScreenHtml({
@@ -1099,13 +1117,13 @@
         moodle: { state: moodleState, busy: moodleBusy, signedIn: moodleSignedIn() }, llmOn, filesOn, alerts,
       }) + V.devToolbarHtml({ devMode, devPanelOpen });
     } else if(tab==='courses'){
-      screenHtml = V.coursesOverviewHtml({ escapeHtml, rows: window.TPCourses.overview(courses, items, today(), courseColorFor), connected: !!moodleState.connected, relativeDueLabel });
+      screenHtml = V.coursesOverviewHtml({ escapeHtml, hdr: headerCtx(), rows: window.TPCourses.overview(courses, items, today(), courseColorFor), connected: !!moodleState.connected, relativeDueLabel });
     } else if(tab==='course' && courseDetailName){
       screenHtml = V.courseDetailHtml(courseDetailCtx(courseDetailName));
     } else if(tab==='item'){
       screenHtml = V.itemDetailHtml(itemDetailCtx());
     } else if(tab==='changes'){
-      screenHtml = V.changesScreenHtml({ feed, escapeHtml, now: Date.now(), fromLabel: changesFrom === 'week' ? 'Week' : changesFrom === 'courses' ? 'Courses' : 'Today', colorFor: courseColorFor });
+      screenHtml = V.changesScreenHtml({ feed, escapeHtml, now: Date.now(), fromLabel: ({week:'Week', courses:'Courses', all:'All'})[changesFrom] || 'Today', colorFor: courseColorFor });
     } else if(tab==='manage'){
       screenHtml = V.coursesScreenHtml({
         escapeHtml, courses, openCountFor: (name)=> window.TPCourses.openCountForCourse(items, name),
@@ -1154,9 +1172,11 @@
 
   // Context handed to js/views/all-html.js, factored out so both a full
   // render() and a search-only patch() can build the exact same shape.
+  // What every main screen's header needs: the What's new bell (with its unread dot) and Settings.
+  function headerCtx(){ return { showBell: !!moodleState.connected, unread: window.TPMoodle.unreadCount(feed) }; }
   function allCtx(){
     return {
-      escapeHtml: window.TPHtml.escapeHtml, searchTerm, sortMode: allSortMode, filterCourse: allFilterCourse,
+      escapeHtml: window.TPHtml.escapeHtml, hdr: headerCtx(), searchTerm, sortMode: allSortMode, filterCourse: allFilterCourse,
       courses, groups: allGroups(), itemsLength: items.filter(i=>!i.archived).length,
       isLocked, daysBetween, today, urgencyClass, relativeDueLabel, fmt, unitLabel, capUnit,
       courseColorFor, contrastTextColor,

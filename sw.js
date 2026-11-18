@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v57'; // bumped: back button is a bordered 44 px button
+const CACHE_NAME = 'taskplus-cache-v58'; // bumped: four tabs, shared header, gestures, restyled All
 const urlsToCache = [
   './',
   './index.html',
@@ -97,6 +97,7 @@ const urlsToCache = [
   './js/views/changes-html.js',
   './js/views/quick-menu-html.js',
   './js/today-logic.js',
+  './js/gestures.js',
   './js/bind-events.js',
   './js/boot.js',
   './js/app.js',

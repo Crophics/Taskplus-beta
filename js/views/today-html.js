@@ -131,10 +131,9 @@
         <div class="tp-t-weekday">${escapeHtml(weekdayLabel)}</div>
         <div class="tp-t-date">${escapeHtml(dateLabel)}</div>
       </div>
-      <div class="tp-t-header-right">
+      <div class="tp-t-header-right-wrap">
         ${streak > 0 ? `<div class="tp-t-streak">${streak}-day streak</div>` : ''}
-        ${ctx.showBell ? window.TPViews.bellButtonHtml(ctx.unread || 0) : ''}
-        <button type="button" class="tp-icon-btn" id="tp-open-settings" aria-label="Settings">${window.TPIcons.svg('cog_outline')}</button>
+        ${window.TPViews.headerActionsHtml({ showBell: ctx.showBell, unread: ctx.unread })}
       </div>
     </div>`;
 

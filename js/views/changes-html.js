@@ -1,11 +1,25 @@
 /* views/changes-html.js — "What's new": the feed of changes found in Moodle
-   (new work, moved dates). Opened from the bell on Today. */
+   (new work, moved dates). Opened from the bell in any main screen's header. */
 (function (global) {
   // Hand-drawn (the Nerd Font extraction recipe in AGENTS.md was not needed for one stroke icon).
   const BELL = '<svg class="tp-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>';
 
   function bellButtonHtml(unread) {
     return `<button type="button" class="tp-icon-btn tp-bell" id="tp-open-changes" aria-label="What's new${unread ? ` (${unread} unread)` : ''}">${BELL}${unread ? '<span class="tp-bell-dot"></span>' : ''}</button>`;
+  }
+
+  /** The same two buttons on every main screen: What's new (when Moodle is connected) and Settings. */
+  function headerActionsHtml(ctx) {
+    const c = ctx || {};
+    return `<div class="tp-t-header-right">
+      ${c.showBell ? bellButtonHtml(c.unread || 0) : ''}
+      <button type="button" class="tp-icon-btn" id="tp-open-settings" aria-label="Settings">${global.TPIcons.svg('cog_outline')}</button>
+    </div>`;
+  }
+
+  /** Title row for a main screen: big title, an optional quiet count, then the shared actions. */
+  function screenHeaderHtml(title, ctx, sub) {
+    return `<div class="tp-screen-head"><div class="tp-screen-head-main"><span class="tp-a-title-heading">${title}</span>${sub ? `<span class="tp-a-count">${sub}</span>` : ''}</div>${headerActionsHtml(ctx)}</div>`;
   }
 
   function when(at, now) {
@@ -52,4 +66,6 @@
   global.TPViews = global.TPViews || {};
   global.TPViews.changesScreenHtml = changesScreenHtml;
   global.TPViews.bellButtonHtml = bellButtonHtml;
+  global.TPViews.headerActionsHtml = headerActionsHtml;
+  global.TPViews.screenHeaderHtml = screenHeaderHtml;
 })(typeof window !== 'undefined' ? window : globalThis);

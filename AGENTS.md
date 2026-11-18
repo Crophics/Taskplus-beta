@@ -47,9 +47,14 @@ for the one-time Cloudflare setup. What matters when touching code:
   tested in `test/moodle-import.test.js`) and the API wrapper. It loads right
   after `courses.js`. Moodle owns title/course/due/`source`; the user owns the
   rest.
-- **Navigation is three tabs** (Today, Week, Courses). Settings is the gear on
-  Today, All is a drill-down from Week, Add is the + on Week. `TABS` in `app.js`
-  still lists every screen so an old saved tab preference keeps working.
+- **Navigation is four tabs** (Today, Week, All, Courses). The app is built around Moodle, so
+  manual add is a quiet fallback with no button of its own: a link at the bottom of All and a row in
+  Settings (`[data-add-manual]`, bound in `bind-events.js`). What's new (bell, only when Moodle is
+  connected) and Settings are in every main screen's header (`TPViews.headerActionsHtml` /
+  `screenHeaderHtml`, context from `headerCtx()` in `app.js`). Gestures live in `js/gestures.js`
+  (pure `classifySwipe`, tested): swipe between tabs, edge swipe = click the screen's own back
+  button, pull down = Moodle sync. Don't add an Add button to the tab bar or a header. `TABS` in
+  `app.js` still lists every screen so an old saved tab preference keeps working.
 - **Tests for the Worker** (`test/moodle-worker.test.js`) use a fake Moodle
   `fetch`, a fake KV and real RSA-signed Firebase tokens; nothing touches the
   network. For changes to the wiring, the jsdom technique below still applies,

@@ -54,6 +54,8 @@
   // at 20px via rsvg-convert) fixes that without shrinking the overall
   // icon footprint.
   const MARKUP = {
+    // Hand-drawn open book (two pages with a gap for the spine); used for the Courses tab.
+    book_open: '<path d="M960 840Q720 700 380 740V1960Q720 1920 960 2060ZM1088 840Q1328 700 1668 740V1960Q1328 1920 1088 2060Z"/>',
     drag_indicator: '<circle cx="760" cy="806" r="120"/><circle cx="1288" cy="806" r="120"/><circle cx="760" cy="1434" r="120"/><circle cx="1288" cy="1434" r="120"/><circle cx="760" cy="2062" r="120"/><circle cx="1288" cy="2062" r="120"/>',
   };
 

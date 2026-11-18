@@ -24,7 +24,7 @@
   function coursesOverviewHtml(ctx) {
     const { rows, connected } = ctx;
     const subtitle = rows.length ? `${rows.length} course${rows.length === 1 ? '' : 's'}` : '';
-    const header = `<div class="tp-a-header-top"><span class="tp-a-title-heading">Courses</span><span class="tp-a-count">${subtitle}</span></div>`;
+    const header = window.TPViews.screenHeaderHtml('Courses', ctx.hdr, subtitle);
     if (!rows.length) {
       return `<div class="tp-screen tp-screen-courses-overview">${header}
         <div class="tp-g-empty">

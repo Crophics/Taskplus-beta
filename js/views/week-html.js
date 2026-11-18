@@ -103,9 +103,7 @@
 
   function weekScreenHtml(ctx) {
     const { escapeHtml, days, dayLabels, selDay, stats, heaviestLabel, courseColorFor, courseStats, advice, animateChart, minutes } = ctx;
-    const header = `<div class="tp-a-header-top tp-a-header-top-center"><span class="tp-a-title-heading">Week</span>
-      <button type="button" class="tp-icon-btn" id="tp-add-toggle" aria-label="Add an assignment manually">${window.TPIcons.svg('plus')}</button>
-    </div>`;
+    const header = window.TPViews.screenHeaderHtml('Week', ctx.hdr);
     // The bar-grow-in animation (css/mobile.css) is scoped under
     // .tp-w-chart-animate so it only plays on animateChart's one true
     // render (js/app.js's weekChartFirstRender) - not on every re-render
@@ -116,7 +114,6 @@
       ${dayDetailHtml(ctx, selDay)}
       ${byCourseHtml(courseStats, escapeHtml)}
       ${adviceHtml(advice)}
-      <button type="button" class="tp-w-all-link" id="tp-open-all"><span>All items</span>${window.TPIcons.svg('chevron_right')}</button>
     </div>`;
   }
 

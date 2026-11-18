@@ -90,8 +90,8 @@
       api.savePrefs();
       api.render();
     });
-    const addToggle = document.getElementById('tp-add-toggle');
-    if (addToggle) addToggle.onclick = () => { api.openAddSheet(); api.render(); };
+    // Adding by hand is a quiet fallback (links on All and in Settings), not a headline action.
+    root.querySelectorAll('[data-add-manual]').forEach(b => b.onclick = () => { api.openAddSheet(); api.render(); });
     const heavyLine = document.getElementById('tp-t-heavy');
     if (heavyLine) heavyLine.onclick = () => { api.tab = 'week'; api.savePrefs(); api.render(); };
     const openSettings = document.getElementById('tp-open-settings');
@@ -112,10 +112,6 @@
     if (alQe) alQe.onchange = (e) => api.savePrefsToServer({ quiet: { end: Number(e.target.value) } });
     const alTest = document.getElementById('tp-al-test');
     if (alTest) alTest.onclick = () => api.sendTestAlert();
-    const openAll = document.getElementById('tp-open-all');
-    if (openAll) openAll.onclick = () => { api.tab = 'all'; api.savePrefs(); api.render(); };
-    const allBack = document.getElementById('tp-all-back');
-    if (allBack) allBack.onclick = () => { api.tab = 'week'; api.savePrefs(); api.render(); };
 
     /* ---- Today screen: tap a row body to open the quick-action menu ---- */
     root.querySelectorAll('.tp-t-row, .tp-t-ahead-row').forEach(row => {
@@ -189,12 +185,12 @@
       api.savePrefs();
       api.render();
     });
-    root.querySelectorAll('.tp-a-chip[data-course-filter]').forEach(b => b.onclick = () => {
-      const val = b.dataset.courseFilter;
-      api.allFilterCourse = (val && val.toLowerCase() === (api.allFilterCourse || '').toLowerCase()) ? '' : val;
+    const courseSelect = document.getElementById('tp-a-course');
+    if (courseSelect) courseSelect.onchange = () => {
+      api.allFilterCourse = courseSelect.value;
       api.savePrefs();
       api.render();
-    });
+    };
 
     /* ---- Drag to reorder (pointer-based; iOS Safari has no HTML5 DnD from touch) ---- */
     root.querySelectorAll('.tp-a-drag').forEach(handle => {

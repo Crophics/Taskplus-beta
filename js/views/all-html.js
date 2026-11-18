@@ -4,18 +4,6 @@
     return `<button type="button" class="tp-a-chip${active ? ' tp-a-chip-active' : ''}" ${attrs}>${label}</button>`;
   }
 
-  function courseFilterChipsHtml(courses, filterCourse) {
-    const escapeHtml = window.TPHtml.escapeHtml;
-    let html = chip('All courses', !filterCourse, `data-course-filter=""`);
-    courses.forEach(c => {
-      const active = filterCourse && filterCourse.toLowerCase() === c.name.toLowerCase();
-      html += `<button type="button" class="tp-a-chip tp-a-course-chip${active ? ' tp-a-chip-active' : ''}" data-course-filter="${escapeHtml(c.name)}">
-        <span class="tp-a-course-swatch" style="background:${c.color}"></span>${escapeHtml(c.name)}
-      </button>`;
-    });
-    return html;
-  }
-
   function rowHtml(row, ctx) {
     const {
       it, i,
@@ -40,7 +28,7 @@
     else if (dt && dt.amt > 0) { statusText = `${dt.amt}/day`; statusClass = 'tp-a-status-accent'; }
     else { statusText = 'Open'; statusClass = 'tp-a-status-dim'; }
     return `<div class="tp-a-card ${cls} ${it.completed ? 'tp-a-done' : ''} ${locked ? 'tp-a-blocked-row' : ''}" id="tp-card-${i}" data-i="${i}">
-      <span class="tp-a-drag" data-i="${i}" aria-hidden="true">${window.TPIcons.svg('drag_indicator')}</span>
+      ${ctx.sortMode === 'custom' ? `<span class="tp-a-drag" data-i="${i}" aria-hidden="true">${window.TPIcons.svg('drag_indicator')}</span>` : ''}
       <span class="tp-a-bar" style="background:${color}"></span>
       <div class="tp-a-body">
         <div class="tp-a-title-line">
@@ -77,7 +65,10 @@
         </div>`
       : groups.map(g => groupHtml(g, ctx)).join('');
 
-    const footer = `<div class="tp-t-footer">Long-press a card for quick actions · drag the handle to reorder</div>`;
+    const footer = `<div class="tp-a-foot">
+      <div class="tp-t-footer">Long-press a card for quick actions</div>
+      <button type="button" class="tp-s-link tp-a-add-manual" data-add-manual>Add an assignment by hand</button>
+    </div>`;
 
     return body + footer;
   }
@@ -86,24 +77,29 @@
     const { escapeHtml, searchTerm, sortMode, filterCourse, courses, groups, itemsLength } = ctx;
     const activeCount = groups.reduce((s, g) => s + g.rows.filter(r => !r.it.completed).length, 0);
 
+    const courseOptions = ['<option value="">All courses</option>'].concat(courses.map(c => {
+      const sel = filterCourse && filterCourse.toLowerCase() === c.name.toLowerCase() ? ' selected' : '';
+      return `<option value="${escapeHtml(c.name)}"${sel}>${escapeHtml(c.name)}</option>`;
+    })).join('');
+
     const header = `<div class="tp-a-header">
-      <div class="tp-a-header-top"><span class="tp-a-title-heading">All</span><span class="tp-a-count">${activeCount} of ${itemsLength}</span></div>
+      ${window.TPViews.screenHeaderHtml('All', ctx.hdr, `${activeCount} of ${itemsLength}`)}
       <div class="tp-a-search-wrap">
         ${window.TPIcons.svg('magnify', { className: 'tp-a-search-icon' })}
         <input id="tp-a-search" placeholder="Search title, course, unit..." value="${escapeHtml(searchTerm)}">
         <button type="button" id="tp-a-search-clear" class="tp-a-search-clear" aria-label="Clear search" ${searchTerm ? '' : 'hidden'}>${window.TPIcons.svg('close_circle')}</button>
       </div>
-      <div class="tp-a-chips">
-        ${chip('Urgency', sortMode === 'urgency', `data-sort="urgency"`)}
-        ${chip('Due date', sortMode === 'due', `data-sort="due"`)}
-        ${chip('Course', sortMode === 'course', `data-sort="course"`)}
-      </div>
-      <div class="tp-a-chips tp-a-chips-wrap">
-        ${courseFilterChipsHtml(courses, filterCourse)}
+      <div class="tp-a-controls">
+        <div class="tp-a-seg" role="group" aria-label="Sort">
+          ${chip('Urgency', sortMode === 'urgency', `data-sort="urgency"`)}
+          ${chip('Due', sortMode === 'due', `data-sort="due"`)}
+          ${chip('Course', sortMode === 'course', `data-sort="course"`)}
+        </div>
+        <select id="tp-a-course" class="tp-a-select" aria-label="Filter by course">${courseOptions}</select>
       </div>
     </div>`;
 
-    return `<div class="tp-screen tp-screen-all"><button type="button" class="tp-c-back" id="tp-all-back">${window.TPIcons.svg('chevron_left')} Week</button>${header}<div id="tp-a-results">${resultsHtml(ctx)}</div></div>`;
+    return `<div class="tp-screen tp-screen-all">${header}<div id="tp-a-results">${resultsHtml(ctx)}</div></div>`;
   }
 
   global.TPViews = global.TPViews || {};

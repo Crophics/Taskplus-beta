@@ -117,6 +117,10 @@ body::-webkit-scrollbar{display:none;}
 .tp-a-header-top{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;}
 .tp-a-header-top-center{align-items:center;}
 .tp-t-header-right{display:flex;align-items:center;gap:10px;}
+.tp-t-header-right-wrap{display:flex;align-items:center;gap:12px;}
+/* Title row shared by Week / All / Courses: big title (+ quiet count) on the left, the same two buttons on the right. */
+.tp-screen-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;min-height:44px;}
+.tp-screen-head-main{display:flex;align-items:baseline;gap:10px;min-width:0;}
 #tp-app .tp-icon-btn{width:44px;height:44px;flex:0 0 auto;margin:0;padding:0;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .3s cubic-bezier(.34,1.56,.64,1);}
 #tp-app .tp-icon-btn:active{transform:scale(0.9);transition:transform .05s ease;}
 #tp-app .tp-icon-btn .tp-icon{font-size:18px;}
@@ -143,7 +147,7 @@ body::-webkit-scrollbar{display:none;}
 .tp-a-heading-danger .tp-section-count{color:var(--danger);}
 .tp-a-heading-dim{color:var(--text-dim);}
 
-.tp-a-card{display:flex;align-items:flex-start;gap:11px;background:var(--surface);box-shadow:0 0 0 1px var(--card-ring);border-radius:8px;padding:12px;margin-bottom:8px;transition:box-shadow .15s ease,transform .3s cubic-bezier(.34,1.56,.64,1);}
+.tp-a-card{display:flex;align-items:flex-start;gap:12px;background:var(--surface);box-shadow:0 0 0 1px var(--card-ring);border-radius:14px;padding:14px 16px;margin-bottom:10px;transition:box-shadow .15s ease,transform .3s cubic-bezier(.34,1.56,.64,1);}
 .tp-a-card:hover{box-shadow:0 0 0 1px var(--card-ring-hover);}
 .tp-a-card:active{transform:scale(0.97);transition:transform .05s ease;}
 .tp-a-card.tp-a-done{opacity:.5;}
@@ -160,13 +164,13 @@ body::-webkit-scrollbar{display:none;}
 .tp-a-bar{width:2px;align-self:stretch;border-radius:2px;flex:0 0 auto;}
 .tp-a-body{flex:1;min-width:0;}
 .tp-a-title-line{display:flex;align-items:center;gap:6px;}
-.tp-a-title{font-size:14.5px;font-weight:500;color:var(--text);}
+.tp-a-title{font-size:16px;font-weight:500;color:var(--text);}
 .tp-a-title-done{text-decoration:line-through;opacity:.7;}
 .tp-a-icon{font-size:12px;color:var(--text-dim);}
-.tp-a-meta{font-size:11px;color:var(--text-dim);margin-top:3px;}
+.tp-a-meta{font-size:12.5px;color:var(--text-dim);margin-top:4px;}
 .tp-a-progress{height:3px;border-radius:2px;background:var(--line);margin-top:6px;overflow:hidden;}
 .tp-a-progress-fill{height:100%;transition:width .35s ease;}
-.tp-a-status{flex:0 0 auto;font-size:11.5px;padding-top:2px;}
+.tp-a-status{flex:0 0 auto;font-size:12.5px;padding-top:2px;}
 .tp-a-status-danger{color:var(--danger);}
 .tp-a-status-accent{color:var(--accent-bright);}
 .tp-a-status-dim{color:var(--text-dim);}
@@ -523,3 +527,17 @@ body::-webkit-scrollbar{display:none;}
 .tp-cls-hint{font-size:11px;color:var(--text-faint);margin-top:6px;}
 
 .tp-s-warn{color:var(--warn,#e0a93a);}
+
+/* All screen: one row of controls (sort as a segmented control, course as a select) instead of two rows of chips. */
+#tp-app .tp-a-controls{display:flex;gap:10px;align-items:center;margin-bottom:6px;}
+#tp-app .tp-a-seg{display:flex;flex:1 1 auto;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:3px;gap:2px;}
+#tp-app .tp-a-seg .tp-a-chip{flex:1;border:none;border-radius:8px;padding:8px 4px;font-size:13px;color:var(--text-muted);background:transparent;}
+#tp-app .tp-a-seg .tp-a-chip-active{background:var(--accent-wash);color:var(--accent-bright);}
+#tp-app .tp-a-select{flex:0 1 44%;min-width:0;min-height:42px;margin:0;padding:0 28px 0 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-family:inherit;font-size:13px;}
+#tp-app .tp-a-foot{display:flex;flex-direction:column;align-items:center;gap:6px;padding-bottom:8px;}
+#tp-app .tp-a-add-manual{min-height:44px;margin:0;padding:0 12px;color:var(--text-dim);}
+
+/* Pull-down-to-sync pill (js/gestures.js) */
+#tp-ptr{position:fixed;top:calc(8px + env(safe-area-inset-top));left:50%;transform:translate(-50%,0);z-index:950;padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text-muted);font-size:13px;pointer-events:none;opacity:0;transition:opacity .15s ease;}
+#tp-ptr.tp-ptr-show{opacity:1;}
+#tp-ptr.tp-ptr-ready{color:var(--accent-bright);border-color:var(--accent);}
