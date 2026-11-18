@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v60'; // bumped: tap opens the assignment menu, now a bottom sheet
+const CACHE_NAME = 'taskplus-cache-v61'; // bumped: clearer menu rows (Plan and notes / Edit assignment)
 const urlsToCache = [
   './',
   './index.html',

@@ -13,11 +13,13 @@
       : `<button type="button" class="${it.total > 1 ? 'tp-i-secondary' : 'tp-i-primary'}" id="tp-qm-complete" data-i="${i}">${global.TPIcons.svg('check')}Mark complete</button>`);
 
     const rows = [];
-    if (ctx.canOpen) rows.push(row('tp-qm-open', 'Open details'));
-    if (it.due) rows.push(row('tp-qm-push', 'Push out a day'));
+    // Moodle work has its own page (time plan, parts, description, notes) that also holds Edit or delete,
+    // so it gets that row and no Edit row; Moodle owns title, course and due date and would overwrite an edit.
+    if (ctx.canOpen) rows.push(row('tp-qm-open', 'Plan and notes'));
+    if (it.due && !ctx.imported) rows.push(row('tp-qm-push', 'Push out a day')); // Moodle owns the due date
     if (ctx.canIgnore) rows.push(row('tp-qm-ignore', 'Ignore (stop showing as overdue)'));
     else if (it.ignored) rows.push(row('tp-qm-unignore', 'Stop ignoring'));
-    rows.push(row('tp-qm-edit', 'Edit details'));
+    if (!ctx.canOpen) rows.push(row('tp-qm-edit', 'Edit assignment'));
 
     const meta = [relativeDueLabel(it.due), it.ignored ? 'Ignored' : ''].filter(Boolean).map(escapeHtml).join(' · ');
     return `<div class="tp-backdrop" id="tp-qmenu-backdrop">
