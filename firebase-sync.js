@@ -226,6 +226,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
       courses: JSON.parse(localStorage.getItem("tp-courses") || "[]"),
       deletedCourses: JSON.parse(localStorage.getItem("tp-deleted-courses") || "[]"),
       ignored: JSON.parse(localStorage.getItem("tp-ignored") || "{}"),
+      progress: JSON.parse(localStorage.getItem("tp-imported-progress") || "{}"),
       dayCompleteLog: JSON.parse(localStorage.getItem("tp-day-complete-log") || "[]"),
       deletedLog,
       prefs: syncPrefs,
@@ -239,6 +240,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     if (data.courses) localStorage.setItem("tp-courses", JSON.stringify(data.courses));
     if (data.deletedCourses) localStorage.setItem("tp-deleted-courses", JSON.stringify(data.deletedCourses));
     if (data.ignored) localStorage.setItem("tp-ignored", JSON.stringify(data.ignored));
+    if (data.progress) localStorage.setItem("tp-imported-progress", JSON.stringify(data.progress));
     if (data.dayCompleteLog) localStorage.setItem("tp-day-complete-log", JSON.stringify(data.dayCompleteLog));
     if (data.deletedLog) localStorage.setItem("tp-deleted-log", JSON.stringify(data.deletedLog));
     if (data.prefs) {
@@ -266,6 +268,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
       courseColors: mergeCourseColors(local.courseColors, remoteData.courseColors),
       courses: mergeCourses(local.courses, remoteData.courses, deletedCourses),
       deletedCourses,
+      progress: window.TPMoodle ? window.TPMoodle.mergeProgress(local.progress, remoteData.progress, Date.now()) : local.progress,
       ignored: window.TPItemLogic ? window.TPItemLogic.mergeIgnored(local.ignored, remoteData.ignored, Date.now()) : local.ignored,
       dayCompleteLog: mergeDayLog(local.dayCompleteLog, remoteData.dayCompleteLog),
       deletedLog,

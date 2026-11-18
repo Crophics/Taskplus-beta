@@ -12,7 +12,9 @@
 */
 (function (global) {
   const RECENT_SUBMITTED_DAYS = 14;
-  const AUTO_SYNC_MIN_HOURS = 3;
+  // How stale this device's own copy may get before opening the app imports again. The server limits
+  // calls itself (30 s), so this can be short: the server's alerts arrive within about half an hour.
+  const AUTO_SYNC_MIN_MS = 10 * 60 * 1000;
 
   function pad(n) { return String(n).padStart(2, '0'); }
 
@@ -91,6 +93,9 @@
         // Every imported item starts with a rule-of-thumb time estimate (js/estimate-logic.js).
         // Unfinished work is split into ~50-minute parts so the daily pacing is in real time.
         if (global.TPEstimate) item = submitted ? { ...item, estimate: global.TPEstimate.estimateForItem(item) } : global.TPEstimate.withEstimate(item, global.TPEstimate.estimateForItem(item));
+        // Done on another device before this one ever imported it: start from that state.
+        const known = ctx.progress && ctx.progress[rec.id];
+        if (known && known.c && !item.completed) { item.completed = true; item.done = item.total || 1; item.completedAt = known.ca || today; item.updatedAt = known.at; }
         out.push(item);
         byId.set(item.id, out.length - 1);
         stats.added++;
@@ -242,8 +247,66 @@
   /** Whether the app should quietly sync on load / when it comes back to the foreground. */
   function shouldAutoSync(state, nowMs) {
     if (!state || !state.connected) return false;
-    if (!state.lastSyncAt) return true;
-    return nowMs - state.lastSyncAt >= AUTO_SYNC_MIN_HOURS * 3600 * 1000;
+    // lastImportAt is when THIS device last imported. (lastSyncAt is the server's own clock: its 30-minute
+    // check also sets it, so trusting it made the app think it was current while the server had news.)
+    if (!state.lastImportAt) return true;
+    return nowMs - state.lastImportAt >= AUTO_SYNC_MIN_MS;
+  }
+
+  /* ---- Done / progress of imported items that syncs ----
+     Imported items stay off the cloud document, so completion could not follow you to another device.
+     It travels as a map {itemId: {c: completed, d: done, ca: completedAt, at}}; the newest change wins. */
+  const PROGRESS_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
+
+  /** Brings the map up to date with the items (an entry is written when completed/done differ from it). */
+  function progressMap(items, prev, now) {
+    const out = { ...(prev || {}) };
+    (items || []).forEach((it) => {
+      if (!it || !it.id || !isImported(it)) return;
+      const c = !!it.completed;
+      const d = Number(it.done) || 0;
+      const e = out[it.id];
+      if (e && e.c === c && e.d === d) return;
+      if (!e && !c && d === 0) return;
+      out[it.id] = { c, d, ca: it.completedAt || null, at: it.updatedAt || now || Date.now() };
+    });
+    return out;
+  }
+
+  function mergeProgress(a, b, now) {
+    const out = {};
+    [a || {}, b || {}].forEach((m) => {
+      Object.entries(m).forEach(([id, e]) => {
+        if (!e || typeof e.at !== 'number' || now - e.at > PROGRESS_MAX_AGE_MS) return;
+        if (!out[id] || e.at > out[id].at) out[id] = { c: !!e.c, d: Number(e.d) || 0, ca: e.ca || null, at: e.at };
+      });
+    });
+    return out;
+  }
+
+  /**
+   * Copies the map's state onto an item when they differ. The map is kept current with local changes
+   * (progressMap runs on every save) and merged newest-wins, so what it says is the winner. An item's own
+   * updatedAt is no guide: a re-estimate bumps it without any change in progress.
+   */
+  function applyProgressTo(it, e) {
+    if (!e) return false;
+    const total = it.total || 1;
+    const d = e.c ? total : Math.min(e.d, total);
+    if (!!it.completed === e.c && (Number(it.done) || 0) === d) return false;
+    it.completed = e.c;
+    it.done = d;
+    it.completedAt = e.c ? (e.ca || it.completedAt || null) : null;
+    it.updatedAt = e.at;
+    return true;
+  }
+
+  function applyProgress(items, map) {
+    let changed = false;
+    (items || []).forEach((it) => {
+      if (it && it.id && isImported(it) && map && map[it.id] && applyProgressTo(it, map[it.id])) changed = true;
+    });
+    return changed;
   }
 
   /** Plain-language lines for the Worker's sync warnings (codes like 'state_failed:7'). */
@@ -341,5 +404,5 @@
     }
   }
 
-  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_HOURS, mergeFeed, unreadCount, markFeedSeen, feedLine };
+  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, progressMap, mergeProgress, applyProgress, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_MS, mergeFeed, unreadCount, markFeedSeen, feedLine };
 })(typeof window !== 'undefined' ? window : globalThis);

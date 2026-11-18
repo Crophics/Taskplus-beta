@@ -48,17 +48,20 @@ self.addEventListener('notificationclick', (event) => {
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const client of list) {
         if (client.url.includes(self.registration.scope) && 'focus' in client) {
+          // The alert means the server found changes: tell the open app to import them now.
+          client.postMessage({ type: 'tp-notification-click' });
           return client.focus();
         }
       }
-      if (clients.openWindow) return clients.openWindow(url);
+      // '#sync' makes a freshly opened app import right away (a hash is never sent to the network, so the cached page still matches).
+      if (clients.openWindow) return clients.openWindow(url.includes('#') ? url : url + '#sync');
     })
   );
 });
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v53'; // bumped: course deletions and ignored items sync
+const CACHE_NAME = 'taskplus-cache-v54'; // bumped: done state syncs; app imports when opened from an alert
 const urlsToCache = [
   './',
   './index.html',

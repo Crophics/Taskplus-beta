@@ -7,6 +7,7 @@
   /* ---- Storage keys & sync ---- */
   const KEY='tp-assignments';
   function syncPush(){
+    refreshProgressMap();
     if(!window.tpSync) return;
     let prefsNow = {};
     try{ prefsNow = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); }catch(e){}
@@ -17,6 +18,7 @@
       courses,
       deletedCourses,
       ignored: ignoredMap,
+      progress: progressMap,
       dayCompleteLog,
       deletedLog,
       prefs: syncPrefs
@@ -27,6 +29,7 @@
   const COURSES_KEY='tp-courses';
   const DELETED_COURSES_KEY='tp-deleted-courses';
   const IGNORED_KEY='tp-ignored';
+  const PROGRESS_KEY='tp-imported-progress';
   const LAST_ACTIVE_DATE_KEY='tp-last-active-date';
   const DAY_COMPLETE_LOG_KEY='tp-day-complete-log';
   const DELETED_LOG_KEY='tp-deleted-log';
@@ -125,7 +128,8 @@
     deletedCourses = readJsonArray(DELETED_COURSES_KEY);
     dedupeCourses();
     ignoredMap = readJsonObject(IGNORED_KEY, {});
-    if(applyIgnoredFromMap()) persistItems();
+    progressMap = readJsonObject(PROGRESS_KEY, {});
+    if(applyIgnoredFromMap() | window.TPMoodle.applyProgress(items, progressMap)) persistItems();
     try{ dayCompleteLog = JSON.parse(localStorage.getItem(DAY_COMPLETE_LOG_KEY)) || []; }catch(e){ dayCompleteLog = []; }
     try{ deletedLog = JSON.parse(localStorage.getItem(DELETED_LOG_KEY)) || []; }catch(e){ deletedLog = []; }
     let p = {};
@@ -690,6 +694,16 @@
     return !!it && !it.completed && !it.ignored && !!it.due && daysBetween(today(), it.due) < 0;
   }
   // Imported items never reach the cloud, so the ignored flag travels as its own small map (item id -> {on, at}).
+  let progressMap = readJsonObject(PROGRESS_KEY, {});
+  // Done / progress on imported items syncs as its own small map (they never reach the cloud document).
+  function refreshProgressMap(){
+    const next = window.TPMoodle.progressMap(items, progressMap, Date.now());
+    if(JSON.stringify(next) !== JSON.stringify(progressMap)){
+      progressMap = next;
+      try{ localStorage.setItem(PROGRESS_KEY, JSON.stringify(progressMap)); }catch(e){}
+    }
+  }
+  if(window.TPMoodle.applyProgress(items, progressMap)) persistItems();
   let ignoredMap = readJsonObject(IGNORED_KEY, {});
   function applyIgnoredFromMap(){
     return window.TPItemLogic.applyIgnored(items, ignoredMap, today(), daysBetween);
@@ -847,16 +861,17 @@
     if(!silent && tab === 'settings' && !userIsTyping()) render();
     try{
       const res = await window.TPMoodle.api.sync();
-      const merged = window.TPMoodle.mergeImported(items, res.records, { today: today(), deletedLog, now: Date.now() });
+      const merged = window.TPMoodle.mergeImported(items, res.records, { today: today(), deletedLog, now: Date.now(), progress: progressMap });
       items = merged.items;
       // A course with no assignments yet still gets its card: every course picked for syncing is listed.
       const names = (res.records||[]).map(r=>r.course).concat((res.courses||[]).filter(c=>c.selected).map(c=>c.code));
       if(window.TPMoodle.ensureCourseNames(courses, names, undefined, deletedCourses)) saveCourses();
       appendMoodleEvents(merged.events);
       addToFeed(res.events);
-      moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt, warnings: (res.warnings||[]).slice(0, 40) };
+      moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt, lastImportAt: Date.now(), warnings: (res.warnings||[]).slice(0, 40) };
       saveMoodleState();
       persistItems();
+      syncPush(); // the cloud copy learns about new manual state (and this device about others') right away
       if(!silent || merged.stats.added || merged.stats.moved) showToast(window.TPMoodle.summarize(merged.stats));
       requestModelEstimates().catch(()=>{});
     }catch(e){
@@ -892,7 +907,7 @@
     render();
     try{
       const status = await window.TPMoodle.api.saveCourses(moodleState.courses.filter(c=>c.selected).map(c=>c.id));
-      moodleState = status;
+      moodleState = { ...status, lastImportAt: moodleState.lastImportAt };
       saveMoodleState();
     }catch(e){
       moodleState = { ...moodleState, courses: prev };
@@ -901,8 +916,20 @@
     }
     render();
   }
+  // Opening the app from an alert means the server found something: import now, however recent the last sync.
+  let forceSyncOnOpen = location.hash === '#sync';
+  if(forceSyncOnOpen){ try{ window.history.replaceState(null, '', location.pathname + location.search); }catch(e){} }
+  function moodleSyncFromAlert(){
+    if(moodleSignedIn()) moodleSync({silent:true});
+  }
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.addEventListener('message', e=>{ if(e.data && e.data.type === 'tp-notification-click') moodleSyncFromAlert(); });
+  }
+  // A push while the app is open: the server just synced (it limits calls to one per 30 s), so wait a moment.
+  document.addEventListener('tp-fcm-message', ()=>{ setTimeout(moodleSyncFromAlert, 35000); });
   function moodleMaybeAutoSync(){
     if(!moodleSignedIn()) return;
+    if(forceSyncOnOpen){ forceSyncOnOpen = false; moodleSync({silent:true}); return; }
     if(window.TPMoodle.shouldAutoSync(moodleState, Date.now())) moodleSync({silent:true});
     else requestModelEstimates().catch(()=>{}); // nothing to sync yet, but older items may still need Claude's estimate
   }
@@ -973,7 +1000,7 @@
   async function moodleBoot(){
     try{
       const status = await window.TPMoodle.api.status();
-      moodleState = status.connected ? status : { connected: false };
+      moodleState = status.connected ? { ...status, lastImportAt: moodleState.lastImportAt } : { connected: false };
       saveMoodleState();
     }catch(e){
       return; // not configured, offline, or signed out: keep the cached state

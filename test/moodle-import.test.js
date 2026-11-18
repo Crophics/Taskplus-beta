@@ -153,9 +153,11 @@ test('shouldAutoSync waits for the interval and needs a connection', () => {
   const H = 3600 * 1000;
   assert.strictEqual(M.shouldAutoSync(null, NOW), false);
   assert.strictEqual(M.shouldAutoSync({ connected: false }, NOW), false);
-  assert.strictEqual(M.shouldAutoSync({ connected: true, lastSyncAt: null }, NOW), true);
-  assert.strictEqual(M.shouldAutoSync({ connected: true, lastSyncAt: NOW - 2 * H }, NOW), false);
-  assert.strictEqual(M.shouldAutoSync({ connected: true, lastSyncAt: NOW - 4 * H }, NOW), true);
+  assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: null }, NOW), true);
+  assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 5 * 60000 }, NOW), false);
+  assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 11 * 60000 }, NOW), true);
+  // The server's own timestamp (set by its 30-minute check) must not make this device think it is current.
+  assert.strictEqual(M.shouldAutoSync({ connected: true, lastSyncAt: NOW - 1000, lastImportAt: NOW - 2 * H }, NOW), true);
 });
 
 test('summarize reads naturally', () => {
@@ -439,4 +441,27 @@ test('ensureCourseNames adds an entry for each name that has none, so courses wi
   assert.strictEqual(M.ensureCourseNames(list, ['math 2400', 'BIBL 1020', 'BIBL 1020', '', 'CSCI 2010']), 2);
   assert.deepStrictEqual(list.map((c) => c.name), ['MATH 2400', 'BIBL 1020', 'CSCI 2010']);
   assert.strictEqual(M.ensureCourses(list, [{ course: 'PHIL 2202' }]), 1);
+});
+
+test('progress map: records changes, merges newest-wins, and applies to another device\'s copy', () => {
+  const imp = (o) => ({ id: 'moodle:1', source: { type: 'moodle' }, total: 1, done: 0, completed: false, updatedAt: 100, ...o });
+  const a = M.progressMap([imp({ completed: true, done: 1, completedAt: '2026-11-18', updatedAt: 200 }), imp({ id: 'moodle:2' }), { id: 'manual', completed: true }], {}, 999);
+  assert.deepStrictEqual(Object.keys(a), ['moodle:1']);
+  assert.deepStrictEqual(a['moodle:1'], { c: true, d: 1, ca: '2026-11-18', at: 200 });
+  // unchecking later is a newer record and wins in either merge order
+  const b = M.progressMap([imp({ completed: false, done: 0, updatedAt: 300 })], a, 999);
+  assert.strictEqual(M.mergeProgress(a, b, 1000)['moodle:1'].c, false);
+  assert.strictEqual(M.mergeProgress(b, a, 1000)['moodle:1'].c, false);
+  // the other device: item open, even if its own updatedAt is newer for an unrelated reason
+  const phone = [imp({ updatedAt: 500 })];
+  assert.strictEqual(M.applyProgress(phone, a), true);
+  assert.deepStrictEqual([phone[0].completed, phone[0].done, phone[0].completedAt], [true, 1, '2026-11-18']);
+  assert.strictEqual(M.applyProgress(phone, a), false);
+});
+
+test('an item first imported on a device where it was already finished on another starts finished', () => {
+  const rec = { id: 'moodle:9', cmid: 9, courseId: 1, course: 'MATH', kind: 'assign', title: 'HW', dueTs: Math.floor(Date.now() / 1000) + 86400, state: 'none', link: 'x' };
+  const r = M.mergeImported([], [rec], { today: '2026-11-18', now: 1, progress: { 'moodle:9': { c: true, d: 1, ca: '2026-11-17', at: 50 } } });
+  assert.strictEqual(r.items[0].completed, true);
+  assert.strictEqual(r.items[0].completedAt, '2026-11-17');
 });
