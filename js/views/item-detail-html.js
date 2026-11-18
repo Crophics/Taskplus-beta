@@ -107,7 +107,7 @@
     const chips = [
       daysToDue === null
         ? '<span class="tp-i-chip">No due date</span>'
-        : `<span class="tp-i-chip${dueTone}">${daysToDue < 0 && !item.completed && !item.ignored ? 'Overdue · ' : 'Due '}${escapeHtml(relativeDueLabel(item.due))}</span>`,
+        : `<span class="tp-i-chip${dueTone}">${daysToDue < 0 && !item.completed && !item.ignored ? 'Overdue · ' : 'Due '}${escapeHtml(window.TPDue.label(item, relativeDueLabel))}</span>`,
       item.ignored ? '<span class="tp-i-chip">Ignored</span>' : '',
       item.completed ? '<span class="tp-i-chip tp-i-chip-ok">Done</span>' : '',
       src.kind === 'quiz' ? `<span class="tp-i-chip">Quiz${src.timeLimitMin ? ' · ' + src.timeLimitMin + ' min' : ''}</span>` : '',

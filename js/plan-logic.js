@@ -8,7 +8,8 @@
 
    It follows the SAME pacing rules as js/today-logic.js so the numbers agree:
      - work days run from today up to the day BEFORE the due date (D = max(days
-       until due, 1)); overdue or due-today work is all today;
+       until due, 1)); overdue or due-today work is all today. When the item is due at or after
+       12:00 the due-day morning is a half work day too (js/due-time.js);
      - a multi-part item's parts are spread evenly, front-loaded (3 parts over 2
        days = 2 today, 1 tomorrow = ceil(left / days left), as Today's targets);
      - a single-part item is done on its LAST work day (the day before it's due),
@@ -24,6 +25,8 @@
    UI can say so rather than silently ignoring them.
 */
 (function (global) {
+  // Due-time rules live in js/due-time.js (see there); without it the old date-only behaviour applies.
+  const D = global.TPDue || { workDays: (it, dueIn) => Math.max(dueIn, 1), singleLastDay: (it, dueIn) => Math.max(dueIn - 1, 0), morningUsable: () => false, DUE_DAY_SHARE: 0 };
   const planned = (it) => !!it.due && !it.ignored; // same rule as TPItemLogic.isPlanned
   const HORIZON = 7;
 
@@ -118,6 +121,15 @@
     return out;
   }
 
+  /** `units` whole units over days with the given weights; the extra units go to the earliest days. */
+  function spreadWeighted(units, weights) {
+    const sum = weights.reduce((a, b) => a + b, 0);
+    const out = weights.map((w) => Math.floor((units * w) / sum + 1e-9));
+    let rest = units - out.reduce((a, b) => a + b, 0);
+    for (let i = 0; rest > 0 && i < out.length; i = (i + 1) % out.length, rest--) out[i] += 1;
+    return out;
+  }
+
   /** One item's remaining work as [{dayIndex, units}], dayIndex 0..HORIZON-1 only. */
   function allocateItem(it, today, daysBetween) {
     if (it.completed || it.archived || !planned(it)) return [];
@@ -131,16 +143,20 @@
     const push = (dayIndex, units) => { if (units > 0 && dayIndex < HORIZON) out.push({ dayIndex, units }); };
 
     if (total <= 1) {
-      push(Math.max(dueIn - 1, 0), 1); // the day before it is due, or today if that has passed
+      push(D.singleLastDay(it, dueIn), 1); // the day before it is due (the due day itself if it is due at or after 12:00), or today
       return out;
     }
-    const days = Math.max(dueIn, 1);
     const startLeft = Math.max(total - Math.max(done - loggedToday, 0), 0); // units left at the start of today
-    const shares = spread(startLeft, days);
-    push(0, Math.max(shares[0] - loggedToday, 0));
+    const workDays = D.workDays(it, dueIn);
+    // Day weights: a whole day each for today .. the day before it is due, then the due-day morning (a share of a day).
+    const weights = new Array(Math.max(dueIn, 1)).fill(1);
+    if (workDays > weights.length) weights.push(workDays - weights.length);
+    // Today's share is what Today shows: ceil(units left / work days). The rest spreads over the later days by weight.
+    const share0 = Math.min(startLeft, Math.ceil(startLeft / workDays - 1e-9));
+    push(0, Math.max(share0 - loggedToday, 0));
     // Whatever is left after today (or after today's extra effort, if you got ahead) spreads over the rest.
-    const later = Math.max(startLeft - Math.max(shares[0], loggedToday), 0);
-    if (days > 1) spread(later, days - 1).forEach((u, i) => push(i + 1, u));
+    const later = Math.max(startLeft - Math.max(share0, loggedToday), 0);
+    if (weights.length > 1) spreadWeighted(later, weights.slice(1)).forEach((u, i) => push(i + 1, u));
     return out;
   }
 

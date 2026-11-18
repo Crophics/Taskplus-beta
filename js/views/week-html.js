@@ -72,7 +72,7 @@
         : (it.total > 1 ? `${Math.round(load * 10) / 10} ${it.unit || 'units'}` : (isFinish ? 'finish' : `${Math.round(load * 10) / 10}`));
       return `<div class="tp-w-detail-row">
         <span class="tp-a-bar" style="background:${color}"></span>
-        <div class="tp-w-detail-body"><div class="tp-t-title">${escapeHtml(it.title)}</div><div class="tp-t-meta">${[it.course, ctx.relativeDueLabel(it.due)].filter(Boolean).map(escapeHtml).join(' · ')}</div></div>
+        <div class="tp-w-detail-body"><div class="tp-t-title">${escapeHtml(it.title)}</div><div class="tp-t-meta">${[it.course, window.TPDue.label(it, ctx.relativeDueLabel)].filter(Boolean).map(escapeHtml).join(' · ')}</div></div>
         <div class="tp-w-detail-status">${escapeHtml(shareText)}</div>
       </div>`;
     }).join('') : `<div class="tp-w-detail-empty">Nothing due. A good day to pull work forward from ${escapeHtml(ctx.heaviestLabel)}.</div>`;

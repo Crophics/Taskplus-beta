@@ -10,6 +10,9 @@
    don't address on their own.
 */
 (function (global) {
+  // Due-time rules live in js/due-time.js; without it (a bare test) the old date-only behaviour applies.
+  const D = global.TPDue || { workDays: (it, dueIn) => Math.max(dueIn, 1), morningUsable: () => false };
+
   /** left/target-day-target formulas from the design spec, usable per item. */
   function dayTarget(it) {
     const left = Math.max((it.total || 0) - (it.done || 0), 0);
@@ -46,11 +49,11 @@
   multi.forEach(it=>{
     const t = today();
     const dt = it.dailyTarget;
-    if(!dt || dt.date!==t || dt.total!==it.total || dt.due!==it.due){
+    if(!dt || dt.date!==t || dt.total!==it.total || dt.due!==it.due || dt.dueTime!==(it.dueTime||'')){
       const left = Math.max(it.total-it.done,0);
-      const daysLeft = Math.max(daysBetween(t, it.due),1);
+      const daysLeft = D.workDays(it, daysBetween(t, it.due)); // fractional when the due-day morning counts
       it.dailyTarget = {
-        date: t, total: it.total, due: it.due,
+        date: t, total: it.total, due: it.due, dueTime: it.dueTime||'',
         amt: left>0? Math.ceil(left/daysLeft) : 0
       };
       dailyTargetsChanged = true;
@@ -65,7 +68,7 @@
 
   const multiTargetsAll = multi.map(it=>{
     const left = Math.max(it.total-it.done,0);
-    const daysLeft = Math.max(daysBetween(today(), it.due),1);
+    const daysLeft = D.workDays(it, daysBetween(today(), it.due));
     const progressToday = it.today || 0;
     const remainingToday = Math.max(it.dailyTarget.amt - progressToday, 0);
     return {
@@ -90,7 +93,9 @@
   const metRequiredToday = multiTargetsAll.filter(t=>t.it.dailyTarget.amt>0 && t.amt<=0);
 
   let requiredTight = multiTargets.filter(t=>t.noSlack && t.tight)
-    .concat(singles.filter(it=>daysBetween(today(), it.due)<=1) // FIX: Changes <=0 to <=1 to natively catch tomorrow's tasks!
+    // Due today/overdue, or due tomorrow BEFORE 12:00 (it will not get done that morning). Due tomorrow at or after
+    // 12:00 can wait for tomorrow morning, so it is optional today (see TPDue).
+    .concat(singles.filter(it=>{ const d = daysBetween(today(), it.due); return d<=0 || (d===1 && !D.morningUsable(it)); })
       .map(it=>({
         it,
         title:it.title,
@@ -125,7 +130,9 @@
     .sort((a,b)=> a[0].localeCompare(b[0]))
     .map(([due, entries])=>{
       const singleCount = entries.filter(e=>e.kind==='single').length;
-      const daysAvailable = Math.max(daysBetween(today(), due), 1);
+      // A single-part item can also be done on the due-day morning when it is due at or after 12:00.
+      const morning = entries.some(e=>e.kind==='single' && D.morningUsable(e.it)) ? 1 : 0;
+      const daysAvailable = Math.max(daysBetween(today(), due), 1) + morning;
       const pickCount = (singleCount>1 && singleCount===entries.length && singleCount>=daysAvailable)
         ? Math.ceil(singleCount/daysAvailable) : null;
       return {due, entries, pickCount};

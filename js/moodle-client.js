@@ -24,6 +24,12 @@
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
   }
 
+  /** Local 'HH:MM' of a unix timestamp in seconds (the due time Moodle sent; '' when there is none). */
+  function localTime(ts) {
+    const d = new Date(ts * 1000);
+    return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
   function daysBetween(a, b) {
     return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
   }
@@ -77,13 +83,14 @@
     (records || []).forEach((rec) => {
       if (tombstoned.has(rec.id)) { stats.skippedDeleted++; return; }
       const due = rec.dueTs ? localDate(rec.dueTs) : ''; // '' = Moodle gave no due date
+      const dueTime = rec.dueTs ? localTime(rec.dueTs) : ''; // the planners use it (js/due-time.js)
       const idx = byId.get(rec.id);
 
       if (idx === undefined) {
         const submitted = rec.state === 'submitted';
         if (submitted && due && daysBetween(due, today) > RECENT_SUBMITTED_DAYS) { stats.skippedOld++; return; }
         let item = {
-          id: rec.id, title: rec.title, course: rec.course, due,
+          id: rec.id, title: rec.title, course: rec.course, due, dueTime,
           // `unit` is what Today's pill shows for one-sitting work; empty would read "Reading".
           total: 1, unit: rec.kind === 'quiz' ? 'quiz' : 'assignment', notes: '', done: submitted ? 1 : 0, today: 0,
           completed: submitted, dependsOn: '', recurring: '', subtasks: [],
@@ -121,6 +128,8 @@
         if (next.ignored && (!due || due >= today)) delete next.ignored;
         changed = true;
       }
+      // A new time on the same day is not a "moved" notice, but the plan changes with it.
+      if ((prev.dueTime || '') !== dueTime) { next.dueTime = dueTime; changed = true; }
       const src = sourceOf(rec, prev.source);
       if (JSON.stringify(src) !== JSON.stringify(prev.source)) { next.source = src; changed = true; }
       // Re-estimate when Moodle's details changed, or if the item predates estimates. A number the

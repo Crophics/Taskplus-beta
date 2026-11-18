@@ -36,7 +36,7 @@
           ${it.recurring ? window.TPIcons.svg('repeat', { className: 'tp-a-icon', title: 'Recurring' }) : ''}
           ${locked ? window.TPIcons.svg('lock_outline', { className: 'tp-a-icon', title: 'Blocked' }) : ''}
         </div>
-        <div class="tp-a-meta">${[it.course, relativeDueLabel(it.due), `${fmt(it.done)}/${fmt(it.total)} ${unit}`].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+        <div class="tp-a-meta">${[it.course, window.TPDue.label(it, relativeDueLabel), `${fmt(it.done)}/${fmt(it.total)} ${unit}`].filter(Boolean).map(escapeHtml).join(' · ')}</div>
         ${it.total > 1 ? `<div class="tp-a-progress"><div class="tp-a-progress-fill" data-fill-key="${i}" style="width:${pct}%;background:${color}"></div></div>` : ''}
       </div>
       <div class="tp-a-status ${statusClass}">${escapeHtml(statusText)}</div>

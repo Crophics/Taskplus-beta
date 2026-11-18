@@ -21,7 +21,7 @@
     else if (it.ignored) rows.push(row('tp-qm-unignore', 'Stop ignoring'));
     if (!ctx.canOpen) rows.push(row('tp-qm-edit', 'Edit assignment'));
 
-    const meta = [relativeDueLabel(it.due), it.ignored ? 'Ignored' : ''].filter(Boolean).map(escapeHtml).join(' · ');
+    const meta = [window.TPDue.label(it, relativeDueLabel), it.ignored ? 'Ignored' : ''].filter(Boolean).map(escapeHtml).join(' · ');
     return `<div class="tp-backdrop" id="tp-qmenu-backdrop">
       <div class="tp-sheet tp-qsheet${ctx.menuJustOpened ? ' tp-sheet-enter' : ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(it.title)}">
         <div class="tp-sheet-handle"></div>

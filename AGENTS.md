@@ -78,6 +78,16 @@ for the one-time Cloudflare setup. What matters when touching code:
   (`test/handouts.test.js` covers the refusals; do not loosen it). The mapper strips any `token=` from file URLs
   (`safeFileUrl`) because records go to the browser. File addresses are sent to the Worker only when the PDF
   switch is on. Which files were read is the server's report on `estimate.files`, never the model's claim.
+- **Due time (2026-11-18).** Moodle sends a due time; imports keep it as `item.dueTime` ('HH:MM', local; ''
+  when none, and manual items have none). `js/due-time.js` (`TPDue`, pure, tested in `test/due-time.test.js`)
+  holds the rule: due BEFORE 12:00 = the due-day morning is not usable, finish the day before (the old rule);
+  due AT OR AFTER 12:00 = the due-day morning counts as half a work day (`DUE_DAY_SHARE`, a guess).
+  Multi-part items split over `workDays` (e.g. 1.5 for due tomorrow after noon: 6 parts = 4 today, 2 tomorrow);
+  a single-part item due tomorrow after noon is optional today (Get ahead), required tomorrow. `today-logic.js`
+  and `plan-logic.js` both use it and must keep agreeing (the cross-check test covers it); without TPDue loaded
+  they fall back to the old date-only behaviour, which is also what no-time items get. `dailyTarget` caches
+  `dueTime`. Labels show it via `TPDue.label(item, relativeDueLabel)`; use that, not `relativeDueLabel(it.due)`.
+  Not done: time-aware overdue (something due 9 AM today still counts as due today after 9 AM).
 - **Estimates and minutes planning (Phase 3).** `js/estimate-logic.js`
   (`TPEstimate`, a rule-of-thumb estimator; its constants are guesses, see the
   header) and `js/plan-logic.js` (`TPPlan`, minutes per day, heavy day) are pure

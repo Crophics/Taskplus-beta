@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v61'; // bumped: clearer menu rows (Plan and notes / Edit assignment)
+const CACHE_NAME = 'taskplus-cache-v62'; // bumped: due times shown and used by the planners
 const urlsToCache = [
   './',
   './index.html',
@@ -70,6 +70,7 @@ const urlsToCache = [
   './css/mobile.css',
   './css/animations.css',
   './js/utils.js',
+  './js/due-time.js',
   './js/item-logic.js',
   './js/courses.js',
   './js/moodle-client.js',

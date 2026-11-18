@@ -35,7 +35,7 @@
     const remaining = Math.max(target - todayCount, 0);
     const isMulti = it.total > 1;
     const color = it.course ? courseColorFor(it.course) : 'var(--text-faint)';
-    const metaBits = [it.course, relativeDueLabel(it.due)];
+    const metaBits = [it.course, window.TPDue.label(it, relativeDueLabel)];
     let stepLine = '';
     if (isPartsItem(it)) {
       const idxPart = Math.min((it.done || 0), it.total - 1);
