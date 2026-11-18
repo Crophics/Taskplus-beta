@@ -147,16 +147,17 @@
   }
 
   /** Makes sure every imported course code exists in the courses collection (so it gets a colour). */
-  function ensureCourses(courses, records, TPCourses) {
-    return ensureCourseNames(courses, (records || []).map((rec) => rec.course), TPCourses);
+  function ensureCourses(courses, records, TPCourses, deleted) {
+    return ensureCourseNames(courses, (records || []).map((rec) => rec.course), TPCourses, deleted);
   }
 
   /** Adds an entry for every name that has none yet. Returns how many were added. */
-  function ensureCourseNames(courses, names, TPCourses) {
+  function ensureCourseNames(courses, names, TPCourses, deleted) {
     const lib = TPCourses || global.TPCourses;
     let added = 0;
     (names || []).forEach((name) => {
-      if (name && !lib.byName(courses, name) && lib.addCourse(courses, name)) added++;
+      // A course the user deleted stays deleted: a sync must not bring it back (only adding it by hand does).
+      if (name && lib.applyTombstones([{ name }], deleted).length && !lib.byName(courses, name) && lib.addCourse(courses, name)) added++;
     });
     return added;
   }

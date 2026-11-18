@@ -187,14 +187,16 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 
   // Same union-by-id philosophy as mergeCourseColors: courses carry no
   // updatedAt of their own, so on a same-id conflict local just wins.
-  function mergeCourses(localCourses, remoteCourses) {
+  function mergeCourses(localCourses, remoteCourses, deletedCourses) {
     const map = new Map();
     (remoteCourses || []).forEach((c) => map.set(c.id, c));
     (localCourses || []).forEach((c) => map.set(c.id, c));
     // Two devices can each create the same course (same name, different random id): keep one, local first.
     const localIds = new Set((localCourses || []).map((c) => c.id));
     const merged = (localCourses || []).map((c) => map.get(c.id)).concat([...map.values()].filter((c) => !localIds.has(c.id)));
-    return window.TPCourses && window.TPCourses.dedupeByName ? window.TPCourses.dedupeByName(merged) : merged;
+    const T = window.TPCourses;
+    // One entry per name, and none that was deleted on some device since it was created (course tombstones).
+    return T && T.dedupeByName ? T.applyTombstones(T.dedupeByName(merged), deletedCourses) : merged;
   }
 
   function mergePrefs(localPrefs, remotePrefs) {
@@ -222,6 +224,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
       items,
       courseColors: JSON.parse(localStorage.getItem("tp-course-colors") || "{}"),
       courses: JSON.parse(localStorage.getItem("tp-courses") || "[]"),
+      deletedCourses: JSON.parse(localStorage.getItem("tp-deleted-courses") || "[]"),
+      ignored: JSON.parse(localStorage.getItem("tp-ignored") || "{}"),
       dayCompleteLog: JSON.parse(localStorage.getItem("tp-day-complete-log") || "[]"),
       deletedLog,
       prefs: syncPrefs,
@@ -233,6 +237,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     if (data.items) localStorage.setItem("tp-assignments", JSON.stringify(data.items));
     if (data.courseColors) localStorage.setItem("tp-course-colors", JSON.stringify(data.courseColors));
     if (data.courses) localStorage.setItem("tp-courses", JSON.stringify(data.courses));
+    if (data.deletedCourses) localStorage.setItem("tp-deleted-courses", JSON.stringify(data.deletedCourses));
+    if (data.ignored) localStorage.setItem("tp-ignored", JSON.stringify(data.ignored));
     if (data.dayCompleteLog) localStorage.setItem("tp-day-complete-log", JSON.stringify(data.dayCompleteLog));
     if (data.deletedLog) localStorage.setItem("tp-deleted-log", JSON.stringify(data.deletedLog));
     if (data.prefs) {
@@ -253,11 +259,14 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
   function applyRemoteMerge(remoteData) {
     const local = readLocalPayload();
     const deletedLog = mergeDeletedLog(local.deletedLog, remoteData.deletedLog);
+    const deletedCourses = window.TPCourses ? window.TPCourses.mergeTombstones(local.deletedCourses, remoteData.deletedCourses, Date.now()) : (local.deletedCourses || []);
     const { items, stats } = mergeItems(local.items, remoteData.items || [], deletedLog);
     const merged = {
       items,
       courseColors: mergeCourseColors(local.courseColors, remoteData.courseColors),
-      courses: mergeCourses(local.courses, remoteData.courses),
+      courses: mergeCourses(local.courses, remoteData.courses, deletedCourses),
+      deletedCourses,
+      ignored: window.TPItemLogic ? window.TPItemLogic.mergeIgnored(local.ignored, remoteData.ignored, Date.now()) : local.ignored,
       dayCompleteLog: mergeDayLog(local.dayCompleteLog, remoteData.dayCompleteLog),
       deletedLog,
       prefs: mergePrefs(local.prefs, remoteData.prefs),

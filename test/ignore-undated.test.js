@@ -136,3 +136,22 @@ test('needsModel never asks Claude about ignored work', () => {
   assert.strictEqual(M.needsModel(it, TODAY, false, false), false);
   assert.strictEqual(M.needsModel({ ...it, ignored: false }, TODAY, false, false), true);
 });
+
+test('the ignored map: newest change wins in either order, so an un-ignore beats an older ignore', () => {
+  const L = global.TPItemLogic;
+  const now = 5e9;
+  const a = L.setIgnoredEntry({}, 'moodle:1', true, now - 100);
+  const b = L.setIgnoredEntry({}, 'moodle:1', false, now - 50);
+  assert.deepStrictEqual(L.mergeIgnored(a, b, now)['moodle:1'], { on: false, at: now - 50 });
+  assert.deepStrictEqual(L.mergeIgnored(b, a, now)['moodle:1'], { on: false, at: now - 50 });
+});
+
+test('applyIgnored flags overdue work from another device and clears it once the due date moves out', () => {
+  const L = global.TPItemLogic;
+  const days = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+  const items = [{ id: 'moodle:1', due: '2026-11-01' }, { id: 'moodle:2', due: '2026-12-30', ignored: true }, { id: 'moodle:3', due: '2026-11-01', completed: true }];
+  const map = { 'moodle:1': { on: true, at: 1 }, 'moodle:2': { on: true, at: 1 }, 'moodle:3': { on: true, at: 1 } };
+  assert.strictEqual(L.applyIgnored(items, map, '2026-11-18', days), true);
+  assert.deepStrictEqual(items.map((i) => !!i.ignored), [true, false, false]);
+  assert.strictEqual(L.applyIgnored(items, map, '2026-11-18', days), false);
+});

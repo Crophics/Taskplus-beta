@@ -106,3 +106,26 @@ test('overview counts each course\'s items so an empty course can say no assignm
   const rows = TPCourses.overview([{ name: 'BIBL 1020' }, { name: 'MATH' }], [{ title: 'x', course: 'math', due: '2026-12-01', completed: true }], '2026-11-17', () => '#111');
   assert.deepStrictEqual(rows.map((r) => [r.name, r.total, r.open]), [['BIBL 1020', 0, 0], ['MATH', 1, 0]]);
 });
+
+test('a deleted course is removed by its tombstone, even when another device sends it back', () => {
+  const T = [];
+  const dead = TPCourses.recordDeletion(T, 'PHIL 2202', 1000);
+  const back = [{ id: 'x', name: 'phil 2202', color: '#111' }, { id: 'y', name: 'MATH', color: '#222' }];
+  assert.deepStrictEqual(TPCourses.applyTombstones(back, dead).map((c) => c.name), ['MATH']);
+});
+
+test('a course added again after the deletion survives it', () => {
+  const dead = TPCourses.recordDeletion([], 'PHIL 2202', 1000);
+  const again = [{ id: 'x', name: 'PHIL 2202', createdAt: 2000 }];
+  assert.strictEqual(TPCourses.applyTombstones(again, dead).length, 1);
+});
+
+test('mergeTombstones keeps the newest per name and drops very old ones', () => {
+  const now = 400 * 86400000;
+  const m = TPCourses.mergeTombstones([{ key: 'a', deletedAt: now - 5 }], [{ key: 'a', deletedAt: now - 1 }, { key: 'b', deletedAt: 1 }], now);
+  assert.deepStrictEqual(m, [{ key: 'a', deletedAt: now - 1 }]);
+});
+
+test('dedupeByName drops an entry with no name', () => {
+  assert.deepStrictEqual(TPCourses.dedupeByName([{ id: '1', name: '' }, { id: '2', name: 'A' }, { id: '3', name: '  ' }]).map((c) => c.id), ['2']);
+});

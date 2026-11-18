@@ -72,12 +72,44 @@
     const out = [];
     (courses || []).forEach((c) => {
       const key = normalize(c && c.name);
-      if (!key) { out.push(c); return; }
+      if (!key) return; // an entry with no name can never match an item
       const first = seen.get(key);
       if (!first) { seen.set(key, c); out.push(c); return; }
       if (!first.color && c.color) first.color = c.color;
     });
     return out;
+  }
+
+  /* ---- Course deletions that stick across devices ----
+     Syncing merges course lists by union, so a course deleted here came straight back from any other copy
+     of the data (another device or browser). A tombstone {key: normalised name, deletedAt} records the
+     deletion; a course is removed by a tombstone unless it was created AFTER the deletion (createdAt),
+     so deleting a course and later adding it again on purpose still works. Courses from before this
+     existed have no createdAt and count as older than any tombstone. */
+  const TOMBSTONE_MAX_AGE_MS = 120 * 24 * 60 * 60 * 1000;
+
+  function recordDeletion(tombstones, name, now) {
+    const key = normalize(name);
+    const rest = (tombstones || []).filter((t) => t && t.key && t.key !== key);
+    return key ? rest.concat([{ key, deletedAt: now }]) : rest;
+  }
+
+  function mergeTombstones(a, b, now) {
+    const byKey = new Map();
+    [...(a || []), ...(b || [])].forEach((t) => {
+      if (!t || !t.key) return;
+      const prev = byKey.get(t.key);
+      if (!prev || (t.deletedAt || 0) > (prev.deletedAt || 0)) byKey.set(t.key, { key: t.key, deletedAt: t.deletedAt || 0 });
+    });
+    return [...byKey.values()].filter((t) => t.deletedAt >= now - TOMBSTONE_MAX_AGE_MS);
+  }
+
+  function applyTombstones(courses, tombstones) {
+    const dead = new Map((tombstones || []).map((t) => [t.key, t.deletedAt || 0]));
+    return (courses || []).filter((c) => {
+      const at = dead.get(normalize(c && c.name));
+      return at === undefined || (c.createdAt || 0) > at;
+    });
   }
 
   function byId(courses, id) {
@@ -97,7 +129,8 @@
   function addCourse(courses, name, color) {
     const trimmed = String(name || '').trim();
     if (!trimmed || isDuplicateName(courses, trimmed)) return null;
-    const course = { id: newCourseId(), name: trimmed, color: color || nextPaletteColor(courses) };
+    // createdAt lets a course made after a deletion outlive that deletion's tombstone (see applyTombstones).
+    const course = { id: newCourseId(), name: trimmed, color: color || nextPaletteColor(courses), createdAt: Date.now() };
     courses.push(course);
     return course;
   }
@@ -172,6 +205,9 @@
 
   global.TPCourses = {
     dedupeByName,
+    recordDeletion,
+    mergeTombstones,
+    applyTombstones,
     openItemsForCourse,
     ignoredItemsForCourse,
     overview,
