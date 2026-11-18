@@ -1,22 +1,36 @@
-/* views/quick-menu-html.js — Long-press quick-action menu for a row */
+/* views/quick-menu-html.js - The assignment menu on All: a bottom sheet (same family as the Add sheet).
+   Opens on a tap. One clear primary action, a grouped list of the rest, Delete kept quiet at the bottom. */
 (function (global) {
   function quickMenuHtml(ctx) {
     const { it, i, escapeHtml, relativeDueLabel, unit } = ctx;
-    const actions = [];
-    if (!it.completed && it.total > 1) actions.push(`<button type="button" class="tp-qm-action" id="tp-qm-log" data-i="${i}">Log 1 ${escapeHtml(unit)}</button>`);
-    actions.push(`<button type="button" class="tp-qm-action tp-qm-accent" id="tp-qm-complete" data-i="${i}">${it.completed ? 'Reopen' : 'Mark complete'}</button>`);
-    if (ctx.canIgnore) actions.push(`<button type="button" class="tp-qm-action" id="tp-qm-ignore" data-i="${i}">Ignore (stop showing as overdue)</button>`);
-    else if (it.ignored) actions.push(`<button type="button" class="tp-qm-action" id="tp-qm-unignore" data-i="${i}">Stop ignoring</button>`);
-    if (it.due) actions.push(`<button type="button" class="tp-qm-action" id="tp-qm-push" data-i="${i}">Push out a day</button>`);
-    actions.push(`<button type="button" class="tp-qm-action" id="tp-qm-edit" data-i="${i}">Edit details</button>`);
-    actions.push(`<button type="button" class="tp-qm-action tp-qm-danger" id="tp-qm-delete" data-i="${i}">Delete</button>`);
-    return `<div class="tp-backdrop tp-qmenu-backdrop" id="tp-qmenu-backdrop">
-      <div class="tp-qmenu${ctx.menuJustOpened ? ' tp-qmenu-enter' : ''}" role="dialog" aria-modal="true">
-        <div class="tp-qmenu-header">
-          <div class="tp-t-title">${escapeHtml(it.title)}</div>
-          <div class="tp-t-meta">${[it.course, relativeDueLabel(it.due)].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+    const chevron = global.TPIcons.svg('chevron_right');
+    const row = (id, label) => `<button type="button" class="tp-qs-row" id="${id}" data-i="${i}"><span>${label}</span>${chevron}</button>`;
+
+    const primary = [];
+    if (!it.completed && it.total > 1) primary.push(`<button type="button" class="tp-i-primary" id="tp-qm-log" data-i="${i}">${global.TPIcons.svg('plus')}Log 1 ${escapeHtml(String(unit).replace(/s$/, ''))}</button>`);
+    primary.push(it.completed
+      ? `<button type="button" class="tp-i-secondary" id="tp-qm-complete" data-i="${i}">Reopen</button>`
+      : `<button type="button" class="${it.total > 1 ? 'tp-i-secondary' : 'tp-i-primary'}" id="tp-qm-complete" data-i="${i}">${global.TPIcons.svg('check')}Mark complete</button>`);
+
+    const rows = [];
+    if (ctx.canOpen) rows.push(row('tp-qm-open', 'Open details'));
+    if (it.due) rows.push(row('tp-qm-push', 'Push out a day'));
+    if (ctx.canIgnore) rows.push(row('tp-qm-ignore', 'Ignore (stop showing as overdue)'));
+    else if (it.ignored) rows.push(row('tp-qm-unignore', 'Stop ignoring'));
+    rows.push(row('tp-qm-edit', 'Edit details'));
+
+    const meta = [relativeDueLabel(it.due), it.ignored ? 'Ignored' : ''].filter(Boolean).map(escapeHtml).join(' · ');
+    return `<div class="tp-backdrop" id="tp-qmenu-backdrop">
+      <div class="tp-sheet tp-qsheet${ctx.menuJustOpened ? ' tp-sheet-enter' : ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(it.title)}">
+        <div class="tp-sheet-handle"></div>
+        <div class="tp-qs-head">
+          <div class="tp-i-course"><span class="tp-i-dot" style="background:${ctx.color || 'var(--text-faint)'}"></span>${escapeHtml(it.course || 'No course')}</div>
+          <div class="tp-qs-title">${escapeHtml(it.title)}</div>
+          ${meta ? `<div class="tp-qs-meta">${meta}</div>` : ''}
         </div>
-        ${actions.join('')}
+        <div class="tp-qs-primary">${primary.join('')}</div>
+        <div class="tp-qs-list">${rows.join('')}</div>
+        <button type="button" class="tp-qs-delete" id="tp-qm-delete" data-i="${i}">Delete</button>
       </div>
     </div>`;
   }

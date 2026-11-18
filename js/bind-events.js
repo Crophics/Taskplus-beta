@@ -1,7 +1,5 @@
 /* bind-events.js — Wire DOM event handlers after each render */
 (function (global) {
-  const LONG_PRESS_MS = 500;
-  const LONG_PRESS_MOVE_TOLERANCE = 10;
 
   function bindEvents(root, api) {
     const TL = window.TPTodayLogic;
@@ -242,24 +240,13 @@
       });
     });
 
-    // Long-press an All-tab card (not its drag handle) to open the quick-action menu.
+    // Tap an All-tab card (not its drag handle) to open the assignment menu.
     root.querySelectorAll('.tp-a-card[data-i]').forEach(card => {
-      let timer = null, startX = 0, startY = 0;
-      const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
-      card.addEventListener('pointerdown', (e) => {
+      card.addEventListener('click', (e) => {
         if (e.target.closest('.tp-a-drag')) return;
-        startX = e.clientX; startY = e.clientY;
-        timer = setTimeout(() => {
-          timer = null;
-          api.menuFor = parseInt(card.dataset.i);
-          api.render();
-        }, LONG_PRESS_MS);
+        api.menuFor = parseInt(card.dataset.i);
+        api.render();
       });
-      card.addEventListener('pointermove', (e) => {
-        if (!timer) return;
-        if (Math.abs(e.clientX - startX) > LONG_PRESS_MOVE_TOLERANCE || Math.abs(e.clientY - startY) > LONG_PRESS_MOVE_TOLERANCE) cancel();
-      });
-      ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt => card.addEventListener(evt, cancel));
     });
 
     /* ---- Quick-action menu ---- */
@@ -274,6 +261,8 @@
     if (qmLog) qmLog.onclick = () => { api.menuFor = null; logOne(parseInt(qmLog.dataset.i), qmLog); };
     const qmComplete = document.getElementById('tp-qm-complete');
     if (qmComplete) qmComplete.onclick = () => { api.menuFor = null; toggleComplete(parseInt(qmComplete.dataset.i)); };
+    const qmOpen = document.getElementById('tp-qm-open');
+    if (qmOpen) qmOpen.onclick = () => { const it = api.items[parseInt(qmOpen.dataset.i)]; api.menuFor = null; if (it) api.openItem(it.id); };
     const qmPush = document.getElementById('tp-qm-push');
     if (qmPush) qmPush.onclick = () => {
       const it = api.items[parseInt(qmPush.dataset.i)];

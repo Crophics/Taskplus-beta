@@ -77,7 +77,7 @@
       : groups.map(g => groupHtml(g, ctx)).join('');
 
     const footer = `<div class="tp-a-foot">
-      <div class="tp-t-footer">Long-press a card for quick actions</div>
+      <div class="tp-t-footer">Tap an assignment for actions</div>
       <button type="button" class="tp-s-link tp-a-add-manual" data-add-manual>Add an assignment by hand</button>
     </div>`;
 

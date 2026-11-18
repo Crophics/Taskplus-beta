@@ -1111,7 +1111,7 @@
     }
     if(menuFor!=null && items[menuFor]){
       const it = items[menuFor];
-      html += V.quickMenuHtml({ it, i: menuFor, escapeHtml, relativeDueLabel, unit: it.unit || 'units', menuJustOpened, canIgnore: canIgnore(it) });
+      html += V.quickMenuHtml({ it, i: menuFor, escapeHtml, relativeDueLabel, unit: it.unit || 'units', menuJustOpened, canIgnore: canIgnore(it), color: courseColorFor(it.course), canOpen: !!(it.source && it.source.type === 'moodle' && it.estimate) });
     }
 
     const prevFills = {};

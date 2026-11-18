@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v59'; // bumped: Courses merged into All; class times removed
+const CACHE_NAME = 'taskplus-cache-v60'; // bumped: tap opens the assignment menu, now a bottom sheet
 const urlsToCache = [
   './',
   './index.html',

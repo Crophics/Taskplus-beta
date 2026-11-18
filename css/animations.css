@@ -25,7 +25,7 @@
 
 @media (prefers-reduced-motion: reduce){
   #tp-app .tp-t-pulse{ animation:none; }
-  #tp-app .tp-sheet-enter,#tp-app .tp-qmenu-enter,#tp-app .tp-screen-enter{ animation:none; }
+  #tp-app .tp-sheet-enter,#tp-app .tp-screen-enter{ animation:none; }
   #tp-app .tp-a-card.tp-removing{ animation:none; opacity:0; }
   #tp-app .tp-w-bar,#tp-app .tp-w-bar-stub,#tp-app .tp-w-course-bar-fill{ animation:none; }
   #tp-app .tp-add-course-list{ animation:none; }
