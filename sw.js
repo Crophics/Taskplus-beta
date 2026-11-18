@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v64'; // bumped: re-import when the import format changes; honest sync label
+const CACHE_NAME = 'taskplus-cache-v65'; // bumped: sync retries when offline; API calls bypass the cache
 const urlsToCache = [
   './',
   './index.html',
@@ -140,6 +140,10 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if(req.method !== 'GET') return;
   if(new URL(req.url).origin !== self.location.origin) return;
+  // The app's own API (/api/...) always goes to the network. This handler used to cache GETs and answer from
+  // the cache first, so /api/moodle/status and the What's new feed could be served stale, or fail outright
+  // (Response.error) when there was nothing cached.
+  if(new URL(req.url).pathname.startsWith('/api/')) return;
 
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {

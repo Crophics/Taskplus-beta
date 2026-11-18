@@ -19,6 +19,9 @@
   // import used an older shape syncs again on its next open, however recent that import was, so the new data
   // does not wait for a manual sync.
   const IMPORT_SHAPE = 2;
+  // A sync that fails to reach the server on its own (the phone's network is often not ready for the first
+  // moment after the app opens or resumes) is retried after these delays, in ms, before it counts as failed.
+  const RETRY_MS = [4000, 15000, 45000];
 
   function pad(n) { return String(n).padStart(2, '0'); }
 
@@ -419,5 +422,5 @@
     }
   }
 
-  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, progressMap, mergeProgress, applyProgress, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_MS, IMPORT_SHAPE, mergeFeed, unreadCount, markFeedSeen, feedLine };
+  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, progressMap, mergeProgress, applyProgress, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_MS, IMPORT_SHAPE, RETRY_MS, mergeFeed, unreadCount, markFeedSeen, feedLine };
 })(typeof window !== 'undefined' ? window : globalThis);

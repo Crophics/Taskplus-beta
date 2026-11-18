@@ -865,6 +865,10 @@
       } else if(code === 'too_soon'){
         // The server synced a moment ago (its own 30-minute check) and refuses a second call for 30 s: try again shortly.
         if(!(opts && opts.retried)) setTimeout(()=>moodleSync({silent:true, retried:true}), 31000);
+      } else if(code === 'offline' && silent && ((opts && opts.attempt) || 0) < window.TPMoodle.RETRY_MS.length){
+        // The automatic sync could not reach the server (often the network is not up yet): try again soon.
+        const attempt = (opts && opts.attempt) || 0;
+        setTimeout(()=>moodleSync({silent:true, attempt: attempt + 1}), window.TPMoodle.RETRY_MS[attempt]);
       } else {
         // Remember why, so Settings can say so (a silent open-time sync used to fail without a trace).
         moodleState = { ...moodleState, syncError: (e && e.message) || 'Could not sync Moodle' };
@@ -1005,6 +1009,8 @@
   document.addEventListener('visibilitychange', ()=>{
     if(document.visibilityState === 'visible') moodleMaybeAutoSync();
   });
+  // The connection came back (or came up late after opening the app): catch up if a sync is due.
+  window.addEventListener('online', ()=>{ moodleMaybeAutoSync(); });
 
   // Touch gestures (js/gestures.js): swipe between tabs, swipe back, pull down to sync with Moodle.
   if(window.TPGestures){
