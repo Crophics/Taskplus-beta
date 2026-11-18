@@ -259,3 +259,10 @@ test('adjusting a Claude estimate by hand keeps its step names', () => {
   assert.strictEqual(next.total, 2);
   assert.strictEqual(E.stepName(next, 1), 'Solve');
 });
+
+test('fromModel records which service made the estimate and ignores anything else', () => {
+  assert.strictEqual(E.fromModel({ ...modelResult(), provider: 'gemini' }, 'k', 'assign').provider, 'gemini');
+  assert.strictEqual(E.fromModel({ ...modelResult(), provider: 'claude' }, 'k', 'assign').provider, 'claude');
+  assert.strictEqual(E.fromModel({ ...modelResult(), provider: '<b>x</b>' }, 'k', 'assign').provider, '');
+  assert.strictEqual(E.fromModel(modelResult(), 'k', 'assign').provider, '', 'older saved estimates have none');
+});

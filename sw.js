@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v69'; // bumped: provider-neutral AI estimate wording
+const CACHE_NAME = 'taskplus-cache-v70'; // bumped: estimates say which AI made them
 const urlsToCache = [
   './',
   './index.html',

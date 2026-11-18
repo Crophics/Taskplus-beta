@@ -8,10 +8,12 @@
 
   const SURE = { low: 'not very sure', medium: 'fairly sure', high: 'quite sure' };
 
+  const PROVIDER_NAME = { claude: 'Claude', gemini: 'Gemini' };
+
   function basisCaption(est) {
     if (est.basis === 'user') return 'You set this';
     if (est.basis === 'quiz-limit') return 'From the quiz time limit';
-    if (est.basis === 'model') return `AI estimate · ${SURE[est.confidence] || 'not very sure'}`;
+    if (est.basis === 'model') return `${PROVIDER_NAME[est.provider] || 'AI'} estimate · ${SURE[est.confidence] || 'not very sure'}`;
     return 'A rough guess';
   }
 
@@ -26,7 +28,7 @@
     const read = est.filesRead || [];
     const skipped = (est.filesSkipped || []).filter((s) => s.reason !== 'not_pdf');
     const parts = [];
-    if (read.length) parts.push(`The AI also read ${read.map(escapeHtml).join(' and ')}.`);
+    if (read.length) parts.push(`${PROVIDER_NAME[est.provider] || 'The AI'} also read ${read.map(escapeHtml).join(' and ')}.`);
     skipped.slice(0, 2).forEach((s) => parts.push(`${escapeHtml(s.name)} ${SKIP_WHY[s.reason] || 'was not read'}.`));
     return parts.length ? `<div class="tp-i-est-why tp-i-read">${parts.join(' ')}</div>` : '';
   }

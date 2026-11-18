@@ -306,7 +306,7 @@ async function estimateItems(env, uid, list, { fresh, readFiles, rec, now, deps 
     }
     // Which files were read is the SERVER's report, not the model's. `retry` marks a miss that may be temporary.
     const retry = skipped.some((s) => TRANSIENT.has(s.reason) || s.reason === 'file_limit');
-    const estimate = { ...r.estimate, files: { read: docs.map((d) => d.name), skipped, retry } };
+    const estimate = { ...r.estimate, provider: provider === 'gemini' ? 'gemini' : 'claude', files: { read: docs.map((d) => d.name), skipped, retry } };
     await env.MOODLE_KV.put(cacheKey, JSON.stringify(estimate), { expirationTtl: retry ? ESTIMATE_RETRY_TTL : ESTIMATE_CACHE_TTL });
     results.push({ id: input.id, ok: true, estimate, cached: false });
   }

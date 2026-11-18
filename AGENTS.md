@@ -76,8 +76,9 @@ for the one-time Cloudflare setup. What matters when touching code:
   generateContent, key in the `x-goog-api-key` header only, same prompt/schema/`validateOutput` as `estimate.mjs`.
   `pickProvider(env)` in `worker.mjs` chooses (`ESTIMATE_PROVIDER`, else Claude if `ANTHROPIC_API_KEY`, else Gemini if
   `GEMINI_API_KEY`). The request field names and the default model (`gemini-3.5-flash-lite`) come from Google's docs and
-  have NOT been run against the live API: test with a real key before relying on it (PDF input, the JSON schema, and
-  the thinking level in particular). Tests use a fake `geminiFetch`.
+  were checked with one real key and a text and a PDF request on 2026-11-18 (it works). Tests use a fake
+  `geminiFetch`. Each estimate carries `provider` ('claude' | 'gemini'; '' on estimates saved before it existed) and
+  the assignment screen shows it ("Gemini estimate"). Settings wording stays provider-neutral.
 - **Handouts.** `src/handouts.mjs` downloads an assignment's PDFs for Claude. This is the one place a URL from
   the browser meets the stored Moodle token, so keep it strict: same host and the site's
   `/webservice/pluginfile.php/` path only, `redirect: 'manual'`, size caps, `%PDF-` check

@@ -643,3 +643,13 @@ test('route: a wrong Gemini key stops the batch with server_misconfigured', asyn
   assert.deepStrictEqual(json.results.map((r) => r.error), ['server_misconfigured']);
   assert.strictEqual(f.calls.length, 1);
 });
+
+test('route: each estimate says which service made it', async () => {
+  const gEnv = await newEnv({ GEMINI_API_KEY: 'AIza-test' });
+  delete gEnv.ANTHROPIC_API_KEY;
+  const g = await call({ items: [item(1)] }, { env: gEnv, geminiFetch: fakeGemini(() => ({ body: geminiOk() })) });
+  assert.strictEqual(g.json.results[0].estimate.provider, 'gemini');
+  const cEnv = await newEnv();
+  const c = await call({ items: [item(2)] }, { env: cEnv, client: fakeClient(() => okResponse(good())) });
+  assert.strictEqual(c.json.results[0].estimate.provider, 'claude');
+});
