@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v56'; // bumped: quieter Ignore button, larger back button
+const CACHE_NAME = 'taskplus-cache-v57'; // bumped: back button is a bordered 44 px button
 const urlsToCache = [
   './',
   './index.html',

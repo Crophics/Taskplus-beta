@@ -249,9 +249,10 @@ body::-webkit-scrollbar{display:none;}
 .tp-s-danger:active{opacity:.6;}
 
 /* ---- Courses screen ---- */
-#tp-app .tp-c-back{background:none;border:none;color:var(--text-muted);font-family:inherit;font-size:15px;cursor:pointer;padding:0 12px 0 0;margin:-6px 0 4px -6px;min-height:44px;display:flex;align-items:center;gap:2px;transition:opacity .15s ease;}
-#tp-app .tp-c-back .tp-icon{font-size:22px;}
-#tp-app .tp-c-back:active{opacity:.6;}
+/* A real button (bordered like the gear), not bare text: 44 px tall, chevron plus the screen it returns to. */
+#tp-app .tp-c-back{display:inline-flex;align-items:center;gap:4px;min-height:44px;margin:0 0 12px;padding:0 16px 0 10px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-family:inherit;font-size:15px;font-weight:500;cursor:pointer;transition:opacity .15s ease,transform .05s ease;}
+#tp-app .tp-c-back .tp-icon{font-size:22px;color:var(--text-muted);}
+#tp-app .tp-c-back:active{transform:scale(0.96);}
 .tp-c-subhead{font-size:11px;color:var(--text-dim);margin-bottom:14px;}
 .tp-c-row{display:flex;align-items:center;gap:10px;padding:10px 0;}
 .tp-c-bar{width:3px;height:28px;border-radius:2px;flex:0 0 auto;}
