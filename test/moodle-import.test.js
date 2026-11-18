@@ -154,10 +154,13 @@ test('shouldAutoSync waits for the interval and needs a connection', () => {
   assert.strictEqual(M.shouldAutoSync(null, NOW), false);
   assert.strictEqual(M.shouldAutoSync({ connected: false }, NOW), false);
   assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: null }, NOW), true);
-  assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 5 * 60000 }, NOW), false);
-  assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 11 * 60000 }, NOW), true);
+  assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 5 * 60000, importShape: M.IMPORT_SHAPE }, NOW), false);
+  assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 11 * 60000, importShape: M.IMPORT_SHAPE }, NOW), true);
+  // An import made before the current data format (e.g. before due times were stored) is redone at once, however recent.
+  assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 60000 }, NOW), true);
+  assert.strictEqual(M.shouldAutoSync({ connected: true, lastImportAt: NOW - 60000, importShape: M.IMPORT_SHAPE - 1 }, NOW), true);
   // The server's own timestamp (set by its 30-minute check) must not make this device think it is current.
-  assert.strictEqual(M.shouldAutoSync({ connected: true, lastSyncAt: NOW - 1000, lastImportAt: NOW - 2 * H }, NOW), true);
+  assert.strictEqual(M.shouldAutoSync({ connected: true, lastSyncAt: NOW - 1000, lastImportAt: NOW - 2 * H, importShape: M.IMPORT_SHAPE }, NOW), true);
 });
 
 test('summarize reads naturally', () => {

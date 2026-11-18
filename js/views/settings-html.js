@@ -29,8 +29,10 @@
     return `<div class="tp-section-heading"><span>${title}</span><span class="tp-section-rule"></span></div><div class="tp-s-group">${rows}</div>`;
   }
 
+  // The time THIS device last imported (st.lastImportAt), not the server's clock: the server's own
+  // 30-minute check also sets that one, so it could say "just now" when this device had nothing new.
   function lastSyncedLabel(ts) {
-    if (!ts) return 'Not synced yet';
+    if (!ts) return 'Not synced on this device yet';
     return 'Last synced ' + new Date(ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
 
@@ -60,7 +62,8 @@
     return groupHtml('Moodle',
       `<div class="tp-s-row"><div class="tp-s-row-main"><span class="tp-s-row-label">${escapeHtml(st.site || 'Connected')}</span>
         <button type="button" class="tp-s-link" id="tp-moodle-sync"${busy ? ' disabled' : ''}>${busy ? 'Syncing…' : 'Sync now'}</button></div>
-        <div class="tp-s-row-sub">${escapeHtml(lastSyncedLabel(st.lastSyncAt))}</div></div>` +
+        <div class="tp-s-row-sub">${escapeHtml(lastSyncedLabel(st.lastImportAt))}</div>
+        ${st.syncError ? `<div class="tp-s-row-sub tp-s-warn">Last sync failed: ${escapeHtml(st.syncError)}</div>` : ''}</div>` +
       courseRows +
       noteRows +
       `<div class="tp-s-row"><div class="tp-s-row-sub">Course changes apply on the next sync.</div></div>

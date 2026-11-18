@@ -15,6 +15,10 @@
   // How stale this device's own copy may get before opening the app imports again. The server limits
   // calls itself (30 s), so this can be short: the server's alerts arrive within about half an hour.
   const AUTO_SYNC_MIN_MS = 10 * 60 * 1000;
+  // Bump this whenever an import starts storing something new on items (2 = due times). A device whose last
+  // import used an older shape syncs again on its next open, however recent that import was, so the new data
+  // does not wait for a manual sync.
+  const IMPORT_SHAPE = 2;
 
   function pad(n) { return String(n).padStart(2, '0'); }
 
@@ -260,7 +264,7 @@
     if (!state || !state.connected) return false;
     // lastImportAt is when THIS device last imported. (lastSyncAt is the server's own clock: its 30-minute
     // check also sets it, so trusting it made the app think it was current while the server had news.)
-    if (!state.lastImportAt) return true;
+    if (!state.lastImportAt || (state.importShape || 0) < IMPORT_SHAPE) return true;
     return nowMs - state.lastImportAt >= AUTO_SYNC_MIN_MS;
   }
 
@@ -415,5 +419,5 @@
     }
   }
 
-  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, progressMap, mergeProgress, applyProgress, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_MS, mergeFeed, unreadCount, markFeedSeen, feedLine };
+  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, progressMap, mergeProgress, applyProgress, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_MS, IMPORT_SHAPE, mergeFeed, unreadCount, markFeedSeen, feedLine };
 })(typeof window !== 'undefined' ? window : globalThis);

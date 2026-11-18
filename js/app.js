@@ -833,6 +833,8 @@
       render();
     }
   }
+  // What only THIS device knows about its imports; the server's status must never overwrite it.
+  function ownImportState(){ return { lastImportAt: moodleState.lastImportAt, importShape: moodleState.importShape, syncError: moodleState.syncError }; }
   // Pulls the latest assignments/quizzes through the Worker and merges them in.
   async function moodleSync(opts){
     const silent = !!(opts && opts.silent);
@@ -848,7 +850,7 @@
       if(window.TPMoodle.ensureCourseNames(courses, names, undefined, deletedCourses)) saveCourses();
       appendMoodleEvents(merged.events);
       addToFeed(res.events);
-      moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt, lastImportAt: Date.now(), warnings: (res.warnings||[]).slice(0, 40) };
+      moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt, lastImportAt: Date.now(), importShape: window.TPMoodle.IMPORT_SHAPE, syncError: null, warnings: (res.warnings||[]).slice(0, 40) };
       saveMoodleState();
       persistItems();
       syncPush(); // the cloud copy learns about new manual state (and this device about others') right away
@@ -860,8 +862,14 @@
         moodleState = { connected: false };
         saveMoodleState();
         showToast('Moodle sign-in expired. Connect again in Settings.');
-      } else if(!silent && code !== 'too_soon'){
-        showToast((e && e.message) || 'Could not sync Moodle');
+      } else if(code === 'too_soon'){
+        // The server synced a moment ago (its own 30-minute check) and refuses a second call for 30 s: try again shortly.
+        if(!(opts && opts.retried)) setTimeout(()=>moodleSync({silent:true, retried:true}), 31000);
+      } else {
+        // Remember why, so Settings can say so (a silent open-time sync used to fail without a trace).
+        moodleState = { ...moodleState, syncError: (e && e.message) || 'Could not sync Moodle' };
+        saveMoodleState();
+        if(!silent) showToast(moodleState.syncError);
       }
     } finally {
       moodleBusy = false;
@@ -887,7 +895,7 @@
     render();
     try{
       const status = await window.TPMoodle.api.saveCourses(moodleState.courses.filter(c=>c.selected).map(c=>c.id));
-      moodleState = { ...status, lastImportAt: moodleState.lastImportAt };
+      moodleState = { ...status, ...ownImportState() };
       saveMoodleState();
     }catch(e){
       moodleState = { ...moodleState, courses: prev };
@@ -980,7 +988,7 @@
   async function moodleBoot(){
     try{
       const status = await window.TPMoodle.api.status();
-      moodleState = status.connected ? { ...status, lastImportAt: moodleState.lastImportAt } : { connected: false };
+      moodleState = status.connected ? { ...status, ...ownImportState() } : { connected: false };
       saveMoodleState();
     }catch(e){
       return; // not configured, offline, or signed out: keep the cached state

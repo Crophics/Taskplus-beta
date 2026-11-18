@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v63'; // bumped: Today dot colour follows the due date
+const CACHE_NAME = 'taskplus-cache-v64'; // bumped: re-import when the import format changes; honest sync label
 const urlsToCache = [
   './',
   './index.html',
