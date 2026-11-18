@@ -36,12 +36,10 @@
   const FEED_KEY='tp-feed';
   const SCHEDULE_KEY='tp-schedule';
   const MOODLE_SITE_KEY='tp-moodle-last-site';
-  // Grades: what Moodle reported (replaced each sync) and what the user owns
-  // (weights, targets, credits). Device-local, like imported items.
   const LLM_KEY='tp-llm-on';
   const LLM_FILES_KEY='tp-llm-files';
-  const GRADES_KEY='tp-moodle-grades';
-  const GRADE_SETTINGS_KEY='tp-grade-settings';
+  // Grades were dropped (Moodle stays the place for them): forget what an older version stored.
+  ['tp-moodle-grades','tp-grade-settings'].forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
   const DEV_MODE_KEY='tp-dev-mode';
   const DEV_PANEL_KEY='tp-dev-panel-open';
   const DAY_OFFSET_KEY='tp-day-offset';
@@ -555,30 +553,16 @@
     });
   }
 
-  /* ---- Grades (js/grades-logic.js, js/views/grades-html.js) ---- */
+  /* ---- Courses tab and Course detail (js/views/courses-overview-html.js) ---- */
   function readJsonObject(key, fallback){
     try{ const v = JSON.parse(localStorage.getItem(key)); return v && typeof v === 'object' && !Array.isArray(v) ? v : fallback; }catch(e){ return fallback; }
   }
-  let gradesStore = readJsonObject(GRADES_KEY, { syncedAt: null, courses: {} });
-  let gradeSettings = readJsonObject(GRADE_SETTINGS_KEY, window.TPGrades.emptySettings());
-  if(!gradeSettings.weights) gradeSettings.weights = {};
-  if(!gradeSettings.courses) gradeSettings.courses = {};
   let courseDetailName = null;
-  function saveGradeSettings(){ localStorage.setItem(GRADE_SETTINGS_KEY, JSON.stringify(gradeSettings)); }
-  function saveGradesStore(){ localStorage.setItem(GRADES_KEY, JSON.stringify(gradesStore)); }
 
   function courseDetailCtx(name){
-    const G = window.TPGrades;
-    const gc = gradesStore.courses[name] || null;
-    const entries = G.buildEntries(name, items, gc);
-    const cs = G.courseSettings(gradeSettings, name);
-    const calc = G.computeCourse(entries.graded.concat(entries.coming), gradeSettings.weights, {
-      target: cs.target, moodleTotal: gc && gc.total !== undefined ? gc.total : null,
-    });
     return {
       escapeHtml: window.TPHtml.escapeHtml, name, color: courseColorFor(name), relativeDueLabel,
-      meets: schedule[name] || '', settingsForCourse: cs, entries, weights: gradeSettings.weights, calc, target: cs.target,
-      letter: G.letterFor(calc.currentPct, cs.scale), summary: '',
+      meets: schedule[name] || '', upcoming: window.TPCourses.openItemsForCourse(items, name), ignored: window.TPCourses.ignoredItemsForCourse(items, name),
     };
   }
   // Class meeting times: device-local text per course (see js/schedule-logic.js).
@@ -592,9 +576,6 @@
     return true;
   }
   function classesForDay(offset){ return window.TPSchedule.classesOn(window.TP.asDate(addDays(today(), offset)), schedule); }
-  function gradeSummaryHtml(){
-    return courseDetailName ? window.TPViews.gradeSummaryHtml(courseDetailCtx(courseDetailName)) : '';
-  }
   function openCourse(name){
     courseDetailName = name;
     if(tab !== 'course') screenJustSwitched = true;
@@ -603,45 +584,6 @@
     savePrefs();
     render();
   }
-  // Weight typing is model-only: the caller patches #tp-g-summary, nothing re-renders.
-  function setWeight(id, value){
-    gradeSettings = window.TPGrades.setWeight(gradeSettings, id, value);
-    saveGradeSettings();
-  }
-  function stepCourseSetting(name, which, dir){
-    const cs = window.TPGrades.courseSettings(gradeSettings, name);
-    const patch = which === 'target' ? { target: cs.target + dir } : { credits: cs.credits + dir * 0.5 };
-    gradeSettings = window.TPGrades.setCourseSetting(gradeSettings, name, patch);
-    saveGradeSettings();
-    render();
-  }
-  function useSuggestedWeights(name){
-    const e = window.TPGrades.buildEntries(name, items, gradesStore.courses[name] || null);
-    let n = 0;
-    e.coming.concat(e.graded).forEach(x=>{
-      if(x.weightSuggested && !(gradeSettings.weights[x.id] > 0)){ gradeSettings = window.TPGrades.setWeight(gradeSettings, x.id, x.weightSuggested); n++; }
-    });
-    saveGradeSettings();
-    showToast(n ? `Filled ${n} weight${n===1?'':'s'} from Moodle` : 'No weights to fill in');
-    render();
-  }
-  function importGradeSettings(file){
-    const reader = new FileReader();
-    reader.onload = ()=>{
-      try{
-        const out = window.TPGrades.importSettings(gradeSettings, JSON.parse(reader.result));
-        if(!out.stats.weights && !out.stats.courses){ showToast('Nothing to import in that file'); return; }
-        gradeSettings = out.settings;
-        saveGradeSettings();
-        showToast(`Imported ${out.stats.weights} weight${out.stats.weights===1?'':'s'} and settings for ${out.stats.courses} course${out.stats.courses===1?'':'s'}`);
-        render();
-      }catch(e){
-        showToast('That is not a grade settings file');
-      }
-    };
-    reader.readAsText(file);
-  }
-
   /* ---- Claude estimates (src/estimate.mjs via /api/estimate) ---- */
   // Opt-out switch in Settings. On by default: the assignment's title, points and description go to
   // Anthropic so Claude can estimate it and name the steps. Device-local.
@@ -683,7 +625,7 @@
         chunk.forEach(it=>{ keys[it.id] = window.TPEstimate.inputsKey(it); });
         let res;
         try{
-          res = await window.TPMoodle.api.estimate(chunk.map(it=> window.TPMoodle.modelInput(it, daysBetween(t, it.due), filesOn)), force, filesOn);
+          res = await window.TPMoodle.api.estimate(chunk.map(it=> window.TPMoodle.modelInput(it, it.due ? daysBetween(t, it.due) : null, filesOn)), force, filesOn);
         }catch(e){
           if(e && (e.code === 'not_configured' || e.code === 'not_allowed')) llmUnavailable = true;
           errorMessage = (e && e.message) || '';
@@ -716,6 +658,22 @@
   let itemDetailFrom = 'today';
   let itemDescOpen = false;
   function itemIndexById(id){ return items.findIndex(x=>x && x.id === id); }
+  /* ---- Ignore: write off overdue work so it stops showing as overdue (js/item-logic.js isPlanned) ---- */
+  const isPlanned = window.TPItemLogic.isPlanned;
+  // Only overdue, unfinished work can be ignored; once ignored, "stop ignoring" is always available.
+  function canIgnore(it){
+    return !!it && !it.completed && !it.ignored && !!it.due && daysBetween(today(), it.due) < 0;
+  }
+  function setIgnored(idx, on){
+    const it = items[idx];
+    if(!it) return;
+    if(on && !canIgnore(it)) return;
+    if(on) it.ignored = true; else delete it.ignored;
+    touchItem(it);
+    menuFor = null;
+    save();
+    showToast(on ? 'Ignored. It won\'t show as overdue.' : 'No longer ignored');
+  }
   function openItem(id){
     if(itemIndexById(id) < 0) return;
     itemDetailId = id;
@@ -762,8 +720,7 @@
     const item = items[i];
     return {
       item, idx: i, escapeHtml: window.TPHtml.escapeHtml, color: item.course ? courseColorFor(item.course) : 'var(--text-faint)',
-      relativeDueLabel, daysToDue: daysBetween(today(), item.due), descOpen: itemDescOpen,
-      weightPct: gradeSettings.weights[item.id] > 0 ? gradeSettings.weights[item.id] : null,
+      relativeDueLabel, daysToDue: item.due ? daysBetween(today(), item.due) : null, descOpen: itemDescOpen, canIgnore: canIgnore(item),
       fromLabel: ({ today:'Today', week:'Week', all:'All', courses:'Courses' })[itemDetailFrom] || 'Back',
       llm: { available: llmOn && moodleSignedIn() && !llmUnavailable, busy: modelBusy },
     };
@@ -854,12 +811,8 @@
       if(window.TPMoodle.ensureCourses(courses, res.records)) saveCourses();
       appendMoodleEvents(merged.events);
       addToFeed(res.events);
-      moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt };
+      moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt, warnings: (res.warnings||[]).slice(0, 40) };
       saveMoodleState();
-      if(Array.isArray(res.grades)){
-        gradesStore = window.TPGrades.mergeGrades(gradesStore, res.grades, res.syncedAt);
-        saveGradesStore();
-      }
       persistItems();
       if(!silent || merged.stats.added || merged.stats.moved) showToast(window.TPMoodle.summarize(merged.stats));
       requestModelEstimates().catch(()=>{});
@@ -912,9 +865,14 @@
   }
 
   /* ---- What's new feed + Moodle alerts (Phase 5; js/views/changes-html.js) ---- */
-  let feed = (function(){ const f = readJsonObject(FEED_KEY, null); return f && Array.isArray(f.events) ? f : { events: [], seenAt: Date.now() }; })();
+  let feed = (function(){
+    const f = readJsonObject(FEED_KEY, null);
+    if(!(f && Array.isArray(f.events))) return { events: [], seenAt: Date.now() };
+    // Grade and feedback updates no longer exist; drop ones an older version saved.
+    return { ...f, events: f.events.filter(e=> e && e.kind !== 'grade' && e.kind !== 'feedback') };
+  })();
   let changesFrom = 'today';
-  let alerts = { loaded:false, configured:false, devices:0, prefs:{ new:true, moved:true, grade:true, feedback:true, due:true, quiet:{ on:false, start:22, end:8 } } };
+  let alerts = { loaded:false, configured:false, devices:0, prefs:{ new:true, moved:true, due:true, quiet:{ on:false, start:22, end:8 } } };
   function saveFeed(){ try{ localStorage.setItem(FEED_KEY, JSON.stringify(feed)); }catch(e){} }
   function addToFeed(events){
     if(!events || !events.length) return;
@@ -1030,20 +988,20 @@
       const weekCtx = { items, today, daysBetween };
       // Minutes view when any open item has a time estimate; otherwise the original unit view.
       const planDays = window.TPPlan.computeDays({ items, today: today(), daysBetween, isLocked });
-      const hasEstimates = items.some(it=> !it.completed && !it.archived && window.TPPlan.minutesPerUnit(it) !== null);
+      const hasEstimates = items.some(it=> !it.completed && !it.archived && isPlanned(it) && window.TPPlan.minutesPerUnit(it) !== null);
       const days = hasEstimates
         ? planDays.days.map(d=>({ dayIndex: d.dayIndex, total: d.minutes, byCourse: d.byCourse }))
         : window.TPWeekLogic.computePacedLoad(weekCtx);
       const heavyWeek = hasEstimates ? window.TPPlan.heavyDay(planDays.days) : null;
       const minutesCtx = hasEstimates ? {
         on: true, entriesFor: (i)=> planDays.days[i].entries, heavyIndex: heavyWeek ? heavyWeek.dayIndex : -1, unestimated: planDays.unestimated,
-        leftMin: items.reduce((s,it)=> (it.completed||it.archived) ? s : s + (window.TPPlan.leftMinutes(it) || 0), 0),
+        leftMin: items.reduce((s,it)=> (it.completed||it.archived||!isPlanned(it)) ? s : s + (window.TPPlan.leftMinutes(it) || 0), 0),
       } : { on: false };
       const dayLabels = days.map((_,i)=> window.TP.asDate(addDays(today(),i)).toLocaleDateString(undefined,{weekday:'long'}));
       const stats = window.TPWeekLogic.statTiles(weekCtx);
       const heaviestLabel = window.TPWeekLogic.heaviestDayLabel(days, dayLabels);
       const courseStats = window.TPWeekLogic.byCourseBreakdown(items, courseColorFor);
-      const overdueCount = items.filter(it=>!it.completed && !it.archived && !isLocked(it) && daysBetween(today(), it.due)<0).length;
+      const overdueCount = items.filter(it=>!it.completed && !it.archived && isPlanned(it) && !isLocked(it) && daysBetween(today(), it.due)<0).length;
       const advice = overdueCount>0
         ? `${overdueCount} item${overdueCount===1?'':'s'} overdue — clear those first, they're weighing every day's pace down.`
         : (heaviestLabel==='none' ? 'Nothing paced this week yet. Add a due date to see the load.' : `${heaviestLabel} carries the most load this week — consider pulling some of it forward.`);
@@ -1063,12 +1021,9 @@
         moodle: { state: moodleState, busy: moodleBusy, signedIn: moodleSignedIn() }, llmOn, filesOn, alerts,
       }) + V.devToolbarHtml({ devMode, devPanelOpen });
     } else if(tab==='courses'){
-      const ov = window.TPGrades.overview({ courses, items, store: gradesStore, settings: gradeSettings, colorFor: courseColorFor, today: today() });
-      screenHtml = V.coursesOverviewHtml({ escapeHtml, rows: ov.rows, gpa: ov.gpa, connected: !!moodleState.connected, relativeDueLabel });
+      screenHtml = V.coursesOverviewHtml({ escapeHtml, rows: window.TPCourses.overview(courses, items, today(), courseColorFor), connected: !!moodleState.connected, relativeDueLabel });
     } else if(tab==='course' && courseDetailName){
-      const ctx = courseDetailCtx(courseDetailName);
-      ctx.summary = V.gradeSummaryHtml(ctx);
-      screenHtml = V.courseDetailHtml(ctx);
+      screenHtml = V.courseDetailHtml(courseDetailCtx(courseDetailName));
     } else if(tab==='item'){
       screenHtml = V.itemDetailHtml(itemDetailCtx());
     } else if(tab==='changes'){
@@ -1092,7 +1047,7 @@
     }
     if(menuFor!=null && items[menuFor]){
       const it = items[menuFor];
-      html += V.quickMenuHtml({ it, i: menuFor, escapeHtml, relativeDueLabel, unit: it.unit || 'units', menuJustOpened });
+      html += V.quickMenuHtml({ it, i: menuFor, escapeHtml, relativeDueLabel, unit: it.unit || 'units', menuJustOpened, canIgnore: canIgnore(it) });
     }
 
     const prevFills = {};
@@ -1180,10 +1135,10 @@
       openConnectSheet, closeConnectSheet, moodleConnect, moodleSync, moodleDisconnect, moodleSetCourse,
       get connectDraft(){ return connectDraft; },
       get connectBusy(){ return connectBusy; },
-      openCourse, setWeight, stepCourseSetting, useSuggestedWeights, importGradeSettings, gradeSummaryHtml,
+      openCourse,
       setMeets,
       openChanges, closeChanges, savePrefsToServer, sendTestAlert, get alerts(){ return alerts; },
-      openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate, askClaude, setLlmOn, setFilesOn,
+      setIgnored, canIgnore, openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate, askClaude, setLlmOn, setFilesOn,
       get llmOn(){ return llmOn; }, get filesOn(){ return filesOn; },
       get itemDetailId(){ return itemDetailId; },
       get itemDescOpen(){ return itemDescOpen; }, set itemDescOpen(v){ itemDescOpen = v; },

@@ -12,7 +12,7 @@ import { syncCourses, MoodleError } from './moodle-client.mjs';
 export const MAX_TOKENS = 5;
 export const MAX_EVENTS = 50;
 export const CRON_SYNC_EVERY_MS = 3 * 3600 * 1000;
-export const DEFAULT_PREFS = { new: true, moved: true, grade: true, feedback: true, due: true, quiet: { on: false, start: 22, end: 8 } };
+export const DEFAULT_PREFS = { new: true, moved: true, due: true, quiet: { on: false, start: 22, end: 8 } };
 
 const key = (kind, uid) => `${kind}:${uid}`;
 async function load(env, kind, uid) {
@@ -20,6 +20,14 @@ async function load(env, kind, uid) {
   return s ? open(env.TOKEN_ENC_KEY, s) : null;
 }
 async function save(env, kind, uid, obj) { await env.MOODLE_KV.put(key(kind, uid), await seal(env.TOKEN_ENC_KEY, obj)); }
+
+/** What the last sync saw for each item: {id: 'submitted'|'draft'|'none'}. Lets a sync skip finished work. */
+export async function knownStates(env, uid) {
+  const snap = await load(env, 'snap', uid);
+  const out = {};
+  Object.entries((snap && snap.items) || {}).forEach(([id, it]) => { if (it && it.s) out[id] = it.s; });
+  return out;
+}
 
 export async function loadPush(env, uid) {
   const p = await load(env, 'push', uid);
@@ -31,7 +39,7 @@ export function cleanPrefs(input, old) {
   const base = { ...DEFAULT_PREFS, ...(old || {}) };
   const out = { ...base, quiet: { ...base.quiet } };
   if (input && typeof input === 'object') {
-    ['new', 'moved', 'grade', 'feedback', 'due'].forEach((k) => { if (typeof input[k] === 'boolean') out[k] = input[k]; });
+    ['new', 'moved', 'due'].forEach((k) => { if (typeof input[k] === 'boolean') out[k] = input[k]; });
     const q = input.quiet;
     if (q && typeof q === 'object') {
       if (typeof q.on === 'boolean') out.quiet.on = q.on;
@@ -99,7 +107,7 @@ async function deliver(env, uid, p, msg, deps, now) {
   return { sent };
 }
 
-const PREF_OF = { new: 'new', moved: 'moved', grade: 'grade', feedback: 'feedback' };
+const PREF_OF = { new: 'new', moved: 'moved' };
 
 /**
  * Record what a sync found and (when `notify`) push it. A user's own in-app sync passes notify=false:
@@ -107,7 +115,7 @@ const PREF_OF = { new: 'new', moved: 'moved', grade: 'grade', feedback: 'feedbac
  */
 export async function processSync(env, uid, result, now, { notify, deps = {} } = {}) {
   const prev = await load(env, 'snap', uid);
-  const next = buildSnapshot(result.records, result.grades, prev, now);
+  const next = buildSnapshot(result.records, prev, now);
   const events = diffSnapshots(prev, next, now);
   await save(env, 'snap', uid, next);
   await addEvents(env, uid, events, now);
@@ -178,7 +186,7 @@ export async function runCron(env, now, deps = {}) {
         await saveRecord(env, uid, rec);
         let result;
         try {
-          result = await (deps.syncFn || syncCourses)(rec.site, rec.token, rec.userid, rec.selected, { fetchFn, nowSec: Math.floor(now / 1000), budget: per });
+          result = await (deps.syncFn || syncCourses)(rec.site, rec.token, rec.userid, rec.selected, { fetchFn, nowSec: Math.floor(now / 1000), budget: per, known: await knownStates(env, uid) });
         } catch (e) {
           if (e instanceof MoodleError && e.code === 'moodle_auth') await deleteRecord(env, uid);
           throw e;

@@ -9,3 +9,8 @@ package-lock.json
 wrangler.toml
 *.md
 src/
+tools/
+eslint.config.js
+firebase.json
+taskplus-backup.json
+grade-settings.json

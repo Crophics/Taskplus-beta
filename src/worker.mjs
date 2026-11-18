@@ -5,7 +5,7 @@
 // Every /api call must carry a valid Firebase ID token; the Moodle token
 // never leaves this Worker.
 
-import { processSync, loadEvents, loadPush, savePush, pushStatus, registerToken, unregisterToken, cleanPrefs, cleanTimeZone, sendTest, runCron } from './push.mjs';
+import { processSync, knownStates, loadEvents, loadPush, savePush, pushStatus, registerToken, unregisterToken, cleanPrefs, cleanTimeZone, sendTest, runCron } from './push.mjs';
 import { parseServiceAccount } from './fcm.mjs';
 import { verifyFirebaseIdToken, AuthError } from './auth.mjs';
 import { MoodleError, normalizeSite, requestToken, getSiteInfo, getCourses, syncCourses } from './moodle-client.mjs';
@@ -169,7 +169,7 @@ export async function handleApi(request, env, deps = {}) {
       const budget = Number(env.SUBREQUEST_BUDGET) > 0 ? Number(env.SUBREQUEST_BUDGET) : 40;
       let result;
       try {
-        result = await syncCourses(rec.site, rec.token, rec.userid, rec.selected, { fetchFn, nowSec: Math.floor(now / 1000), budget });
+        result = await syncCourses(rec.site, rec.token, rec.userid, rec.selected, { fetchFn, nowSec: Math.floor(now / 1000), budget, known: await knownStates(env, uid) });
       } catch (e) {
         if (e instanceof MoodleError && e.code === 'moodle_auth') await deleteRecord(env, uid);
         throw e;
@@ -179,7 +179,7 @@ export async function handleApi(request, env, deps = {}) {
       // Events go to the feed, not to a push: the user is looking at the app right now.
       let events = [];
       try { events = await processSync(env, uid, result, now, { notify: false, deps }); } catch (e) { /* alerts must never break a sync */ }
-      return json({ records: result.records, grades: result.grades, warnings: result.warnings, syncedAt: now, courses: courseView(rec.courses, rec.selected), events });
+      return json({ records: result.records, warnings: result.warnings, syncedAt: now, courses: courseView(rec.courses, rec.selected), events });
     }
 
     return fail('not_found', 'Unknown endpoint', 404);

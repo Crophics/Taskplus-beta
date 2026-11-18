@@ -7,13 +7,8 @@ Windows scheduled tasks. Nothing here deletes the vault; it can stay as plain no
 
 Finish `docs/SETUP-moodle-worker.md`: KV, `TOKEN_ENC_KEY`, optionally `ANTHROPIC_API_KEY` and
 `FCM_SERVICE_ACCOUNT`. Then in the app: Settings > Connect Moodle, pick courses, turn on notification
-permission, send a test alert, and import grade settings:
-
-```bash
-node tools/import-vault-grades.mjs "<vault path>" > grade-settings.json
-```
-
-(Settings > Import grade settings.) Type each course's class times on its Course detail screen.
+permission and send a test alert. Type each course's class times on its Course detail screen. Taskplus has no
+grades (Moodle stays the place for those), so the vault's grade views are not replaced.
 
 ## Each week of the overlap
 
@@ -34,7 +29,7 @@ notes are skipped (add `--all` to include them). Expect these, and decide each:
 
 - [ ] Two weeks with nothing unexplained in the comparison.
 - [ ] You acted on at least one alert from your phone (new assignment or due soon) while the app was closed.
-- [ ] Grades and targets in Courses match the vault's grade view for every course.
+- [ ] Every assignment you care about, with its due date, shows up in Taskplus (the comparison above).
 - [ ] You do not need the pieces Taskplus does not replace yet: flashcards, lecture notes, the CSCI site
       importer, scheduled backups (Phase 6 leftovers). If you do, keep those parts of the vault running.
 

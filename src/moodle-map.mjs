@@ -2,7 +2,8 @@
 // No network, no storage, no globals: everything here is unit-tested with
 // fixtures shaped like real Moodle responses (see test/moodle-map.test.js).
 
-const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '–', mdash: '—', hellip: '…', rsquo: '’', lsquo: '‘', ldquo: '“', rdquo: '”' };
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '–', mdash: '—', hellip: '…', rsquo: '’', lsquo: '‘', ldquo: '“', rdquo: '”',
+  copy: '©', reg: '®', trade: '™', times: '×', divide: '÷', bull: '•', middot: '·', laquo: '«', raquo: '»', deg: '°', plusmn: '±', frac12: '½', eacute: 'é', egrave: 'è', aacute: 'á', iacute: 'í', oacute: 'ó', uacute: 'ú', ntilde: 'ñ', uuml: 'ü', ouml: 'ö', auml: 'ä', ccedil: 'ç' };
 
 /** Moodle intro HTML -> plain text (no DOM available in a Worker). */
 export function htmlToText(html, max = 4000) {
@@ -25,9 +26,18 @@ export function htmlToText(html, max = 4000) {
   return s;
 }
 
+/**
+ * A short Moodle name (assignment, quiz or course title) as plain one-line text. Moodle sends these
+ * HTML-escaped ("Journal &amp; Reflection"), and the app escapes text again when it draws it, so
+ * decode here once or the screen shows "&amp;".
+ */
+export function plainText(s, max = 300) {
+  return htmlToText(s, max).replace(/\s+/g, ' ').trim();
+}
+
 /** "MATH 2400 Calculus III - Fall 2026" -> "MATH 2400" (same rule the vault script used). */
 export function courseCode(fullname) {
-  return String(fullname || '').trim().split(/\s+/).slice(0, 2).join(' ');
+  return plainText(fullname).split(/\s+/).slice(0, 2).join(' ');
 }
 
 /**
@@ -106,15 +116,13 @@ export function submissionInfo(configs) {
 
 /**
  * mod_assign_get_assignments response -> records. `course` is {id, fullname}.
- * Items with no due date are skipped (the app can't place them) and counted.
+ * An assignment with no due date is kept with `dueTs: null`: the app lists it but never paces it.
  */
 export function mapAssignments(course, resp, base) {
   const records = [];
-  let skippedNoDue = 0;
   ((resp && resp.courses) || []).forEach((co) => {
     (co.assignments || []).forEach((a) => {
       const dueTs = positiveTs(a.duedate);
-      if (!dueTs) { skippedNoDue++; return; }
       const cmid = a.cmid != null ? a.cmid : a.coursemodule;
       const sub = submissionInfo(a.configs);
       records.push({
@@ -124,7 +132,7 @@ export function mapAssignments(course, resp, base) {
         courseId: Number(course.id),
         course: courseCode(course.fullname),
         kind: 'assign',
-        title: String(a.name || '').trim(),
+        title: plainText(a.name),
         dueTs,
         opensTs: positiveTs(a.allowsubmissionsfromdate),
         cutoffTs: positiveTs(a.cutoffdate),
@@ -139,16 +147,14 @@ export function mapAssignments(course, resp, base) {
       });
     });
   });
-  return { records, skippedNoDue };
+  return { records };
 }
 
-/** mod_quiz_get_quizzes_by_courses response -> records. */
+/** mod_quiz_get_quizzes_by_courses response -> records. A quiz with no close date is kept with `dueTs: null`. */
 export function mapQuizzes(course, resp, base) {
   const records = [];
-  let skippedNoDue = 0;
   ((resp && resp.quizzes) || []).forEach((q) => {
     const dueTs = positiveTs(q.timeclose);
-    if (!dueTs) { skippedNoDue++; return; }
     const cmid = q.coursemodule != null ? q.coursemodule : q.cmid;
     const limit = Number(q.timelimit);
     records.push({
@@ -158,7 +164,7 @@ export function mapQuizzes(course, resp, base) {
       courseId: Number(course.id),
       course: courseCode(course.fullname),
       kind: 'quiz',
-      title: String(q.name || '').trim(),
+      title: plainText(q.name),
       dueTs,
       opensTs: positiveTs(q.timeopen),
       cutoffTs: null,
@@ -172,15 +178,21 @@ export function mapQuizzes(course, resp, base) {
       state: null,
     });
   });
-  return { records, skippedNoDue };
+  return { records };
 }
 
 /** Normalises mod_assign_get_submission_status / mod_quiz_get_user_attempts to 'submitted'|'draft'|'none'. */
 export function submissionState(kind, resp) {
   if (kind === 'assign') {
-    const st = resp && resp.lastattempt && resp.lastattempt.submission && resp.lastattempt.submission.status;
-    if (st === 'submitted') return 'submitted';
-    if (st === 'draft') return 'draft';
+    const la = resp && resp.lastattempt;
+    // A group assignment is submitted by the team, not by you: that shows up as teamsubmission.
+    const sts = [la && la.submission && la.submission.status, la && la.teamsubmission && la.teamsubmission.status];
+    if (sts.includes('submitted')) return 'submitted';
+    // Graded by the teacher with nothing submitted here (handed in on paper, in class, or marked by hand):
+    // Moodle has handled it, so there is nothing left to do. (This school's Moodle does not expose
+    // activity completion to the mobile app, so the grading status is the signal there is.)
+    if (la && la.gradingstatus === 'graded') return 'submitted';
+    if (sts.includes('draft')) return 'draft';
     return 'none';
   }
   const states = ((resp && resp.attempts) || []).map((a) => a.state);
@@ -190,50 +202,3 @@ export function submissionState(kind, resp) {
 }
 
 /** "12.50 %" -> 12.5; anything without a percent sign -> null. */
-export function parsePercent(str) {
-  const m = /(-?\d+(?:\.\d+)?)\s*%/.exec(String(str == null ? '' : str));
-  return m ? Number(m[1]) : null;
-}
-
-function percentOf(g) {
-  if (g.gradeishidden) return null;
-  if (g.graderaw === null || g.graderaw === undefined) return null;
-  const raw = Number(g.graderaw);
-  const max = Number(g.grademax);
-  if (!Number.isFinite(raw) || !(max > 0)) return null;
-  return Math.round((raw / max) * 10000) / 100;
-}
-
-/**
- * gradereport_user_get_grade_items response -> one course's grade entries.
- * `id` matches the import records ('moodle:<cmid>') for activities, and is
- * 'gi:<gradeitem id>' for manual items (attendance, MyLab totals...) that have
- * no activity. `weightSuggested` is Moodle's own weight, offered only for flat
- * gradebooks: with nested categories a weight is relative to its category, so
- * it would be wrong as a share of the whole course.
- */
-export function mapGradeItems(course, resp) {
-  const ug = resp && Array.isArray(resp.usergrades) ? resp.usergrades[0] : null;
-  const rows = (ug && ug.gradeitems) || [];
-  const flat = !(ug && Number(ug.maxdepth) > 2);
-  let total = null;
-  const items = [];
-  rows.forEach((g) => {
-    if (g.itemtype === 'course') { total = percentOf(g); return; }
-    if (g.itemtype === 'category') return;
-    const cmid = g.cmid !== null && g.cmid !== undefined && Number(g.cmid) > 0 ? Number(g.cmid) : null;
-    const suggested = flat ? parsePercent(g.weightformatted) : null;
-    items.push({
-      id: cmid ? 'moodle:' + cmid : 'gi:' + g.id,
-      cmid,
-      name: String(g.itemname || '').trim() || 'Grade item',
-      kind: g.itemmodule || g.itemtype || 'other',
-      pct: percentOf(g),
-      max: Number(g.grademax) > 0 ? Number(g.grademax) : null,
-      feedback: htmlToText(g.feedback, 1000),
-      gradedTs: positiveTs(g.gradedategraded),
-      weightSuggested: suggested !== null && suggested > 0 ? suggested : null,
-    });
-  });
-  return { courseId: Number(course.id), course: courseCode(course.fullname), total, items };
-}

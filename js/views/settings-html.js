@@ -54,12 +54,15 @@
         <span class="tp-s-row-label">${escapeHtml(c.code || c.name)}</span>
         <button type="button" class="tp-s-toggle${c.selected ? ' tp-s-toggle-on' : ''}" data-moodle-course="${c.id}" role="switch" aria-checked="${!!c.selected}" aria-label="Sync ${escapeHtml(c.code || c.name)}"><span class="tp-s-toggle-knob"></span></button>
       </div></div>`).join('');
+    const notes = window.TPMoodle.explainWarnings(st.warnings);
+    const noteRows = notes.map(n => `<div class="tp-s-row"><div class="tp-s-row-sub tp-s-warn">${escapeHtml(n)}</div></div>`).join('');
     const busy = moodle.busy;
     return groupHtml('Moodle',
       `<div class="tp-s-row"><div class="tp-s-row-main"><span class="tp-s-row-label">${escapeHtml(st.site || 'Connected')}</span>
         <button type="button" class="tp-s-link" id="tp-moodle-sync"${busy ? ' disabled' : ''}>${busy ? 'Syncing…' : 'Sync now'}</button></div>
         <div class="tp-s-row-sub">${escapeHtml(lastSyncedLabel(st.lastSyncAt))}</div></div>` +
       courseRows +
+      noteRows +
       `<div class="tp-s-row"><div class="tp-s-row-sub">Course changes apply on the next sync.</div></div>
        <div class="tp-s-row"><div class="tp-s-row-main"><button type="button" class="tp-s-danger" id="tp-moodle-disconnect">Disconnect Moodle</button></div>
         <div class="tp-s-row-sub">Assignments already imported stay, but stop updating.</div></div>`
@@ -85,8 +88,6 @@
     const rows =
       rowHtml('New assignments', pillToggleHtml('tp-al-new', p.new)) +
       rowHtml('Due date changes', pillToggleHtml('tp-al-moved', p.moved)) +
-      rowHtml('Grades posted', pillToggleHtml('tp-al-grade', p.grade)) +
-      rowHtml('Feedback', pillToggleHtml('tp-al-feedback', p.feedback)) +
       rowHtml('Due soon', pillToggleHtml('tp-al-due', p.due), 'A day before and an hour before something is due.') +
       rowHtml('Quiet hours', pillToggleHtml('tp-al-quiet', p.quiet.on), 'Alerts wait and arrive together afterwards.') +
       (p.quiet.on ? rowHtml('From', quietSel('tp-al-qstart', p.quiet.start)) + rowHtml('Until', quietSel('tp-al-qend', p.quiet.end)) : '') +
@@ -117,7 +118,7 @@
     const courseDots = courses.slice(0, 5).map(c => `<span class="tp-s-course-dot" style="background:${c.color}"></span>`).join('');
     const estimates = groupHtml('Time estimates',
       rowHtml('Use Claude to estimate', pillToggleHtml('tp-llm-toggle', ctx.llmOn !== false),
-        'Sends an assignment\'s title, points and description to Anthropic so Claude can estimate it and suggest steps. Never your grades, notes or login.') +
+        'Sends an assignment\'s title, points and description to Anthropic so Claude can estimate it and suggest steps. Never your notes or login.') +
       rowHtml('Also read attached PDFs', pillToggleHtml('tp-files-toggle', ctx.filesOn !== false && ctx.llmOn !== false),
         'Sends the PDF handouts attached to an assignment (up to 2, 5 MB each) so Claude can split the real questions into steps. Only files attached to the assignment itself, never your submissions.')
     );
@@ -126,7 +127,6 @@
       rowHtml('Sync', `<button type="button" class="tp-s-link" id="tp-sync-btn">${escapeHtml(syncLabel)}</button>`) +
       rowHtml('Manage courses', `<span class="tp-s-course-dots">${courseDots}</span><button type="button" class="tp-s-chevron" id="tp-manage-courses" aria-label="Open Courses">${window.TPIcons.svg('chevron_right')}</button>`) +
       rowHtml('Export', `<span class="tp-s-io-buttons"><button type="button" class="tp-s-link" id="tp-export">Backup</button><button type="button" class="tp-s-link" id="tp-export-ics">Calendar</button></span>`) +
-      rowHtml('Import grade settings', `<label class="tp-s-link" style="cursor:pointer;">Choose file<input type="file" id="tp-import-grades" accept="application/json" style="display:none;"></label>`, 'Weights, targets and credits from tools/import-vault-grades.mjs') +
       rowHtml('Import backup', `<label class="tp-s-link" style="cursor:pointer;">Choose file<input type="file" id="tp-import" accept="application/json" style="display:none;"></label>`)
     );
 

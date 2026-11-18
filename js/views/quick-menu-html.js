@@ -5,7 +5,9 @@
     const actions = [];
     if (!it.completed && it.total > 1) actions.push(`<button type="button" class="tp-qm-action" id="tp-qm-log" data-i="${i}">Log 1 ${escapeHtml(unit)}</button>`);
     actions.push(`<button type="button" class="tp-qm-action tp-qm-accent" id="tp-qm-complete" data-i="${i}">${it.completed ? 'Reopen' : 'Mark complete'}</button>`);
-    actions.push(`<button type="button" class="tp-qm-action" id="tp-qm-push" data-i="${i}">Push out a day</button>`);
+    if (ctx.canIgnore) actions.push(`<button type="button" class="tp-qm-action" id="tp-qm-ignore" data-i="${i}">Ignore (stop showing as overdue)</button>`);
+    else if (it.ignored) actions.push(`<button type="button" class="tp-qm-action" id="tp-qm-unignore" data-i="${i}">Stop ignoring</button>`);
+    if (it.due) actions.push(`<button type="button" class="tp-qm-action" id="tp-qm-push" data-i="${i}">Push out a day</button>`);
     actions.push(`<button type="button" class="tp-qm-action" id="tp-qm-edit" data-i="${i}">Edit details</button>`);
     actions.push(`<button type="button" class="tp-qm-action tp-qm-danger" id="tp-qm-delete" data-i="${i}">Delete</button>`);
     return `<div class="tp-backdrop tp-qmenu-backdrop" id="tp-qmenu-backdrop">

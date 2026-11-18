@@ -37,7 +37,8 @@
 
   function computeTodayPanel(ctx) {
     const { items, storageKey: KEY, persist, isLocked, unlockedToday, today, daysBetween } = ctx;
-  const active = items.filter(x=>!x.completed && !x.archived && !isLocked(x) && !unlockedToday(x));
+  const planned = (x)=> !!x.due && !x.ignored; // same rule as TPItemLogic.isPlanned
+  const active = items.filter(x=>!x.completed && !x.archived && planned(x) && !isLocked(x) && !unlockedToday(x));
   const multi = active.filter(it=>it.total>1);
   const singles = active.filter(it=>it.total<=1 && it.done<it.total);
 
@@ -159,7 +160,7 @@
 
   const hasRequired = requiredTight.length > 0 || requiredPace.length > 0;
   const pickBuckets = optionalBucketsFinal.filter(b=>b.pickCount);
-  const hasPriorAssignmentWork = items.some(it => !it.archived && (
+  const hasPriorAssignmentWork = items.some(it => !it.archived && planned(it) && (
   (!it.completed && (it.createdAt ? it.createdAt < today() : it.due < today())) ||
   (it.completed && it.completedAt === today())
   ));

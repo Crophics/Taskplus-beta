@@ -101,13 +101,15 @@
   }
 
   function itemDetailHtml(ctx) {
-    const { item, idx, color, escapeHtml, relativeDueLabel, weightPct, fromLabel, daysToDue } = ctx;
+    const { item, idx, color, escapeHtml, relativeDueLabel, fromLabel, daysToDue } = ctx;
     const src = item.source || {};
-    const dueTone = item.completed ? '' : daysToDue < 0 ? ' tp-i-chip-bad' : daysToDue <= 1 ? ' tp-i-chip-warn' : '';
+    const dueTone = item.completed || item.ignored || daysToDue === null ? '' : daysToDue < 0 ? ' tp-i-chip-bad' : daysToDue <= 1 ? ' tp-i-chip-warn' : '';
     const chips = [
-      `<span class="tp-i-chip${dueTone}">${daysToDue < 0 && !item.completed ? 'Overdue · ' : 'Due '}${escapeHtml(relativeDueLabel(item.due))}</span>`,
+      daysToDue === null
+        ? '<span class="tp-i-chip">No due date</span>'
+        : `<span class="tp-i-chip${dueTone}">${daysToDue < 0 && !item.completed && !item.ignored ? 'Overdue · ' : 'Due '}${escapeHtml(relativeDueLabel(item.due))}</span>`,
+      item.ignored ? '<span class="tp-i-chip">Ignored</span>' : '',
       item.completed ? '<span class="tp-i-chip tp-i-chip-ok">Done</span>' : '',
-      weightPct ? `<span class="tp-i-chip">${weightPct}% of grade</span>` : '',
       src.kind === 'quiz' ? `<span class="tp-i-chip">Quiz${src.timeLimitMin ? ' · ' + src.timeLimitMin + ' min' : ''}</span>` : '',
       '<span class="tp-i-chip">From Moodle</span>',
     ].join('');
@@ -115,6 +117,9 @@
     const primary = item.completed
       ? `<button type="button" class="tp-i-primary tp-complete" data-i="${idx}">Mark not done</button>`
       : `<button type="button" class="tp-i-primary ${parts ? 'tp-log' : 'tp-complete'}" data-i="${idx}">${global.TPIcons.svg('check')}${parts ? 'Done with this part' : 'Mark done'}</button>`;
+    const ignore = ctx.canIgnore
+      ? `<button type="button" class="tp-i-secondary" id="tp-i-ignore" data-i="${idx}">Ignore (stop showing as overdue)</button>`
+      : item.ignored ? `<button type="button" class="tp-i-secondary" id="tp-i-unignore" data-i="${idx}">Stop ignoring</button>` : '';
     const open = src.link ? `<a class="tp-i-secondary" href="${escapeHtml(src.link)}" target="_blank" rel="noopener noreferrer">Open in Moodle to submit</a>` : '';
     return `<div class="tp-screen tp-screen-item">
       <button type="button" class="tp-c-back" id="tp-i-back">${global.TPIcons.svg('chevron_left')} ${escapeHtml(fromLabel)}</button>
@@ -126,7 +131,7 @@
       ${descriptionHtml(ctx)}
       <div class="tp-section-heading"><span>My notes</span><span class="tp-section-rule"></span></div>
       <textarea class="tp-i-notes" id="tp-i-notes" rows="3" placeholder="Add notes. They stay yours and are never overwritten by a sync." aria-label="Notes">${escapeHtml(item.notes || '')}</textarea>
-      <div class="tp-i-actions">${primary}${open}<button type="button" class="tp-i-more" id="tp-i-more" data-i="${idx}">Edit or delete…</button></div>
+      <div class="tp-i-actions">${primary}${open}${ignore}<button type="button" class="tp-i-more" id="tp-i-more" data-i="${idx}">Edit or delete…</button></div>
     </div>`;
   }
 

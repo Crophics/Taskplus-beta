@@ -1,7 +1,7 @@
 // moodle-client.mjs — talks to a Moodle site's web-service API.
 // Every network call takes an injectable fetch so tests never hit a real site.
 
-import { mapAssignments, mapQuizzes, mapGradeItems, submissionState } from './moodle-map.mjs';
+import { mapAssignments, mapQuizzes, submissionState, plainText } from './moodle-map.mjs';
 
 export class MoodleError extends Error {
   constructor(code, message, status = 400) {
@@ -12,7 +12,7 @@ export class MoodleError extends Error {
 }
 
 const REQUEST_TIMEOUT_MS = 20000;
-const STATE_WINDOW_SEC = 14 * 86400; // only check submission state for items due within the last 14 days or later
+const RECENT_SEC = 14 * 86400; // overdue by more than this = lowest priority for a submission check
 const STATE_CONCURRENCY = 4;
 
 /**
@@ -106,7 +106,7 @@ export async function getSiteInfo(base, token, fetchFn) {
 export async function getCourses(base, token, userid, fetchFn) {
   const list = await wsCall(base, token, 'core_enrol_get_users_courses', { userid }, fetchFn);
   return (Array.isArray(list) ? list : []).map((c) => ({
-    id: c.id, fullname: c.fullname || c.shortname || '', startdate: c.startdate || 0, enddate: c.enddate || 0, visible: c.visible,
+    id: c.id, fullname: plainText(c.fullname || c.shortname || ''), startdate: c.startdate || 0, enddate: c.enddate || 0, visible: c.visible,
   }));
 }
 
@@ -134,41 +134,31 @@ export async function syncCourses(base, token, userid, courseIds, opts = {}) {
 
   const courses = await getCourses(base, token, userid, fetchFn); used++;
   const wanted = courses.filter((c) => courseIds.includes(c.id));
-  if (!wanted.length) return { records: [], grades: [], warnings: ['no_courses_selected'], courses };
+  if (!wanted.length) return { records: [], warnings: ['no_courses_selected'], courses };
 
   const ids = wanted.map((c) => c.id);
   const assignResp = await wsCall(base, token, 'mod_assign_get_assignments', { courseids: ids }, fetchFn); used++;
   const quizResp = await wsCall(base, token, 'mod_quiz_get_quizzes_by_courses', { courseids: ids }, fetchFn); used++;
 
   const records = [];
-  let skippedNoDue = 0;
   wanted.forEach((c) => {
     const a = mapAssignments(c, { courses: ((assignResp && assignResp.courses) || []).filter((x) => x.id === c.id) }, base);
     const q = mapQuizzes(c, { quizzes: ((quizResp && quizResp.quizzes) || []).filter((x) => x.course === c.id) }, base);
     records.push(...a.records, ...q.records);
-    skippedNoDue += a.skippedNoDue + q.skippedNoDue;
   });
-  if (skippedNoDue) warnings.push('skipped_no_due_date:' + skippedNoDue);
 
-  // Grades: one call per course. Optional, since many schools restrict the grade
-  // report; a refusal for one course is a warning, never a failed sync.
-  const grades = [];
-  await pool(wanted, STATE_CONCURRENCY, async (c) => {
-    if (used >= budget) { warnings.push('grades_skipped:' + c.id); return; }
-    used++;
-    try {
-      const resp = await wsCall(base, token, 'gradereport_user_get_grade_items', { courseid: c.id, userid }, fetchFn);
-      grades.push(mapGradeItems(c, resp));
-    } catch (e) {
-      if (e instanceof MoodleError && e.code === 'moodle_auth') throw e;
-      warnings.push('grades_failed:' + c.id);
-    }
-  });
-  grades.sort((a, b) => a.courseId - b.courseId);
-
+  // What to check, in order. `known` is the state a previous sync saw ({id: 'submitted'|'draft'|'none'}).
+  // A submitted item is final, so it is never re-checked (that is what lets old work get its turn).
+  // Then: items never checked at all (soonest due first), then ones not yet submitted that are current
+  // or recently overdue, then long-overdue ones (most recent first).
+  const known = opts.known || {};
+  records.forEach((r) => { if (known[r.id] === 'submitted') r.state = 'submitted'; });
+  // (No due date counts as current: it can still be handed in.)
+  const due = (r) => r.dueTs || 4e9;
+  const rank = (r) => (known[r.id] == null ? 0 : !r.dueTs || r.dueTs >= nowSec - RECENT_SEC ? 1 : 2);
   const candidates = records
-    .filter((r) => r.dueTs >= nowSec - STATE_WINDOW_SEC)
-    .sort((a, b) => a.dueTs - b.dueTs);
+    .filter((r) => r.state !== 'submitted')
+    .sort((a, b) => rank(a) - rank(b) || (rank(a) === 2 ? due(b) - due(a) : due(a) - due(b)));
   const allowed = Math.max(0, budget - used);
   const checked = candidates.slice(0, allowed);
   if (candidates.length > checked.length) warnings.push('state_skipped:' + (candidates.length - checked.length));
@@ -185,5 +175,5 @@ export async function syncCourses(base, token, userid, courseIds, opts = {}) {
     }
   });
 
-  return { records, grades, warnings, courses };
+  return { records, warnings, courses };
 }

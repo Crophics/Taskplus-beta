@@ -74,12 +74,12 @@
 
     (records || []).forEach((rec) => {
       if (tombstoned.has(rec.id)) { stats.skippedDeleted++; return; }
-      const due = localDate(rec.dueTs);
+      const due = rec.dueTs ? localDate(rec.dueTs) : ''; // '' = Moodle gave no due date
       const idx = byId.get(rec.id);
 
       if (idx === undefined) {
         const submitted = rec.state === 'submitted';
-        if (submitted && daysBetween(due, today) > RECENT_SUBMITTED_DAYS) { stats.skippedOld++; return; }
+        if (submitted && due && daysBetween(due, today) > RECENT_SUBMITTED_DAYS) { stats.skippedOld++; return; }
         let item = {
           id: rec.id, title: rec.title, course: rec.course, due,
           // `unit` is what Today's pill shows for one-sitting work; empty would read "Reading".
@@ -106,9 +106,14 @@
       if (prev.title !== rec.title) { next.title = rec.title; changed = true; }
       if (prev.course !== rec.course) { next.course = rec.course; changed = true; }
       if (prev.due !== due) {
-        events.push({ kind: 'moved', id: prev.id, title: rec.title, course: rec.course, from: prev.due, to: due });
+        // A date appearing or disappearing is not a "moved" notice; only a real change of date is.
+        if (prev.due && due) {
+          events.push({ kind: 'moved', id: prev.id, title: rec.title, course: rec.course, from: prev.due, to: due });
+          stats.moved++;
+        }
         next.due = due;
-        stats.moved++;
+        // "Ignore" only makes sense for work that is overdue: a new date that is not in the past ends it.
+        if (next.ignored && (!due || due >= today)) delete next.ignored;
         changed = true;
       }
       const src = sourceOf(rec, prev.source);
@@ -171,7 +176,7 @@
   }
 
   function needsModel(item, today, force, filesOn) {
-    if (!isImported(item) || item.completed || item.archived || !item.estimate || !global.TPEstimate) return false;
+    if (!isImported(item) || item.completed || item.archived || item.ignored || !item.estimate || !global.TPEstimate) return false;
     if (force) return true;
     if (item.estimate.basis !== 'heuristic' && !wantsHandoutUpgrade(item, filesOn)) return false;
     const tried = item.modelTry;
@@ -233,6 +238,20 @@
     if (!state || !state.connected) return false;
     if (!state.lastSyncAt) return true;
     return nowMs - state.lastSyncAt >= AUTO_SYNC_MIN_HOURS * 3600 * 1000;
+  }
+
+  /** Plain-language lines for the Worker's sync warnings (codes like 'state_failed:7'). */
+  function explainWarnings(warnings) {
+    const list = Array.isArray(warnings) ? warnings : [];
+    const ids = (code) => list.filter((w) => w.startsWith(code + ':')).map((w) => w.split(':')[1]);
+    const num = (code) => ids(code).reduce((n, v) => n + (Number(v) || 0), 0);
+    const out = [];
+    const later = num('state_skipped');
+    if (later) out.push(`${later} item${later === 1 ? '' : 's'} will have submission status checked on the next sync (call limit).`);
+    const stateFailed = ids('state_failed').length;
+    if (stateFailed) out.push(`Could not check submission status for ${stateFailed} item${stateFailed === 1 ? '' : 's'}.`);
+    if (list.includes('no_courses_selected')) out.push('No courses are selected to sync.');
+    return out;
   }
 
   /** A short, human summary of a sync result for a toast. */
@@ -312,11 +331,9 @@
     switch (e.kind) {
       case 'new': return { head: 'New ' + (e.quiz ? 'quiz' : 'assignment'), text: e.title };
       case 'moved': return { head: 'Date moved', text: e.title };
-      case 'grade': return { head: 'Graded ' + (Math.round(e.pct * 10) / 10) + '%', text: e.title };
-      case 'feedback': return { head: 'Feedback', text: e.title };
       default: return { head: 'Update', text: e.title || '' };
     }
   }
 
-  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, shouldAutoSync, summarize, MoodleClientError, api, AUTO_SYNC_MIN_HOURS, mergeFeed, unreadCount, markFeedSeen, feedLine };
+  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, shouldAutoSync, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_HOURS, mergeFeed, unreadCount, markFeedSeen, feedLine };
 })(typeof window !== 'undefined' ? window : globalThis);

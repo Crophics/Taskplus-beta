@@ -54,11 +54,13 @@
     }
 
     // Urgency / Due date: group into Overdue / This week / Later / Blocked / Completed.
-    const groups = { overdue: [], thisWeek: [], later: [], blocked: [], completed: [] };
+    const groups = { overdue: [], thisWeek: [], later: [], noDue: [], blocked: [], ignored: [], completed: [] };
     rows.forEach(r => {
       const it = r.it;
       if (it.completed) { groups.completed.push(r); return; }
+      if (it.ignored) { groups.ignored.push(r); return; }
       if (isLocked(it)) { groups.blocked.push(r); return; }
+      if (!it.due) { groups.noDue.push(r); return; }
       const d = daysBetween(today(), it.due);
       if (d < 0) groups.overdue.push(r);
       else if (d <= 6) groups.thisWeek.push(r);
@@ -71,12 +73,16 @@
       ['overdue', 'Overdue'],
       ['thisWeek', 'This week'],
       ['later', 'Later'],
+      ['noDue', 'No due date'],
       ['blocked', 'Blocked'],
+      ['ignored', 'Ignored'],
       ['completed', 'Completed'],
     ];
+    // Undated and ignored work has no date to order by: alphabetical.
+    const byTitle = (a, b) => (a.it.title || '').localeCompare(b.it.title || '');
     return order
       .filter(([key]) => groups[key].length)
-      .map(([key, label]) => ({ key, label, rows: groups[key].sort(sortWithin) }));
+      .map(([key, label]) => ({ key, label, rows: groups[key].sort(key === 'noDue' || key === 'ignored' ? byTitle : sortWithin) }));
   }
 
   global.TPAllLogic = { buildGroups, matchesQuery, statusPriority };

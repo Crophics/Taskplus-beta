@@ -24,6 +24,7 @@
    UI can say so rather than silently ignoring them.
 */
 (function (global) {
+  const planned = (it) => !!it.due && !it.ignored; // same rule as TPItemLogic.isPlanned
   const HORIZON = 7;
 
   /** 50 -> "50m", 90 -> "1h 30m", 120 -> "2h", 0 -> "0m". Rounds to whole minutes. */
@@ -94,7 +95,7 @@
     });
     let doneMin = 0;
     items.forEach((it) => {
-      if (it.archived) return;
+      if (it.archived || !planned(it)) return;
       if (minutesPerUnit(it) !== null && it.today > 0) doneMin += unitMinutes(it, Math.max((it.done || 0) - it.today, 0), it.today);
     });
     // Optional work the plan ALSO puts on today: a multi-part item with slack still has a share
@@ -119,7 +120,7 @@
 
   /** One item's remaining work as [{dayIndex, units}], dayIndex 0..HORIZON-1 only. */
   function allocateItem(it, today, daysBetween) {
-    if (it.completed || it.archived) return [];
+    if (it.completed || it.archived || !planned(it)) return [];
     const total = Math.max(it.total || 1, 1);
     const done = it.done || 0;
     const loggedToday = it.today || 0;
@@ -153,7 +154,7 @@
     const days = Array.from({ length: HORIZON }, (_, i) => ({ dayIndex: i, minutes: 0, byCourse: {}, entries: [] }));
     let unestimated = 0;
     items.forEach((it) => {
-      if (it.completed || it.archived) return;
+      if (it.completed || it.archived || !planned(it)) return;
       if (isLocked && isLocked(it)) return;
       const mpu = minutesPerUnit(it);
       if (mpu === null) { unestimated++; return; }
