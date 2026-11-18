@@ -433,3 +433,10 @@ test('explainWarnings turns sync warning codes into plain lines', () => {
   assert.deepStrictEqual(M.explainWarnings([], courses), []);
   assert.deepStrictEqual(M.explainWarnings(undefined, courses), []);
 });
+
+test('ensureCourseNames adds an entry for each name that has none, so courses without assignments still get a card', () => {
+  const list = [{ id: 'a', name: 'MATH 2400', color: '#111' }];
+  assert.strictEqual(M.ensureCourseNames(list, ['math 2400', 'BIBL 1020', 'BIBL 1020', '', 'CSCI 2010']), 2);
+  assert.deepStrictEqual(list.map((c) => c.name), ['MATH 2400', 'BIBL 1020', 'CSCI 2010']);
+  assert.strictEqual(M.ensureCourses(list, [{ course: 'PHIL 2202' }]), 1);
+});

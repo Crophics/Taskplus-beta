@@ -58,7 +58,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v50'; // bumped: one entry per course name
+const CACHE_NAME = 'taskplus-cache-v51'; // bumped: courses with no assignments still listed
 const urlsToCache = [
   './',
   './index.html',

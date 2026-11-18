@@ -817,7 +817,9 @@
       const res = await window.TPMoodle.api.sync();
       const merged = window.TPMoodle.mergeImported(items, res.records, { today: today(), deletedLog, now: Date.now() });
       items = merged.items;
-      if(window.TPMoodle.ensureCourses(courses, res.records)) saveCourses();
+      // A course with no assignments yet still gets its card: every course picked for syncing is listed.
+      const names = (res.records||[]).map(r=>r.course).concat((res.courses||[]).filter(c=>c.selected).map(c=>c.code));
+      if(window.TPMoodle.ensureCourseNames(courses, names)) saveCourses();
       appendMoodleEvents(merged.events);
       addToFeed(res.events);
       moodleState = { ...moodleState, connected: true, courses: res.courses, lastSyncAt: res.syncedAt, warnings: (res.warnings||[]).slice(0, 40) };
