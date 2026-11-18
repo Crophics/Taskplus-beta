@@ -118,8 +118,8 @@
       ? `<button type="button" class="tp-i-primary tp-complete" data-i="${idx}">Mark not done</button>`
       : `<button type="button" class="tp-i-primary ${parts ? 'tp-log' : 'tp-complete'}" data-i="${idx}">${global.TPIcons.svg('check')}${parts ? 'Done with this part' : 'Mark done'}</button>`;
     const ignore = ctx.canIgnore
-      ? `<button type="button" class="tp-i-secondary" id="tp-i-ignore" data-i="${idx}">Ignore (stop showing as overdue)</button>`
-      : item.ignored ? `<button type="button" class="tp-i-secondary" id="tp-i-unignore" data-i="${idx}">Stop ignoring</button>` : '';
+      ? `<button type="button" class="tp-i-more" id="tp-i-ignore" data-i="${idx}" title="Stop showing it as overdue">Ignore</button>`
+      : item.ignored ? `<button type="button" class="tp-i-more" id="tp-i-unignore" data-i="${idx}">Stop ignoring</button>` : '';
     const open = src.link ? `<a class="tp-i-secondary" href="${escapeHtml(src.link)}" target="_blank" rel="noopener noreferrer">Open in Moodle to submit</a>` : '';
     return `<div class="tp-screen tp-screen-item">
       <button type="button" class="tp-c-back" id="tp-i-back">${global.TPIcons.svg('chevron_left')} ${escapeHtml(fromLabel)}</button>
@@ -131,7 +131,7 @@
       ${descriptionHtml(ctx)}
       <div class="tp-section-heading"><span>My notes</span><span class="tp-section-rule"></span></div>
       <textarea class="tp-i-notes" id="tp-i-notes" rows="3" placeholder="Add notes. They stay yours and are never overwritten by a sync." aria-label="Notes">${escapeHtml(item.notes || '')}</textarea>
-      <div class="tp-i-actions">${primary}${open}${ignore}<button type="button" class="tp-i-more" id="tp-i-more" data-i="${idx}">Edit or delete…</button></div>
+      <div class="tp-i-actions">${primary}${open}<div class="tp-i-quiet">${ignore}<button type="button" class="tp-i-more" id="tp-i-more" data-i="${idx}">Edit or delete…</button></div></div>
     </div>`;
   }
 

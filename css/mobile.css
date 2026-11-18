@@ -249,7 +249,8 @@ body::-webkit-scrollbar{display:none;}
 .tp-s-danger:active{opacity:.6;}
 
 /* ---- Courses screen ---- */
-#tp-app .tp-c-back{background:none;border:none;color:var(--text-dim);font-family:inherit;font-size:13px;cursor:pointer;padding:0;margin-bottom:10px;display:flex;align-items:center;gap:2px;transition:opacity .15s ease;}
+#tp-app .tp-c-back{background:none;border:none;color:var(--text-muted);font-family:inherit;font-size:15px;cursor:pointer;padding:0 12px 0 0;margin:-6px 0 4px -6px;min-height:44px;display:flex;align-items:center;gap:2px;transition:opacity .15s ease;}
+#tp-app .tp-c-back .tp-icon{font-size:22px;}
 #tp-app .tp-c-back:active{opacity:.6;}
 .tp-c-subhead{font-size:11px;color:var(--text-dim);margin-bottom:14px;}
 .tp-c-row{display:flex;align-items:center;gap:10px;padding:10px 0;}
@@ -484,7 +485,9 @@ body::-webkit-scrollbar{display:none;}
 #tp-app .tp-i-notes{width:100%;box-sizing:border-box;margin:0;padding:12px;min-height:84px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:16px;resize:vertical;}
 .tp-i-actions{display:flex;flex-direction:column;gap:10px;margin-top:18px;}
 #tp-app .tp-i-primary{display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;margin:0;border-radius:12px;border:1px solid var(--accent);background:var(--accent-wash);color:var(--accent-bright);font-family:inherit;font-size:16px;font-weight:500;cursor:pointer;}
-.tp-i-secondary{display:flex;align-items:center;justify-content:center;min-height:48px;border-radius:12px;border:1px solid var(--border);color:var(--text);font-size:15px;text-decoration:none;}
+/* #tp-app prefix: without it the page's button reset wins and the browser's white default shows through. */
+#tp-app .tp-i-secondary{display:flex;align-items:center;justify-content:center;min-height:48px;margin:0;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text);font-family:inherit;font-size:15px;text-decoration:none;}
+#tp-app .tp-i-quiet{display:flex;align-items:center;justify-content:center;gap:20px;}
 #tp-app .tp-i-more{margin:0;padding:0;min-height:44px;background:none;border:none;color:var(--text-dim);font-family:inherit;font-size:13px;cursor:pointer;}
 
 /* Claude estimates */

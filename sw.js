@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v55'; // bumped: reopening an item restores its progress; Moodle completes once
+const CACHE_NAME = 'taskplus-cache-v56'; // bumped: quieter Ignore button, larger back button
 const urlsToCache = [
   './',
   './index.html',
