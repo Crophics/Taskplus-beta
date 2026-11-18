@@ -845,6 +845,8 @@
       const res = await window.TPMoodle.api.sync();
       const merged = window.TPMoodle.mergeImported(items, res.records, { today: today(), deletedLog, now: Date.now(), progress: progressMap });
       items = merged.items;
+      // Items Moodle just created (e.g. on a second device) have no ignore flag yet: apply the synced list.
+      applyIgnoredFromMap();
       // A course with no assignments yet still gets its card: every course picked for syncing is listed.
       const names = (res.records||[]).map(r=>r.course).concat((res.courses||[]).filter(c=>c.selected).map(c=>c.code));
       if(window.TPMoodle.ensureCourseNames(courses, names, undefined, deletedCourses)) saveCourses();

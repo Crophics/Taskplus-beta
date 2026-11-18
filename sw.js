@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v66'; // bumped: open-time sync throttle 2 min
+const CACHE_NAME = 'taskplus-cache-v67'; // bumped: apply synced ignore list after a Moodle import
 const urlsToCache = [
   './',
   './index.html',
