@@ -96,11 +96,20 @@
     try{ return JSON.parse(localStorage.getItem(COURSE_COLORS_KEY)) || {}; }catch(e){ return {}; }
   }
   function saveCourses(){ localStorage.setItem(COURSES_KEY, JSON.stringify(courses)); syncPush(); }
+  // A course synced in from another device can duplicate one made here (same name, different id): keep one.
+  function dedupeCourses(){
+    const clean = window.TPCourses.dedupeByName(courses);
+    if(clean.length === courses.length) return;
+    courses = clean;
+    try{ localStorage.setItem(COURSES_KEY, JSON.stringify(courses)); }catch(e){}
+  }
+  dedupeCourses();
 
   document.addEventListener('tp-remote-data', function(){
     items = loadItems();
     try{ courseColors = JSON.parse(localStorage.getItem(COURSE_COLORS_KEY)) || {}; }catch(e){ courseColors = {}; }
     try{ courses = JSON.parse(localStorage.getItem(COURSES_KEY)) || []; }catch(e){ courses = []; }
+    dedupeCourses();
     try{ dayCompleteLog = JSON.parse(localStorage.getItem(DAY_COMPLETE_LOG_KEY)) || []; }catch(e){ dayCompleteLog = []; }
     try{ deletedLog = JSON.parse(localStorage.getItem(DELETED_LOG_KEY)) || []; }catch(e){ deletedLog = []; }
     let p = {};
