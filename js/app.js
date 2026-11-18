@@ -1046,7 +1046,7 @@
         streak, totalLoggedToday, screen, escapeHtml, itemIndexMap,
         dateLabel: d.toLocaleDateString(undefined,{month:'long',day:'numeric'}),
         weekdayLabel: d.toLocaleDateString(undefined,{weekday:'long'}),
-        courseColorFor, relativeDueLabel, unitLabel, capUnit, plan,
+        courseColorFor, relativeDueLabel, unitLabel, capUnit, plan, today, daysBetween,
         TPTodayLogic: window.TPTodayLogic,
         showBell: !!moodleState.connected, unread: window.TPMoodle.unreadCount(feed),
       });

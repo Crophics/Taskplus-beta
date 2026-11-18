@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v62'; // bumped: due times shown and used by the planners
+const CACHE_NAME = 'taskplus-cache-v63'; // bumped: Today dot colour follows the due date
 const urlsToCache = [
   './',
   './index.html',

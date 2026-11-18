@@ -1,8 +1,12 @@
 /* views/today-html.js — Today screen: header, target rows/pips, Get ahead, footer */
 (function (global) {
-  function urgencyDotClass(t) {
+  // Red = overdue, yellow = due today or tomorrow (or marked tight), green = later. "Tight" alone is not
+  // enough: a single-part item due tomorrow is tight but a multi-part one is only tight once due today,
+  // so two items due tomorrow showed different colours. Judge by the due date as well.
+  function urgencyDotClass(t, ctx) {
     if (t.overdue) return 'tp-t-dot-danger tp-t-pulse';
-    if (t.dueToday || t.tight) return 'tp-t-dot-warn';
+    const soon = !!(ctx && t.it && t.it.due && ctx.daysBetween(ctx.today(), t.it.due) <= 1);
+    if (t.dueToday || t.tight || soon) return 'tp-t-dot-warn';
     return 'tp-t-dot-ok';
   }
 
@@ -50,7 +54,7 @@
       <div class="tp-t-bar" style="background:${color}"></div>
       <div class="tp-t-body">
         <div class="tp-t-title-line">
-          <span class="tp-t-dot ${urgencyDotClass(entry)}"></span>
+          <span class="tp-t-dot ${urgencyDotClass(entry, ctx)}"></span>
           <span class="tp-t-title">${escapeHtml(it.title)}</span>
         </div>
         ${stepLine}
