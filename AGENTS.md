@@ -169,7 +169,7 @@ for the one-time Cloudflare setup. What matters when touching code:
   line (`cron: a user sync failed (<code>)`, never ids, tokens or messages, so it is safe in Cloudflare's logs) and stores
   `lastError: {code, at}` on that user's `push:` record, written only when the code changes and cleared by the next good sync.
   `/api/push/status` returns it and Settings -> Moodle alerts shows a warning line. Look at the Worker's logs in the Cloudflare dashboard.
-- **Who can connect, and what address it may reach (2026-11-18).** `INVITE_CODES` (Worker secret, comma-separated, unset = open): when set,
+- **Who can connect, and what address it may reach (2026-11-18).** Invite codes live in KV as entries `code:<code>` (value = a note; managed in the dashboard, no deploy) and/or the optional `INVITE_CODES` secret; the gate is on while either has a code, off when neither does (`inviteState` in `worker.mjs`; codes must match `/^[\w.-]{4,100}$/` before KV is touched; a used code's entry gets ` [used <date>]` appended). When on,
   `/api/moodle/connect` answers 403 `invite_required`/`invite_invalid` before looking at the password or contacting Moodle; the connect
   sheet then shows an "Invite code" field (remembered in `tp-invite`). Each code is ONE-TIME: after a successful connect `invite:<sha256(code)>` stores `sha256('uid:'+uid)`; another account gets 403 `invite_used`, the same account can reconnect, a failed login does not burn it (only hashes are stored; two truly simultaneous redemptions could both pass, KV is eventually consistent). Already-connected users are unaffected. `normalizeSite` rejects
   trailing-dot hosts, more internal suffixes, numeric TLDs and IP spellings; `postForm` uses `redirect: 'manual'` and refuses any 3xx

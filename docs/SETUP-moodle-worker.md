@@ -82,7 +82,7 @@ Optional Worker variables (set in `wrangler.toml` under `[vars]` or in the dashb
 | `ESTIMATE_DAILY_LIMIT` / `ESTIMATE_GLOBAL_DAILY_LIMIT` | Change the 60 / 300 daily caps. |
 | `ESTIMATE_READ_FILES` | `off` turns off reading PDF handouts for everyone (the per-user Settings switch still exists). |
 | `ESTIMATE_FILE_DAILY_LIMIT` | Handout-reading requests per user per day (default 20). Reading a PDF costs far more than reading text. |
-| `INVITE_CODES` | Optional, a secret (`npx wrangler secret put INVITE_CODES`): comma-separated invite codes. When set, connecting Moodle needs one (the app asks for it when needed; use long random codes, 16+ characters, and give each friend their own: each code works for ONE account and then no longer works for anyone else; the same account can reuse it to reconnect). People already connected are not affected. Leave unset to keep connecting open. |
+| `INVITE_CODES` | Optional and usually not needed: comma-separated invite codes as a secret (`npx wrangler secret put INVITE_CODES`). Easier: manage codes in the dashboard, see "Invite codes" below. |
 | `ALLOWED_UIDS` | Comma-separated Firebase user ids allowed to use Claude estimates. Leave unset to allow every connected user. |
 
 Only the assignment's title, points, description, file names and submission type go to Anthropic. Never
@@ -141,3 +141,14 @@ Notes:
 Sign in to Taskplus on `beta.taskplus.cc`, open Settings, and use **Connect
 Moodle**. A wrong password shows "Moodle did not accept that username or
 password"; a missing setup step shows "The server is not set up for Moodle yet".
+
+## Invite codes (optional)
+
+Connecting Moodle can require an invite code. Manage them in the Cloudflare dashboard, no deploy needed:
+
+1. Workers & Pages -> KV (Storage & Databases -> KV), open the namespace the Worker uses as `MOODLE_KV`.
+2. **Add entry**: the **key** is `code:` followed by the code (for example `code:kx9m2vq7tr8hjw4pd3n`), the **value** is any note
+   (for example the friend's name). Use long random codes (16+ characters, letters, digits, `.`, `_`, `-`).
+3. Give each friend one code. Each code works for one account: after it is used the entry's value gets ` [used 2026-11-18]` added, and
+   other accounts are refused. The same account can reuse its code to reconnect. Deleting an entry removes the code (people already connected keep working).
+4. **The gate is on while any `code:` entry (or the `INVITE_CODES` variable) exists, and off when none do.** Deleting the last code opens signup.

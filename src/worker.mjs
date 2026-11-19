@@ -79,6 +79,22 @@ function statusView(rec) {
 }
 
 const inviteCodesOf = (env) => String(env.INVITE_CODES || '').split(',').map((s) => s.trim()).filter(Boolean);
+/** Invite state. Codes live in KV (add or delete an entry named `code:<the code>` in the dashboard, no redeploy) and/or in the
+ *  optional INVITE_CODES variable. The gate is on while either has any code, off when neither does. */
+async function inviteState(env, given) {
+  const envCodes = inviteCodesOf(env);
+  let kvAny = false;
+  if (typeof env.MOODLE_KV.list === 'function') kvAny = (await env.MOODLE_KV.list({ prefix: 'code:', limit: 1 })).keys.length > 0;
+  if (!envCodes.length && !kvAny) return { required: false };
+  if (!given) return { required: true, ok: false, reason: 'required' };
+  if (inviteMatches(envCodes, given)) return { required: true, ok: true, reason: '' };
+  if (kvAny && /^[\w.-]{4,100}$/.test(given)) {
+    const note = await env.MOODLE_KV.get('code:' + given);
+    if (note !== null) return { required: true, ok: true, reason: '', kvKey: 'code:' + given, note };
+  }
+  return { required: true, ok: false, reason: 'invalid' };
+}
+
 function inviteMatches(codes, given) {
   let ok = false;
   for (const c of codes) if (sameText(given, c)) ok = true; // no early exit: every code is compared
@@ -115,12 +131,11 @@ export async function handleApi(request, env, deps = {}) {
   // Onboarding asks before sign-in whether an invite code is needed and whether the one typed would work. Nothing is
   // consumed or revealed beyond valid / already used. Codes are long random strings, so guessing one is not practical.
   if (route === '/api/invite/check') {
-    const codes = inviteCodesOf(env);
-    if (!codes.length) return json({ required: false });
     const body = await readJson(request).catch(() => ({}));
     const given = typeof body.invite === 'string' ? body.invite.trim() : '';
-    if (!given) return json({ required: true, ok: false, reason: 'required' });
-    if (!inviteMatches(codes, given)) return json({ required: true, ok: false, reason: 'invalid' });
+    const state = await inviteState(env, given);
+    if (!state.required) return json({ required: false });
+    if (!state.ok) return json({ required: true, ok: false, reason: state.reason });
     const usedBy = await env.MOODLE_KV.get('invite:' + await sha256Hex(given));
     return json({ required: true, ok: !usedBy, reason: usedBy ? 'used' : '' });
   }
@@ -185,16 +200,18 @@ export async function handleApi(request, env, deps = {}) {
     const body = await readJson(request);
 
     if (route === '/api/moodle/connect') {
-      // Optional invite gate: with INVITE_CODES set (comma-separated), connecting needs one of them. Checked before the
-      // password is looked at or Moodle is contacted. Unset = open, as before.
+      // Optional invite gate: while any code exists (KV entries `code:<code>`, and/or INVITE_CODES), connecting needs one of them.
+      // Checked before the password is looked at or Moodle is contacted. No codes anywhere = open.
       // Each code works for ONE account: it is marked used only after a successful connect (a mistyped password does not burn it),
       // and the same account can use it again (reconnecting). Only hashes are stored (of the code and of the account).
-      const codes = inviteCodesOf(env);
       let inviteKey = null;
       let inviteUser = null;
-      if (codes.length) {
-        const given = typeof body.invite === 'string' ? body.invite.trim() : '';
-        if (!inviteMatches(codes, given)) return fail(given ? 'invite_invalid' : 'invite_required', given ? 'That invite code is not valid.' : 'Enter your invite code to connect.', 403);
+      let inviteNote = null; // the dashboard entry for this code, so it can be marked used
+      const given = typeof body.invite === 'string' ? body.invite.trim() : '';
+      const gate = await inviteState(env, given);
+      if (gate.required) {
+        if (!gate.ok) return fail(given ? 'invite_invalid' : 'invite_required', given ? 'That invite code is not valid.' : 'Enter your invite code to connect.', 403);
+        inviteNote = gate.kvKey ? { key: gate.kvKey, note: gate.note } : null;
         inviteKey = 'invite:' + await sha256Hex(given);
         inviteUser = await sha256Hex('uid:' + uid);
         const usedBy = await env.MOODLE_KV.get(inviteKey);
@@ -217,7 +234,11 @@ export async function handleApi(request, env, deps = {}) {
         createdAt: now, lastSyncAt: null,
       };
       await saveRecord(env, uid, rec);
-      if (inviteKey) await env.MOODLE_KV.put(inviteKey, inviteUser);
+      if (inviteKey) {
+        await env.MOODLE_KV.put(inviteKey, inviteUser);
+        // Visible in the dashboard: which codes are spent. (The code stays valid for the same account only.)
+        if (inviteNote) await env.MOODLE_KV.put(inviteNote.key, ((inviteNote.note || '') + ' [used ' + new Date(now).toISOString().slice(0, 10) + ']').trim());
+      }
       return json(statusView(rec));
     }
 

@@ -516,3 +516,36 @@ test('invite check: open servers say so; with codes it says valid / invalid / us
   assert.deepStrictEqual((await check(env, 'good-code-aaaaaaaaaaaa')).json, { required: true, ok: false, reason: 'used' });
   assert.strictEqual((await api('/api/invite/check', { env, token: null, method: 'GET' })).res.status, 405);
 });
+
+test('invite codes can live in KV (dashboard entries named code:<code>): gate on while any exists, one account per code, used codes are marked, deleting them all opens signup', async () => {
+  const env = { MOODLE_KV: listingKv(), TOKEN_ENC_KEY: ENC_KEY };
+  const m = env.MOODLE_KV.m;
+  const check = (invite) => api('/api/invite/check', { env, token: null, body: { invite } });
+  assert.deepStrictEqual((await check('')).json, { required: false }, 'no codes anywhere: open');
+  m.set('code:friend-sam-0123456789', 'Sam');
+  m.set('code:friend-ava-9876543210', 'Ava');
+  assert.deepStrictEqual((await check('')).json, { required: true, ok: false, reason: 'required' });
+  assert.deepStrictEqual((await check('nope-nope')).json, { required: true, ok: false, reason: 'invalid' });
+  assert.deepStrictEqual((await check('../../etc/passwd')).json, { required: true, ok: false, reason: 'invalid' }, 'odd characters never reach KV');
+  assert.deepStrictEqual((await check('friend-sam-0123456789')).json, { required: true, ok: true, reason: '' });
+  const f = makeFetch();
+  const connect = async (invite, sub) => api('/api/moodle/connect', { env, fetchFn: f, token: sub ? await makeToken({ sub }) : undefined, body: { site: 'moodle.example.edu/moodle', username: 'student', password: 'pw-secret', invite } });
+  let r = await connect('friend-sam-0123456789');
+  assert.strictEqual(r.res.status, 200);
+  assert.match(m.get('code:friend-sam-0123456789'), /^Sam \[used \d{4}-\d{2}-\d{2}\]$/, 'the dashboard entry shows it is spent, keeping the note');
+  r = await connect('friend-sam-0123456789', 'user-2');
+  assert.strictEqual(r.json.error, 'invite_used');
+  assert.strictEqual(m.get('code:friend-ava-9876543210'), 'Ava', 'other codes are untouched');
+  r = await connect('friend-sam-0123456789');
+  assert.strictEqual(r.res.status, 200, 'the same account can reconnect');
+  assert.ok(!/used.*used/.test(m.get('code:friend-sam-0123456789')), 'marked once');
+  // both sources work together
+  env.INVITE_CODES = 'from-variable-code-1';
+  assert.strictEqual((await check('from-variable-code-1')).json.ok, true);
+  assert.strictEqual((await check('friend-ava-9876543210')).json.ok, true);
+  delete env.INVITE_CODES;
+  // delete every code entry: signup is open again
+  for (const k of [...m.keys()].filter((k) => k.startsWith('code:'))) m.delete(k);
+  assert.deepStrictEqual((await check('')).json, { required: false });
+  assert.strictEqual((await api('/api/moodle/connect', { env, fetchFn: f, token: await makeToken({ sub: 'user-3' }), body: { site: 'moodle.example.edu/moodle', username: 'student', password: 'pw-secret' } })).res.status, 200);
+});
