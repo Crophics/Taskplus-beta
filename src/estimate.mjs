@@ -40,7 +40,7 @@ How to split into steps (this matters, because the app uses the steps as a day-b
 - Each step is one working session on its own day: the student does step 1 today, step 2 tomorrow, step 3 the day after, and so on. Steps are NOT just a way to break the work into pieces.
 - If the whole assignment is reasonable to finish in one sitting (up to about 2 hours of focused work), give exactly ONE step. Do not split a short or medium task just to have more steps.
 - Only split work that is too big for one sitting. Then give the fewest steps that make each day's session reasonable, roughly 45 to 120 minutes each, 2 to 8 steps in total, ending each at a natural stopping point ("Problems 1-3: integration", "Draft the introduction and first section"). If due_in_days is given, never give more steps than the days left.
-- Name each step by what is done in that session, never generic words like "Part 1" or "Do the work". Step names are short (under 50 characters).
+- Name each step by what is done in that session, using the actual question numbers or section names from the handout when you have it, and never generic words like "Part 1" or "Do the work". Step names are short (under 50 characters).
 - Step minutes are multiples of 5 and should add up to "minutes".
 
 "rationale" is one or two plain sentences saying what the estimate is based on, including whether you read a handout.`;
