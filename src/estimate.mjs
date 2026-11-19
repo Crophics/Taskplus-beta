@@ -9,7 +9,7 @@
 // so it is fenced as data, the output is constrained to a JSON schema, and nothing the
 // model returns is ever executed or used as anything but numbers and short labels.
 
-export const PROMPT_VERSION = 'v4';
+export const PROMPT_VERSION = 'v5';
 export const DEFAULT_MODEL = 'claude-opus-5-5';
 
 const MIN_MIN = 15;
@@ -37,9 +37,12 @@ How to estimate:
 - Be honest about uncertainty. "low" and "high" are the range you would bet the real time falls inside. A vague description should get a wider range and "low" confidence; a precise one can be narrower.
 
 How to split into steps (this matters, because the app uses the steps as a day-by-day plan):
-- Each step is one working session on its own day: the student does step 1 today, step 2 tomorrow, step 3 the day after, and so on. Steps are NOT just a way to break the work into pieces.
-- If the whole assignment is reasonable to finish in one sitting (up to about 2 hours of focused work), give exactly ONE step. Do not split a short or medium task just to have more steps.
-- Only split work that is too big for one sitting. Then give the fewest steps that make each day's session reasonable, roughly 45 to 120 minutes each, 2 to 8 steps in total, ending each at a natural stopping point ("Problems 1-3: integration", "Draft the introduction and first section"). If due_in_days is given, never give more steps than the days left.
+- Each step is one working session on its own day: the student does step 1 today, step 2 tomorrow, and so on. Steps are NOT just a way to break the work into pieces.
+- Split by topic, not by length. Start a new step (a new day) where the work moves to a separate, independent topic or skill: for example a math problem set whose first section is hypothesis tests for means and whose second is hypothesis tests for proportions, or a reading and then an unrelated problem set. Doing the two on different days is better than cramming them into one, even when the whole assignment is short (for example two sessions of about 30 minutes).
+- Keep work together in one step when it is the same topic or builds directly on what was just done: sections that use the same method, a draft and its immediate revision, questions that depend on the previous answer. Do not split those just because the total is long or short.
+- If the whole assignment is one topic, or is small and hangs together, give exactly ONE step.
+- A step should be worth a day: at least about 20 minutes and, when you can help it, no more than about 90. If one topic alone is bigger than that, split it at a natural stopping point ("Draft the introduction and first section").
+- Give 1 to 8 steps. If due_in_days is given, never give more steps than the days left.
 - Name each step by what is done in that session, using the actual question numbers or section names from the handout when you have it, and never generic words like "Part 1" or "Do the work". Step names are short (under 50 characters).
 - Step minutes are multiples of 5 and should add up to "minutes".
 
