@@ -146,6 +146,7 @@
       if (!isImported(it) || it.completed || it.archived || !it.due || !it.estimate || it.estimate.basis === 'user') return;
       if (it.done > 0 || it.today > 0 || !(it.total > E.maxParts(it))) return;
       Object.assign(it, E.withEstimate(it, it.estimate));
+      if (!(it.total > 1)) delete it.dailyTarget; // its old per-day target was for more parts
       changed = true;
     });
     return changed;

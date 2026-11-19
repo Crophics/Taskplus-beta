@@ -126,3 +126,16 @@ test('an AI estimate that was shown your history is not scaled a second time', (
   assert.strictEqual(items[2].estimate.minutes, 30);
   assert.strictEqual(items[3].estimate.minutes, 20, 'an estimate made without history still falls back to the scaling');
 });
+
+test('refitParts collapses an untouched plan to the usable days and drops its stale per-day target', () => {
+  global.TP = { today: () => '2026-11-18' };
+  require('../js/due-time.js');
+  const steps = [{ name: 'a', minutes: 60 }, { name: 'b', minutes: 60 }, { name: 'c', minutes: 60 }];
+  const it = mk('1', 'Paper', { due: '2026-11-19', dueTime: '09:00', total: 3, unit: 'part', dailyTarget: { date: '2026-11-18', total: 3, due: '2026-11-19', dueTime: '09:00', amt: 3 }, estimate: est(180, { steps }) });
+  assert.strictEqual(L.refitParts([it]), true);
+  assert.strictEqual(it.total, 1);
+  assert.strictEqual(it.dailyTarget, undefined);
+  assert.strictEqual(L.refitParts([it]), false, 'idempotent');
+  const started = mk('2', 'Paper 2', { due: '2026-11-19', dueTime: '09:00', total: 3, done: 1, estimate: est(180, { steps }) });
+  assert.strictEqual(L.refitParts([started]), false, 'progress is never reinterpreted');
+});

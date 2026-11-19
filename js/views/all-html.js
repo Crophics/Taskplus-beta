@@ -25,7 +25,8 @@
     else if (it.ignored) { statusText = 'Ignored'; statusClass = 'tp-a-status-dim'; }
     else if (locked) { statusText = 'Blocked'; statusClass = 'tp-a-status-dim'; }
     else if (overdue) { statusText = 'Overdue'; statusClass = 'tp-a-status-danger'; }
-    else if (dt && dt.amt > 0) { statusText = `${dt.amt}/day`; statusClass = 'tp-a-status-accent'; }
+    // (a one-part item can keep a stale target from when it had more parts, so only multi-part items show N/day)
+    else if (dt && dt.amt > 0 && it.total > 1) { statusText = `${dt.amt}/day`; statusClass = 'tp-a-status-accent'; }
     else { statusText = 'Open'; statusClass = 'tp-a-status-dim'; }
     return `<div class="tp-a-card ${cls} ${it.completed ? 'tp-a-done' : ''} ${locked ? 'tp-a-blocked-row' : ''}" id="tp-card-${i}" data-i="${i}">
       ${ctx.sortMode === 'custom' ? `<span class="tp-a-drag" data-i="${i}" aria-hidden="true">${window.TPIcons.svg('drag_indicator')}</span>` : ''}
