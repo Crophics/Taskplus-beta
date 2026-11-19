@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v73'; // bumped: Today row alignment
+const CACHE_NAME = 'taskplus-cache-v74'; // bumped: smaller time-left figure
 const urlsToCache = [
   './',
   './index.html',
