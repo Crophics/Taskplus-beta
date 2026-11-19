@@ -1118,7 +1118,7 @@
   async function loadAlerts(){
     try{
       const s = await window.TPMoodle.api.pushStatus();
-      alerts = { loaded:true, configured:!!s.configured, devices:s.devices||0, prefs:s.prefs };
+      alerts = { loaded:true, configured:!!s.configured, devices:s.devices||0, prefs:s.prefs, lastError:s.lastError||null };
       if(tab === 'settings' && !userIsTyping()) render();
     }catch(e){ /* keep defaults */ }
   }

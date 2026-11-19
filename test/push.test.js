@@ -273,3 +273,34 @@ test('a sync that finds something still saves the snapshot and still notifies on
   assert.ok(puts.some((k) => k.startsWith('snap:')));
   assert.strictEqual(f.sent.length, 1, 'one notification for the one new assignment');
 });
+
+/* ---------- background failures are visible ---------- */
+
+test('a failing background sync is logged without identifiers, remembered by code, shown in status, written once, and cleared on recovery', async () => {
+  const env = await setup();
+  await S.saveRecord(env, 'u1', { site: 's', token: 'secret-token', userid: 1, courses: [], selected: [], lastSyncAt: 0 });
+  const logged = [];
+  const origErr = console.error;
+  console.error = (...a) => logged.push(a.join(' '));
+  try {
+    const bad = async () => { const e = new Error('Moodle said secret-token for u1'); e.code = 'moodle_unreachable'; throw e; };
+    await P.runCron(env, Date.UTC(2026, 10, 18, 10, 0), { fetchFn: fakeFcm().fn, syncFn: bad });
+    let st = P.pushStatus(await P.loadPush(env, 'u1'), env);
+    assert.strictEqual(st.lastError.code, 'moodle_unreachable');
+    assert.ok(logged.length === 1 && logged[0].includes('moodle_unreachable'));
+    assert.ok(!logged.join(' ').includes('secret-token') && !logged.join(' ').includes('u1'), 'the log line carries no token, message or user id');
+    // the same failure again does not rewrite the record
+    const puts = countingKv(env);
+    await P.runCron(env, Date.UTC(2026, 10, 18, 13, 5), { fetchFn: fakeFcm().fn, syncFn: bad });
+    assert.ok(!puts.includes('push:u1') || puts.filter((k) => k === 'push:u1').length <= 1);
+    assert.strictEqual((await P.loadPush(env, 'u1')).lastError.code, 'moodle_unreachable');
+    // a plain Error has no safe code
+    const odd = async () => { throw new Error('boom with details'); };
+    await P.runCron(env, Date.UTC(2026, 10, 18, 16, 10), { fetchFn: fakeFcm().fn, syncFn: odd });
+    assert.strictEqual((await P.loadPush(env, 'u1')).lastError.code, 'unknown');
+    // recovery clears it
+    await P.runCron(env, Date.UTC(2026, 10, 18, 19, 15), { fetchFn: fakeFcm().fn, syncFn: async () => result([rec('moodle:1')]) });
+    assert.strictEqual((await P.loadPush(env, 'u1')).lastError, undefined);
+    assert.strictEqual(P.pushStatus(await P.loadPush(env, 'u1'), env).lastError, null);
+  } finally { console.error = origErr; }
+});

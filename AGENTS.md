@@ -165,6 +165,10 @@ for the one-time Cloudflare setup. What matters when touching code:
   `evt:`, `push:` and `est:<uid>:*`; then `tpSync.deleteCloudData()` deletes the Firestore document, signs out, clears every `tp-*`
   localStorage key and reloads. The daily counters (`estn:`/`estf:`) are kept on purpose (no content, 2-day expiry, and deleting
   must not reset the AI limits). Other devices keep their local copy. **If you add a new server-side key for a user, delete it here too.**
+- **Background failures are visible (2026-11-18).** `runCron` no longer swallows a user's failed sync silently: `noteCronError` logs one
+  line (`cron: a user sync failed (<code>)`, never ids, tokens or messages, so it is safe in Cloudflare's logs) and stores
+  `lastError: {code, at}` on that user's `push:` record, written only when the code changes and cleared by the next good sync.
+  `/api/push/status` returns it and Settings -> Moodle alerts shows a warning line. Look at the Worker's logs in the Cloudflare dashboard.
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
   today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
   slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can

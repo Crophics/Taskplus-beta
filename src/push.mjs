@@ -92,7 +92,7 @@ export function deviceLabel(ua) {
 }
 
 export function pushStatus(p, env) {
-  return { configured: !!parseServiceAccount(env.FCM_SERVICE_ACCOUNT), devices: p.tokens.length, prefs: p.prefs, tz: p.tz };
+  return { configured: !!parseServiceAccount(env.FCM_SERVICE_ACCOUNT), devices: p.tokens.length, prefs: p.prefs, tz: p.tz, lastError: p.lastError || null };
 }
 
 /* ---------------- feed ---------------- */
@@ -188,6 +188,17 @@ export async function sendTest(env, uid, now, deps = {}) {
  * Runs every 30 minutes. Cloudflare allows few outgoing requests per invocation, so users are
  * handled least-recently-served first until the budget is spent; anyone left over goes first next time.
  */
+/** A background failure must not stop other users, but it must not vanish either: log a line (no ids, tokens or messages that
+ *  could carry them) and remember the CODE on the user's push record so Settings can say so. Written only when it changes. */
+async function noteCronError(env, uid, e, now) {
+  const code = e && typeof e.code === 'string' && /^[a-z_]{2,40}$/.test(e.code) ? e.code : 'unknown';
+  console.error('cron: a user sync failed (' + code + ')');
+  try {
+    const p = await loadPush(env, uid);
+    if (!p.lastError || p.lastError.code !== code) await savePush(env, uid, { ...p, lastError: { code, at: now } });
+  } catch (err) { /* storage trouble: the log line above is all we can do */ }
+}
+
 export async function runCron(env, now, deps = {}) {
   if (!env.MOODLE_KV || !env.TOKEN_ENC_KEY) return { users: 0 };
   const fetchFn = deps.fetchFn || fetch;
@@ -205,7 +216,7 @@ export async function runCron(env, now, deps = {}) {
     if (budget < 12) break;
     try {
       const rec = await loadRecord(env, uid);
-      const reserve = 4 + p.tokens.length * 2;
+      const reserve = 5 + p.tokens.length * 2;
       if (rec && now - (rec.lastSyncAt || 0) >= CRON_SYNC_EVERY_MS && inSyncWindow(now, p.tz) && budget - reserve >= 12) {
         const per = Math.min(Number(env.SUBREQUEST_BUDGET) > 0 ? Number(env.SUBREQUEST_BUDGET) : 40, budget - reserve);
         rec.lastSyncAt = now;
@@ -222,13 +233,15 @@ export async function runCron(env, now, deps = {}) {
         rec.courses = result.courses.map((c) => ({ id: c.id, fullname: c.fullname }));
         if (JSON.stringify(rec.courses) !== coursesBefore) await saveRecord(env, uid, rec);
         await processSync(env, uid, result, now, { notify: true, deps, touch: true });
+        const after = await loadPush(env, uid);
+        if (after.lastError) { delete after.lastError; await savePush(env, uid, after); } // recovered
       } else if (rec) {
         const snap = await load(env, 'snap', uid);
         if (snap) await notifyUser(env, uid, [], snap, now, deps);
       }
       budget -= reserve;
       done++;
-    } catch (e) { /* one user's failure must not stop the rest */ }
+    } catch (e) { await noteCronError(env, uid, e, now); /* one user's failure must not stop the rest */ }
   }
   return { users: done };
 }

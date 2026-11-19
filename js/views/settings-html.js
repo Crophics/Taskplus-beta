@@ -88,7 +88,13 @@
     else if (a.loaded && !a.configured) status = 'The server cannot send notifications yet (see docs/SETUP-moodle-worker.md). Changes still appear in What\'s new.';
     else if (a.loaded && !a.devices) status = 'This device is not registered yet. Reopen the app and try again.';
     else status = '';
+    const failing = a.lastError && a.lastError.code;
+    const failText = failing
+      ? 'Background checks have been failing' + (a.lastError.at ? ' since ' + new Date(a.lastError.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '') +
+        (a.lastError.code === 'moodle_unreachable' || a.lastError.code === 'moodle_network' ? ' (your school\'s Moodle did not answer).' : '. Open the app and tap Sync now; if it keeps failing, disconnect and reconnect Moodle.')
+      : '';
     const rows =
+      (failText ? `<div class="tp-s-row"><div class="tp-s-row-sub tp-s-warn">${failText}</div></div>` : '') +
       rowHtml('New assignments', pillToggleHtml('tp-al-new', p.new)) +
       rowHtml('Due date changes', pillToggleHtml('tp-al-moved', p.moved)) +
       rowHtml('Due soon', pillToggleHtml('tp-al-due', p.due), 'A day before and an hour before something is due.') +
