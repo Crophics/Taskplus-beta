@@ -86,7 +86,7 @@ export async function handleApi(request, env, deps = {}) {
 
   const methods = {
     '/api/moodle/status': 'GET', '/api/moodle/connect': 'POST', '/api/moodle/courses': 'POST', '/api/moodle/sync': 'POST',
-    '/api/moodle/disconnect': 'POST', '/api/estimate': 'POST',
+    '/api/moodle/disconnect': 'POST', '/api/account/delete': 'POST', '/api/estimate': 'POST',
     '/api/push/status': 'GET', '/api/push/events': 'GET', '/api/push/register': 'POST', '/api/push/unregister': 'POST',
     '/api/push/prefs': 'POST', '/api/push/test': 'POST',
   };
@@ -129,6 +129,21 @@ export async function handleApi(request, env, deps = {}) {
     if (route === '/api/moodle/status') {
       const rec = await loadRecord(env, uid);
       return json(rec ? statusView(rec) : { connected: false });
+    }
+
+    if (route === '/api/account/delete') {
+      // Forget everything the server holds about this account. Daily usage counters stay (they hold no content, expire
+      // in two days, and keeping them means deleting data cannot be used to reset the daily AI limits).
+      await deleteRecord(env, uid);
+      for (const k of ['snap:', 'evt:', 'push:']) await env.MOODLE_KV.delete(k + uid);
+      // Cached AI answers: a bounded batch per call (the free plan allows few storage calls per request); the app repeats until done.
+      let more = false;
+      if (typeof env.MOODLE_KV.list === 'function') {
+        const listed = await env.MOODLE_KV.list({ prefix: 'est:' + uid + ':', limit: 30 });
+        for (const k of listed.keys) await env.MOODLE_KV.delete(k.name);
+        more = listed.list_complete === false;
+      }
+      return json({ ok: true, more });
     }
 
     if (route === '/api/moodle/disconnect') {

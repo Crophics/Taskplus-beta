@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, getDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   import { getMessaging, getToken, onMessage, isSupported } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
   import { FCM_VAPID_KEY } from "./js/fcm-config.js";
 
@@ -471,6 +471,12 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     // Firebase ID token for authenticating calls to this app's own Worker
     // (js/moodle-client.js). Refreshed automatically by the SDK when stale.
     getIdToken: async () => (currentUser ? currentUser.getIdToken() : null),
+    // Delete this account's synced document (Settings -> Delete my data). Stops any further push first.
+    deleteCloudData: async () => {
+      if (!currentUser) return;
+      lastPushedAt = Date.now();
+      await deleteDoc(doc(db, "users", currentUser.uid, "taskplus", "data"));
+    },
     ensureItemMeta,
     newId,
     enablePush,

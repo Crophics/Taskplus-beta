@@ -138,6 +138,10 @@
     const clear = `<div class="tp-s-row">
       <div class="tp-s-row-main"><button type="button" class="tp-s-danger" id="tp-clear-completed">Clear completed (${completedCount})</button></div>
       <div class="tp-s-row-sub">Completed items archive themselves after 14 days.</div>
+    </div>
+    <div class="tp-s-row">
+      <div class="tp-s-row-main"><button type="button" class="tp-s-danger" id="tp-delete-data">Delete my data</button></div>
+      <div class="tp-s-row-sub">Removes your Moodle connection, alerts, AI estimates and synced data from the server and this device. Your Moodle account is not touched.</div>
     </div>`;
 
     return `<div class="tp-screen tp-screen-settings">

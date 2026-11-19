@@ -610,6 +610,7 @@
     sync: () => call('/api/moodle/sync', 'POST', {}),
     estimate: (items, fresh, readFiles) => call('/api/estimate', 'POST', { items, fresh: !!fresh, readFiles: !!readFiles }, 90000),
     disconnect: () => call('/api/moodle/disconnect', 'POST', {}),
+    deleteAccount: () => call('/api/account/delete', 'POST', {}),
     pushStatus: () => call('/api/push/status', 'GET'),
     registerPush: (token) => call('/api/push/register', 'POST', { token, timeZone: tz(), userAgent: (global.navigator && global.navigator.userAgent) || '' }),
     unregisterPush: (token) => call('/api/push/unregister', 'POST', { token }),

@@ -1007,6 +1007,32 @@
       if(!userIsTyping()) render();
     }
   }
+  // Settings -> Delete my data: the server's copy (token, snapshot, feed, push devices, AI cache), the synced
+  // cloud document, then this device. Other devices keep their own local copy until they delete it too.
+  async function deleteMyData(){
+    const signedIn = !!(window.tpSync && window.tpSync.getUser && window.tpSync.getUser());
+    const msg = signedIn
+      ? 'Delete all your Taskplus data?\n\nThis removes your Moodle connection, alerts, AI estimates and synced data from the server, and everything on this device. Your Moodle account itself is not touched. Other devices keep their own copy until you delete there too. This cannot be undone.'
+      : 'Delete everything Taskplus stored on this device? This cannot be undone.';
+    if(!window.confirm(msg)) return;
+    try{
+      if(signedIn){
+        for(let i = 0; i < 25; i++){
+          const r = await window.TPMoodle.api.deleteAccount();
+          if(!r || !r.more) break;
+        }
+        await window.tpSync.deleteCloudData();
+        try{ await window.tpSync.signOut(); }catch(e){ /* already gone */ }
+      }
+    }catch(e){
+      showToast('Could not delete everything: ' + ((e && e.message) || 'try again') + '. Nothing was removed from this device.');
+      return;
+    }
+    try{
+      Object.keys(localStorage).filter(k => k.indexOf('tp-') === 0).forEach(k => localStorage.removeItem(k));
+    }catch(e){ /* storage blocked */ }
+    window.location.reload();
+  }
   async function moodleDisconnect(){
     if(!window.confirm('Disconnect Moodle? Assignments already imported stay, but stop updating.')) return;
     try{
@@ -1350,7 +1376,7 @@
       get newCourseColor(){ return newCourseColor; }, set newCourseColor(v){ newCourseColor = v; },
       get lastAddedCourseId(){ return lastAddedCourseId; }, set lastAddedCourseId(v){ lastAddedCourseId = v; },
       touchItem, newItemId,
-      openConnectSheet, closeConnectSheet, moodleConnect, moodleSync, moodleDisconnect, moodleSetCourse,
+      openConnectSheet, closeConnectSheet, moodleConnect, moodleSync, moodleDisconnect, deleteMyData, moodleSetCourse,
       get connectDraft(){ return connectDraft; },
       get connectBusy(){ return connectBusy; },
       openChanges, closeChanges, savePrefsToServer, sendTestAlert, get alerts(){ return alerts; },

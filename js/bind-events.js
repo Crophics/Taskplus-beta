@@ -376,6 +376,8 @@
     if (exportIcsBtn) exportIcsBtn.onclick = api.exportIcs;
     const importEl = document.getElementById('tp-import');
     if (importEl) importEl.onchange = (e) => { if (e.target.files[0]) api.importData(e.target.files[0]); };
+    const deleteDataBtn = document.getElementById('tp-delete-data');
+    if (deleteDataBtn) deleteDataBtn.onclick = api.deleteMyData;
     const clearCompletedBtn = document.getElementById('tp-clear-completed');
     if (clearCompletedBtn) clearCompletedBtn.onclick = api.clearCompleted;
 

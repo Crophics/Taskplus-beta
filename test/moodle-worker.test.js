@@ -405,3 +405,40 @@ test('disconnect also forgets the snapshot and feed', async () => {
   assert.ok(!env.MOODLE_KV.m.has('snap:user-1'));
   assert.ok(![...env.MOODLE_KV.m.keys()].some((k) => k.startsWith('moodle:')));
 });
+
+/* ---------- Delete my data ---------- */
+
+function listingKv() {
+  const kv = fakeKv();
+  kv.list = async ({ prefix, limit = 1000 }) => {
+    const all = [...kv.m.keys()].filter((k) => k.startsWith(prefix));
+    return { keys: all.slice(0, limit).map((name) => ({ name })), list_complete: all.length <= limit };
+  };
+  return kv;
+}
+
+test('delete my data removes the connection, snapshot, feed, push devices and cached AI answers, in batches, and only for this user', async () => {
+  const env = { MOODLE_KV: listingKv(), TOKEN_ENC_KEY: ENC_KEY };
+  const f = makeFetch();
+  await connected(env, f);
+  const m = env.MOODLE_KV.m;
+  for (const k of ['snap:user-1', 'evt:user-1', 'push:user-1']) m.set(k, 'x');
+  for (let i = 0; i < 45; i++) m.set('est:user-1:' + i, 'x');
+  m.set('est:user-2:keep', 'x'); m.set('push:user-2', 'x'); m.set('estn:user-1:2026-11-18', '3');
+  let r = await api('/api/account/delete', { env, fetchFn: f, body: {} });
+  assert.strictEqual(r.res.status, 200);
+  assert.strictEqual(r.json.more, true, '45 cached answers need a second batch');
+  r = await api('/api/account/delete', { env, fetchFn: f, body: {} });
+  assert.strictEqual(r.json.more, false);
+  const left = [...m.keys()].sort();
+  assert.deepStrictEqual(left, ['est:user-2:keep', 'estn:user-1:2026-11-18', 'push:user-2'], 'the other user and the daily counter are untouched');
+});
+
+test('delete my data needs a signed-in user and works with nothing stored', async () => {
+  const env = { MOODLE_KV: listingKv(), TOKEN_ENC_KEY: ENC_KEY };
+  const noAuth = await api('/api/account/delete', { env, token: null, body: {} });
+  assert.strictEqual(noAuth.res.status, 401);
+  const empty = await api('/api/account/delete', { env, fetchFn: makeFetch(), body: {} });
+  assert.strictEqual(empty.res.status, 200);
+  assert.deepStrictEqual(empty.json, { ok: true, more: false });
+});

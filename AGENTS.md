@@ -160,6 +160,11 @@ for the one-time Cloudflare setup. What matters when touching code:
   zone). Due-soon reminders still run on every tick. To stay under KV's 1,000 writes/day an idle check writes nothing
   (`notifyUser` saves push state only if it changed), `processSync` saves the snapshot only if its items changed (its own `at`
   does not count), and the only per-sync writes are the last-sync time and the `lastCron` stamp (`touch`). Tests: `test/push.test.js`.
+- **Delete my data (2026-11-18).** Settings -> "Delete my data" (`deleteMyData` in `app.js`): `POST /api/account/delete` (repeated
+  while `more`, 30 cached AI answers per call because of the free plan's per-request storage-call cap) removes `moodle:`, `snap:`,
+  `evt:`, `push:` and `est:<uid>:*`; then `tpSync.deleteCloudData()` deletes the Firestore document, signs out, clears every `tp-*`
+  localStorage key and reloads. The daily counters (`estn:`/`estf:`) are kept on purpose (no content, 2-day expiry, and deleting
+  must not reset the AI limits). Other devices keep their local copy. **If you add a new server-side key for a user, delete it here too.**
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
   today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
   slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can
