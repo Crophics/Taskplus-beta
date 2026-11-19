@@ -174,6 +174,15 @@ for the one-time Cloudflare setup. What matters when touching code:
   sheet then shows an "Invite code" field (remembered in `tp-invite`). Each code is ONE-TIME: after a successful connect `invite:<sha256(code)>` stores `sha256('uid:'+uid)`; another account gets 403 `invite_used`, the same account can reconnect, a failed login does not burn it (only hashes are stored; two truly simultaneous redemptions could both pass, KV is eventually consistent). Already-connected users are unaffected. `normalizeSite` rejects
   trailing-dot hosts, more internal suffixes, numeric TLDs and IP spellings; `postForm` uses `redirect: 'manual'` and refuses any 3xx
   (hinting the real host), so a redirect can never receive the password or token or point the Worker elsewhere. Tests: `test/moodle-worker.test.js`.
+- **Onboarding and Settings layout (2026-11-18).** `js/views/onboarding-html.js` + the `ob*` functions in `app.js` (state `onboard`, `null` = off):
+  invite code (only when the server has `INVITE_CODES`; `POST /api/invite/check`, public, answers required/valid/invalid/used and consumes nothing)
+  -> Google sign-in -> connect Moodle (reuses the connect sheet) -> a 6-page tour. It starts only on a device with no items, no connection and no
+  sign-in and no `tp-onboarded` flag; anyone with data is marked onboarded silently. Progress is kept in `tp-ob-step` (a reload resumes), the
+  tab bar and gestures are off while it shows, signing in or an already-connected account skips ahead (`tp-auth-changed`, `moodleBoot`). Sign-in
+  and Moodle can be skipped; the code cannot. Settings -> About -> "Show again" replays only the tour (`replayIntro`). Settings now reads Account,
+  Moodle, Notifications (permission + alert rows + daily digest), Time estimates, Appearance, Your data, About, Danger zone; every control keeps
+  its element id (`bind-events.js` finds them by id). The tour text describes real behavior (Targets/Get ahead, parts are days, swipe tabs,
+  pull to sync, edge-swipe back): update it when those change. Verified only with jsdom; no real browser.
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
   today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
   slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can

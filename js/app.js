@@ -166,6 +166,7 @@
   const TABS = ['today','all','week','settings','manage','item','changes'];
   // A saved 'courses' tab (removed: Courses is part of All now) opens All.
   let tab = prefs.tab === 'courses' || prefs.tab === 'course' ? 'all' : TABS.includes(prefs.tab) && prefs.tab !== 'item' && prefs.tab !== 'changes' ? prefs.tab : 'today';
+  let onboard = null; // first-run flow / replayed intro: {step, page, error, busy, required, invite, replay}; null = not showing
   let addOpen = false;
   let pickerOpen = false;
   let moreOpen = false; // add-sheet "Notes, subtasks, repeat, dependency" disclosure
@@ -949,6 +950,7 @@
       moodleState = status;
       saveMoodleState();
       closeConnectSheet();
+      if(onboard && onboard.step === 'moodle'){ onboard.step = 'tour'; onboard.page = 0; onboard.error = ''; obSave(); }
       render();
       moodleSync({silent:false});
     }catch(e){
@@ -1158,13 +1160,18 @@
     }catch(e){
       return; // not configured, offline, or signed out: keep the cached state
     }
+    if(onboard && !onboard.replay && onboard.step === 'moodle' && moodleState.connected){ onboard.page = 0; obGo('tour'); } // already connected (another device): nothing to set up
     if(tab === 'settings' && !userIsTyping()) render();
     loadFeed().then(()=>{ if(tab === 'today' && !userIsTyping()) render(); });
     loadAlerts();
     moodleMaybeAutoSync();
   }
   document.addEventListener('tp-auth-changed', function(e){
-    if(e.detail && e.detail.user) moodleBoot();
+    if(e.detail && e.detail.user){
+      // Signed in during first run (or an account that already exists on a fresh device): on to Moodle.
+      if(onboard && !onboard.replay && (onboard.step === 'checking' || onboard.step === 'invite' || onboard.step === 'signin')){ onboard.busy = false; obGo('moodle'); }
+      moodleBoot();
+    }
     else if(tab === 'settings' && !userIsTyping()) render();
   });
   document.addEventListener('visibilitychange', ()=>{
@@ -1176,7 +1183,7 @@
   // Touch gestures (js/gestures.js): swipe between tabs, swipe back, pull down to sync with Moodle.
   if(window.TPGestures){
     window.TPGestures.init({
-      state: ()=>({ tab, blocked: !!(addOpen || connectOpen || menuFor != null || timeFor != null || userIsTyping()) }),
+      state: ()=>({ tab, blocked: !!(onboard || addOpen || connectOpen || menuFor != null || timeFor != null || userIsTyping()) }),
       goTab: (t)=>{ tab = t; screenJustSwitched = true; savePrefs(); render(); if(typeof window.scrollTo === 'function') window.scrollTo(0, 0); },
       // Use the screen's own back button so the gesture and the button can never disagree.
       back: ()=>{
@@ -1189,6 +1196,92 @@
         return moodleSync({silent:false});
       }
     });
+  }
+
+  /* ---- First run: invite code -> Google -> Moodle -> a short tour. Also the replayable intro (Settings). ---- */
+  const OB_DONE_KEY = 'tp-onboarded';
+  const OB_STEP_KEY = 'tp-ob-step';
+  function obSave(){
+    try{
+      if(onboard && !onboard.replay) localStorage.setItem(OB_STEP_KEY, JSON.stringify({ step: onboard.step, page: onboard.page || 0, required: !!onboard.required }));
+    }catch(e){ /* storage blocked: the flow still works, it just restarts after a reload */ }
+  }
+  function obGo(step){
+    if(!onboard) return;
+    onboard.step = step; onboard.error = ''; onboard.busy = false;
+    if(step !== 'tour') onboard.page = 0;
+    obSave();
+    render();
+    if(typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+  }
+  function startOnboardingIfNew(){
+    try{ if(localStorage.getItem(OB_DONE_KEY)) return; }catch(e){ return; }
+    const hasData = items.length > 0 || !!moodleState.connected || moodleSignedIn();
+    if(hasData){ try{ localStorage.setItem(OB_DONE_KEY, '1'); }catch(e){ /* ignore */ } return; }
+    let saved = null;
+    try{ saved = JSON.parse(localStorage.getItem(OB_STEP_KEY) || 'null'); }catch(e){ saved = null; }
+    onboard = { step: 'checking', page: 0, error: '', busy: false, required: false, invite: '', replay: false };
+    if(saved && ['invite','signin','moodle','tour'].includes(saved.step)){
+      onboard.step = saved.step; onboard.required = !!saved.required; onboard.page = Number(saved.page) || 0;
+    } else {
+      window.TPMoodle.api.inviteCheck('').then(r=>{
+        if(!onboard || onboard.step !== 'checking') return;
+        onboard.required = !!r.required;
+        obGo(onboard.required ? 'invite' : 'signin');
+      });
+    }
+  }
+  async function obSubmitInvite(){
+    const code = String(onboard.invite || '').trim();
+    if(!code){ onboard.error = 'Enter your invite code.'; render(); return; }
+    onboard.busy = true; onboard.error = ''; render();
+    const r = await window.TPMoodle.api.inviteCheck(code);
+    if(!onboard) return;
+    onboard.busy = false;
+    if(!r.required || r.ok){
+      try{ localStorage.setItem('tp-invite', code); }catch(e){ /* ignore */ }
+      obGo(moodleSignedIn() ? 'moodle' : 'signin');
+      return;
+    }
+    onboard.error = r.reason === 'used' ? 'That code was already used. Ask for a new one.'
+      : r.offline ? 'Could not reach Taskplus. Check your connection and try again.'
+      : 'That code is not valid. Check it and try again.';
+    render();
+  }
+  async function obSignIn(){
+    if(moodleSignedIn()){ obGo('moodle'); return; }
+    if(!window.tpSync || !window.tpSync.signIn){ onboard.error = 'Sign-in is not available right now. You can skip and sign in later in Settings.'; render(); return; }
+    onboard.busy = true; onboard.error = ''; render();
+    try{ await window.tpSync.signIn(); }
+    catch(e){ if(onboard){ onboard.busy = false; onboard.error = 'Sign-in did not finish. Try again, or skip for now.'; render(); } }
+  }
+  function obFinish(){
+    const wasReplay = !!(onboard && onboard.replay);
+    onboard = null;
+    if(!wasReplay){
+      try{ localStorage.setItem(OB_DONE_KEY, '1'); localStorage.removeItem(OB_STEP_KEY); }catch(e){ /* ignore */ }
+      tab = 'today'; screenJustSwitched = true; savePrefs();
+    }
+    render();
+    if(typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+  }
+  function obAction(name){
+    if(!onboard) return;
+    const st = onboard.step;
+    if(name === 'next'){
+      if(st === 'invite') obSubmitInvite();
+      else if(st === 'tour'){ onboard.page = Math.min((onboard.page || 0) + 1, window.TPViews.TOUR_PAGES - 1); obSave(); render(); }
+    } else if(name === 'back'){
+      onboard.page = Math.max((onboard.page || 0) - 1, 0); obSave(); render();
+    } else if(name === 'google') obSignIn();
+    else if(name === 'connect'){ openConnectSheet(); render(); }
+    else if(name === 'skip'){ obGo('tour'); }
+    else if(name === 'finish') obFinish();
+  }
+  function replayIntro(){
+    onboard = { step: 'tour', page: 0, error: '', busy: false, required: false, invite: '', replay: true };
+    render();
+    if(typeof window.scrollTo === 'function') window.scrollTo(0, 0);
   }
 
   /* ---- Render ---- */
@@ -1271,7 +1364,9 @@
     }
 
     if(screenJustSwitched) screenHtml = `<div class="tp-screen-enter">${screenHtml}</div>`;
-    let html = V.tabBarHtml({ tab: tab==='item' ? itemDetailFrom : tab==='changes' ? changesFrom : tab }) + screenHtml;
+    let html = onboard
+      ? V.onboardingHtml({ ob: onboard, escapeHtml, busy: !!onboard.busy })
+      : V.tabBarHtml({ tab: tab==='item' ? itemDetailFrom : tab==='changes' ? changesFrom : tab }) + screenHtml;
 
     if(addOpen && draft){
       html += V.addSheetHtml({ draft, courses, items, pickerOpen, moreOpen, prereqOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null, sheetJustOpened });
@@ -1379,7 +1474,7 @@
       get newCourseColor(){ return newCourseColor; }, set newCourseColor(v){ newCourseColor = v; },
       get lastAddedCourseId(){ return lastAddedCourseId; }, set lastAddedCourseId(v){ lastAddedCourseId = v; },
       touchItem, newItemId,
-      openConnectSheet, closeConnectSheet, moodleConnect, moodleSync, moodleDisconnect, deleteMyData, moodleSetCourse,
+      openConnectSheet, closeConnectSheet, moodleConnect, moodleSync, moodleDisconnect, deleteMyData, obAction, replayIntro, get onboard(){ return onboard; }, moodleSetCourse,
       get connectDraft(){ return connectDraft; },
       get connectBusy(){ return connectBusy; },
       openChanges, closeChanges, savePrefsToServer, sendTestAlert, get alerts(){ return alerts; },
@@ -1390,5 +1485,6 @@
       get itemDescOpen(){ return itemDescOpen; }, set itemDescOpen(v){ itemDescOpen = v; },
     };
   }
+  startOnboardingIfNew();
   render();
 })();

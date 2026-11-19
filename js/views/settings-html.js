@@ -45,7 +45,7 @@
     if (!st.connected) {
       const sub = moodle && moodle.signedIn
         ? 'Import assignments and quizzes automatically.'
-        : 'Sign in to Taskplus first (Sync, below), then connect Moodle.';
+        : 'Sign in to Taskplus first (Account, above), then connect Moodle.';
       return groupHtml('Moodle', `<div class="tp-s-row">
         <div class="tp-s-row-main"><span class="tp-s-row-label">Moodle</span>
           <button type="button" class="tp-s-link" id="tp-moodle-connect"${moodle && moodle.signedIn ? '' : ' disabled'}>Connect</button></div>
@@ -72,29 +72,28 @@
     );
   }
 
-  // Alerts about imported Moodle work. Only shown once Moodle is connected: they have nothing to say before that.
-  function alertsGroupHtml(ctx) {
+  // Alert rows for imported Moodle work. Only once Moodle is connected: they have nothing to say before that.
+  // (Returns rows for the Notifications group, not a group of its own.)
+  function alertRowsHtml(ctx, granted) {
     const a = ctx.alerts;
     if (!a || !ctx.moodle || !ctx.moodle.state || !ctx.moodle.state.connected) return '';
     const p = a.prefs;
-    const granted = 'Notification' in window && Notification.permission === 'granted';
     const quietSel = (id, v) => {
       let o = '';
       for (let h = 0; h < 24; h++) o += `<option value="${h}" ${h === v ? 'selected' : ''}>${hourLabel(h)}</option>`;
       return `<select class="tp-s-hour-select" id="${id}">${o}</select>`;
     };
     let status;
-    if (!granted) status = 'Turn on notification permission above to get alerts when the app is closed.';
+    if (!granted) status = 'Turn on notification permission to get alerts when the app is closed.';
     else if (a.loaded && !a.configured) status = 'The server cannot send notifications yet (see docs/SETUP-moodle-worker.md). Changes still appear in What\'s new.';
     else if (a.loaded && !a.devices) status = 'This device is not registered yet. Reopen the app and try again.';
     else status = '';
     const failing = a.lastError && a.lastError.code;
     const failText = failing
       ? 'Background checks have been failing' + (a.lastError.at ? ' since ' + new Date(a.lastError.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '') +
-        (a.lastError.code === 'moodle_unreachable' || a.lastError.code === 'moodle_network' ? ' (your school\'s Moodle did not answer).' : '. Open the app and tap Sync now; if it keeps failing, disconnect and reconnect Moodle.')
+        (a.lastError.code === 'moodle_unreachable' ? ' (your school\'s Moodle did not answer).' : '. Open the app and tap Sync now; if it keeps failing, disconnect and reconnect Moodle.')
       : '';
-    const rows =
-      (failText ? `<div class="tp-s-row"><div class="tp-s-row-sub tp-s-warn">${failText}</div></div>` : '') +
+    return (failText ? `<div class="tp-s-row"><div class="tp-s-row-sub tp-s-warn">${failText}</div></div>` : '') +
       rowHtml('New assignments', pillToggleHtml('tp-al-new', p.new)) +
       rowHtml('Due date changes', pillToggleHtml('tp-al-moved', p.moved)) +
       rowHtml('Due soon', pillToggleHtml('tp-al-due', p.due), 'A day before and an hour before something is due.') +
@@ -102,59 +101,65 @@
       (p.quiet.on ? rowHtml('From', quietSel('tp-al-qstart', p.quiet.start)) + rowHtml('Until', quietSel('tp-al-qend', p.quiet.end)) : '') +
       (granted && a.configured && a.devices ? rowHtml('Test', `<button type="button" class="tp-s-link" id="tp-al-test">Send a test</button>`) : '') +
       (status ? `<div class="tp-s-row"><div class="tp-s-row-sub">${status}</div></div>` : '');
-    return groupHtml('Moodle alerts', rows);
   }
 
+  // Order: who you are, where the work comes from, how you hear about it, how it is estimated, how it looks,
+  // what you can do with your data, about, and last (and alone) the destructive action.
   function settingsScreenHtml(ctx) {
     const { theme, notifyHour, notifyDigest, courses, escapeHtml, completedCount, syncLabel } = ctx;
 
-    const appearance = groupHtml('Appearance', rowHtml('Theme', segmentedThemeHtml(theme)));
+    const account = groupHtml('Account',
+      rowHtml('Taskplus account', `<button type="button" class="tp-s-link" id="tp-sync-btn">${escapeHtml(syncLabel)}</button>`,
+        'Signing in keeps your assignments, notes and settings in step across your devices.')
+    );
 
+    const granted = ('Notification' in window) && Notification.permission === 'granted';
     const notifPermRow = ('Notification' in window)
-      ? (Notification.permission === 'granted'
+      ? (granted
         ? `<span class="tp-s-status-ok">On${(window.tpSync && window.tpSync.hasVapidKey && window.tpSync.hasVapidKey()) ? ' (incl. background)' : ''}</span>`
         : Notification.permission === 'denied'
           ? `<span class="tp-s-status-dim">Blocked in browser settings</span>`
           : `<button type="button" class="tp-s-link" id="tp-enable-notify">Enable</button>`)
       : '';
-    const reminders = groupHtml('Reminders',
+    const notifications = groupHtml('Notifications',
+      rowHtml('Permission', notifPermRow) +
+      alertRowsHtml(ctx, granted) +
       rowHtml('Daily digest', pillToggleHtml('tp-notify-digest', notifyDigest !== false)) +
-      rowHtml('Digest arrives at', hourSelectHtml(notifyHour)) +
-      rowHtml('Notification permission', notifPermRow)
+      rowHtml('Digest arrives at', hourSelectHtml(notifyHour))
     );
 
-    const alerts = alertsGroupHtml(ctx);
-    const courseDots = courses.slice(0, 5).map(c => `<span class="tp-s-course-dot" style="background:${c.color}"></span>`).join('');
     const estimates = groupHtml('Time estimates',
       rowHtml('Use AI to estimate', pillToggleHtml('tp-llm-toggle', ctx.llmOn !== false),
-        'Sends an assignment\'s title, points and description to an AI service (Anthropic\'s Claude or Google\'s Gemini, whichever the server uses) so it can estimate the time and suggest steps. It also gets the titles and times you entered for your finished assignments, so it can tell which are similar. Never your notes, descriptions of past work or login. Google may use content sent on its free tier to improve its products.') +
+        'Sends an assignment\'s title, points and description to an AI service (Anthropic\'s Claude or Google\'s Gemini, whichever the server uses) so it can estimate the time and suggest steps. It also gets the titles and times you entered for your finished assignments, so it can judge similar work. Never your notes, grades or login.') +
       rowHtml('Also read attached PDFs', pillToggleHtml('tp-files-toggle', ctx.filesOn !== false && ctx.llmOn !== false),
         'Sends the PDF handouts attached to an assignment (up to 2, 5 MB each) so the AI can split the real questions into steps. Only files attached to the assignment itself, never your submissions.')
     );
 
-    const account = groupHtml('Account & data',
-      rowHtml('Sync', `<button type="button" class="tp-s-link" id="tp-sync-btn">${escapeHtml(syncLabel)}</button>`) +
-      rowHtml('Manage courses', `<span class="tp-s-course-dots">${courseDots}</span><button type="button" class="tp-s-chevron" id="tp-manage-courses" aria-label="Open Courses">${window.TPIcons.svg('chevron_right')}</button>`) +
+    const appearance = groupHtml('Appearance', rowHtml('Theme', segmentedThemeHtml(theme)));
+
+    const courseDots = courses.slice(0, 5).map(c => `<span class="tp-s-course-dot" style="background:${c.color}"></span>`).join('');
+    const data = groupHtml('Your data',
+      rowHtml('Courses and colors', `<span class="tp-s-course-dots">${courseDots}</span><button type="button" class="tp-s-chevron" id="tp-manage-courses" aria-label="Open Courses">${window.TPIcons.svg('chevron_right')}</button>`) +
+      rowHtml('Add an assignment by hand', `<button type="button" class="tp-s-link" data-add-manual>Add</button>`, 'For work that is not in Moodle. Everything from Moodle arrives on its own.') +
       rowHtml('Export', `<span class="tp-s-io-buttons"><button type="button" class="tp-s-link" id="tp-export">Backup</button><button type="button" class="tp-s-link" id="tp-export-ics">Calendar</button></span>`) +
-      rowHtml('Import backup', `<label class="tp-s-link" style="cursor:pointer;">Choose file<input type="file" id="tp-import" accept="application/json" style="display:none;"></label>`)
+      rowHtml('Import backup', `<label class="tp-s-link" style="cursor:pointer;">Choose file<input type="file" id="tp-import" accept="application/json" style="display:none;"></label>`) +
+      `<div class="tp-s-row"><div class="tp-s-row-main"><button type="button" class="tp-s-danger" id="tp-clear-completed">Clear completed (${completedCount})</button></div>
+        <div class="tp-s-row-sub">Completed items archive themselves after 14 days.</div></div>`
     );
 
-    const privacy = `<div class="tp-s-row"><div class="tp-s-row-main"><a class="tp-s-link" href="privacy.html" target="_blank" rel="noopener">Privacy: what is stored and sent</a></div></div>`;
+    const about = groupHtml('About',
+      rowHtml('Privacy', `<a class="tp-s-link" href="privacy.html" target="_blank" rel="noopener">What is stored and sent</a>`) +
+      rowHtml('Intro', `<button type="button" class="tp-s-link" id="tp-replay-intro">Show again</button>`)
+    );
 
-    const manual = groupHtml('Manual', rowHtml('Add an assignment by hand', `<button type="button" class="tp-s-link" data-add-manual>Add</button>`, 'For work that is not in Moodle. Everything from Moodle arrives on its own.'));
-
-    const clear = `<div class="tp-s-row">
-      <div class="tp-s-row-main"><button type="button" class="tp-s-danger" id="tp-clear-completed">Clear completed (${completedCount})</button></div>
-      <div class="tp-s-row-sub">Completed items archive themselves after 14 days.</div>
-    </div>
-    <div class="tp-s-row">
-      <div class="tp-s-row-main"><button type="button" class="tp-s-danger" id="tp-delete-data">Delete my data</button></div>
-      <div class="tp-s-row-sub">Removes your Moodle connection, alerts, AI estimates and synced data from the server and this device. Your Moodle account is not touched.</div>
-    </div>`;
+    const danger = groupHtml('Danger zone',
+      `<div class="tp-s-row"><div class="tp-s-row-main"><button type="button" class="tp-s-danger" id="tp-delete-data">Delete my data</button></div>
+        <div class="tp-s-row-sub">Removes your Moodle connection, alerts, AI estimates and synced data from the server and this device. Your Moodle account is not touched.</div></div>`
+    );
 
     return `<div class="tp-screen tp-screen-settings">
       <div class="tp-a-header-top"><span class="tp-a-title-heading">Settings</span></div>
-      ${appearance}${reminders}${alerts}${moodleGroupHtml(ctx)}${estimates}${manual}${account}${privacy}${clear}
+      ${account}${moodleGroupHtml(ctx)}${notifications}${estimates}${appearance}${data}${about}${danger}
     </div>`;
   }
 

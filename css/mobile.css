@@ -536,3 +536,20 @@ body::-webkit-scrollbar{display:none;}
 /* Course sort on All: section title with the course colour, and a quiet line for a course with nothing yet. */
 .tp-a-course-title{display:inline-flex;align-items:center;gap:8px;}
 .tp-a-course-empty{font-size:13px;color:var(--text-dim);padding:2px 2px 14px;}
+
+/* Onboarding (first run) and the replayable intro. #tp-app prefix on buttons/inputs: the page reset would win otherwise. */
+.tp-ob{box-sizing:border-box;min-height:100vh;min-height:100dvh;max-width:520px;margin:0 auto;display:flex;flex-direction:column;justify-content:center;
+  padding:calc(24px + env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) calc(32px + env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));}
+.tp-ob-kicker{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px;}
+.tp-ob-title{font-size:28px;line-height:1.2;font-weight:600;color:var(--text);margin:0 0 12px;}
+.tp-ob-text{font-size:16px;line-height:1.55;color:var(--text-muted,var(--text-dim));margin:0 0 24px;}
+#tp-app .tp-ob-input{width:100%;box-sizing:border-box;min-height:48px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:16px;padding:0 12px;margin:0;}
+.tp-ob-error{font-size:13px;line-height:1.4;color:var(--danger);margin-top:12px;}
+.tp-ob-error:empty{margin:0;}
+#tp-app .tp-ob-primary{display:block;width:100%;height:52px;margin:24px 0 0;border-radius:8px;border:1px solid var(--accent);background:var(--accent-wash);color:var(--accent-bright);font-family:inherit;font-size:16px;font-weight:500;cursor:pointer;}
+#tp-app .tp-ob-primary:active{background:var(--accent-wash-strong);}
+#tp-app .tp-ob-primary:disabled{opacity:.6;cursor:default;}
+#tp-app .tp-ob-link{display:block;width:100%;min-height:44px;margin:8px 0 0;background:none;border:none;color:var(--text-dim);font-family:inherit;font-size:14px;cursor:pointer;}
+.tp-ob-dots{display:flex;gap:8px;margin:4px 0 0;}
+.tp-ob-dot{width:8px;height:8px;border-radius:50%;background:var(--border);}
+.tp-ob-dot-on{background:var(--accent);}

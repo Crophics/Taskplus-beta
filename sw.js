@@ -84,7 +84,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v99'; // bumped: record how long it took; estimates learn from it
+const CACHE_NAME = 'taskplus-cache-v100'; // bumped: record how long it took; estimates learn from it
 const urlsToCache = [
   './',
   './index.html',
@@ -120,6 +120,7 @@ const urlsToCache = [
   './js/views/changes-html.js',
   './js/views/quick-menu-html.js',
   './js/views/time-sheet-html.js',
+  './js/views/onboarding-html.js',
   './js/today-logic.js',
   './js/gestures.js',
   './js/bind-events.js',

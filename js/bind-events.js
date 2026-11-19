@@ -376,6 +376,15 @@
     if (exportIcsBtn) exportIcsBtn.onclick = api.exportIcs;
     const importEl = document.getElementById('tp-import');
     if (importEl) importEl.onchange = (e) => { if (e.target.files[0]) api.importData(e.target.files[0]); };
+    // Onboarding / intro: one data-driven handler; the invite box only updates the model (typing never re-renders).
+    root.querySelectorAll('[data-ob]').forEach(b => { b.onclick = () => api.obAction(b.dataset.ob); });
+    const obInvite = document.getElementById('tp-ob-invite');
+    if (obInvite && api.onboard) {
+      obInvite.oninput = (e) => { api.onboard.invite = e.target.value; };
+      obInvite.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); api.obAction('next'); } };
+    }
+    const replayBtn = document.getElementById('tp-replay-intro');
+    if (replayBtn) replayBtn.onclick = api.replayIntro;
     const deleteDataBtn = document.getElementById('tp-delete-data');
     if (deleteDataBtn) deleteDataBtn.onclick = api.deleteMyData;
     const clearCompletedBtn = document.getElementById('tp-clear-completed');

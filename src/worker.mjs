@@ -78,6 +78,13 @@ function statusView(rec) {
   };
 }
 
+const inviteCodesOf = (env) => String(env.INVITE_CODES || '').split(',').map((s) => s.trim()).filter(Boolean);
+function inviteMatches(codes, given) {
+  let ok = false;
+  for (const c of codes) if (sameText(given, c)) ok = true; // no early exit: every code is compared
+  return ok;
+}
+
 /** Compares two strings without stopping at the first difference. */
 function sameText(a, b) {
   let diff = a.length ^ b.length;
@@ -94,7 +101,7 @@ export async function handleApi(request, env, deps = {}) {
 
   const methods = {
     '/api/moodle/status': 'GET', '/api/moodle/connect': 'POST', '/api/moodle/courses': 'POST', '/api/moodle/sync': 'POST',
-    '/api/moodle/disconnect': 'POST', '/api/account/delete': 'POST', '/api/estimate': 'POST',
+    '/api/moodle/disconnect': 'POST', '/api/account/delete': 'POST', '/api/invite/check': 'POST', '/api/estimate': 'POST',
     '/api/push/status': 'GET', '/api/push/events': 'GET', '/api/push/register': 'POST', '/api/push/unregister': 'POST',
     '/api/push/prefs': 'POST', '/api/push/test': 'POST',
   };
@@ -104,6 +111,19 @@ export async function handleApi(request, env, deps = {}) {
 
   if (!env.MOODLE_KV || !env.TOKEN_ENC_KEY) return fail('not_configured', 'The server is not set up for Moodle yet', 503);
   if (route === '/api/estimate' && !pickProvider(env)) return fail('not_configured', 'Estimates are not set up on the server yet', 503);
+
+  // Onboarding asks before sign-in whether an invite code is needed and whether the one typed would work. Nothing is
+  // consumed or revealed beyond valid / already used. Codes are long random strings, so guessing one is not practical.
+  if (route === '/api/invite/check') {
+    const codes = inviteCodesOf(env);
+    if (!codes.length) return json({ required: false });
+    const body = await readJson(request).catch(() => ({}));
+    const given = typeof body.invite === 'string' ? body.invite.trim() : '';
+    if (!given) return json({ required: true, ok: false, reason: 'required' });
+    if (!inviteMatches(codes, given)) return json({ required: true, ok: false, reason: 'invalid' });
+    const usedBy = await env.MOODLE_KV.get('invite:' + await sha256Hex(given));
+    return json({ required: true, ok: !usedBy, reason: usedBy ? 'used' : '' });
+  }
 
   let uid;
   try {
@@ -169,14 +189,12 @@ export async function handleApi(request, env, deps = {}) {
       // password is looked at or Moodle is contacted. Unset = open, as before.
       // Each code works for ONE account: it is marked used only after a successful connect (a mistyped password does not burn it),
       // and the same account can use it again (reconnecting). Only hashes are stored (of the code and of the account).
-      const codes = String(env.INVITE_CODES || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const codes = inviteCodesOf(env);
       let inviteKey = null;
       let inviteUser = null;
       if (codes.length) {
         const given = typeof body.invite === 'string' ? body.invite.trim() : '';
-        let ok = false;
-        for (const c of codes) if (sameText(given, c)) ok = true; // no early exit: every code is compared
-        if (!ok) return fail(given ? 'invite_invalid' : 'invite_required', given ? 'That invite code is not valid.' : 'Enter your invite code to connect.', 403);
+        if (!inviteMatches(codes, given)) return fail(given ? 'invite_invalid' : 'invite_required', given ? 'That invite code is not valid.' : 'Enter your invite code to connect.', 403);
         inviteKey = 'invite:' + await sha256Hex(given);
         inviteUser = await sha256Hex('uid:' + uid);
         const usedBy = await env.MOODLE_KV.get(inviteKey);

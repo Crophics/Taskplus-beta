@@ -500,3 +500,19 @@ test('a failed connect (wrong password) does not use up the invite code', async 
   assert.strictEqual(r.res.status, 200);
   assert.ok([...env.MOODLE_KV.m.keys()].some((k) => k.startsWith('invite:')));
 });
+
+test('invite check: open servers say so; with codes it says valid / invalid / used, without a token and without consuming anything', async () => {
+  const check = (env, invite) => api('/api/invite/check', { env, token: null, body: invite === undefined ? {} : { invite } });
+  assert.deepStrictEqual((await check(newEnv())).json, { required: false });
+  const env = newEnv();
+  env.INVITE_CODES = 'good-code-aaaaaaaaaaaa,other-code-bbbbbbbbbbbb';
+  assert.deepStrictEqual((await check(env)).json, { required: true, ok: false, reason: 'required' });
+  assert.deepStrictEqual((await check(env, 'nope')).json, { required: true, ok: false, reason: 'invalid' });
+  assert.deepStrictEqual((await check(env, ' good-code-aaaaaaaaaaaa ')).json, { required: true, ok: true, reason: '' });
+  assert.deepStrictEqual((await check(env, 'good-code-aaaaaaaaaaaa')).json, { required: true, ok: true, reason: '' }, 'checking twice does not use it up');
+  assert.strictEqual([...env.MOODLE_KV.m.keys()].filter((k) => k.startsWith('invite:')).length, 0);
+  const f = makeFetch();
+  await api('/api/moodle/connect', { env, fetchFn: f, body: { site: 'moodle.example.edu/moodle', username: 'student', password: 'pw-secret', invite: 'good-code-aaaaaaaaaaaa' } });
+  assert.deepStrictEqual((await check(env, 'good-code-aaaaaaaaaaaa')).json, { required: true, ok: false, reason: 'used' });
+  assert.strictEqual((await api('/api/invite/check', { env, token: null, method: 'GET' })).res.status, 405);
+});

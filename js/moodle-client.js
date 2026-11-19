@@ -603,7 +603,17 @@
     return json;
   }
 
+  // Before sign-in: does this server want an invite code, and would this one work? (No token needed.)
+  async function inviteCheck(code) {
+    let res;
+    try {
+      res = await fetch('/api/invite/check', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite: code || '' }) });
+    } catch (e) { return { required: false, offline: true }; }
+    try { return res.ok ? await res.json() : { required: false, offline: true }; } catch (e) { return { required: false, offline: true }; }
+  }
+
   const api = {
+    inviteCheck,
     status: () => call('/api/moodle/status', 'GET'),
     connect: (site, username, password, invite) => call('/api/moodle/connect', 'POST', { site, username, password, invite: invite || '' }),
     saveCourses: (selected) => call('/api/moodle/courses', 'POST', { selected }),
