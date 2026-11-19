@@ -881,7 +881,7 @@
       relativeDueLabel, daysToDue: item.due ? daysBetween(today(), item.due) : null, descOpen: itemDescOpen, canIgnore: canIgnore(item),
       fromLabel: ({ today:'Today', week:'Week', all:'All', courses:'Courses' })[itemDetailFrom] || 'Back',
       llm: { available: llmOn && moodleSignedIn() && !llmUnavailable, busy: modelBusy },
-      canEditPlan: canEditPlan(item), planDraft,
+      canEditPlan: canEditPlan(item), planDraft, canTime: window.TPLearn.canAsk(item),
     };
   }
 

@@ -38,11 +38,11 @@ test('a new record becomes a normal one-unit item with Moodle details on `source
   assert.strictEqual(it.title, 'Assignment 6');
   assert.strictEqual(it.course, 'MATH 2400');
   assert.strictEqual(it.due, '2026-11-19');
-  // 100 pts -> 120 base, a 2-word description x0.85, +15 for the handout = 115 min -> 2 parts
+  // 100 pts -> 120 base, a 2-word description x0.85, +15 for the handout = 115 min: about one sitting -> 1 part
   assert.strictEqual(it.estimate.minutes, 115);
   assert.strictEqual(it.estimate.basis, 'heuristic');
-  assert.strictEqual(it.total, 2);
-  assert.strictEqual(it.unit, 'part');
+  assert.strictEqual(it.total, 1);
+  assert.strictEqual(it.unit, 'assignment');
   const quizItem = M.mergeImported([], [rec({ id: 'moodle:9', cmid: 9, kind: 'quiz', timeLimitMin: 20 })], ctx()).items[0];
   assert.strictEqual(quizItem.total, 1, 'a quiz is one sitting');
   assert.strictEqual(quizItem.unit, 'quiz');
@@ -178,22 +178,22 @@ test('an item already submitted when first imported gets an estimate but is not 
 
 test('changed Moodle details re-estimate an untouched item and re-split its parts', () => {
   const first = M.mergeImported([], [rec()], ctx());
-  assert.strictEqual(first.items[0].total, 2);
+  assert.strictEqual(first.items[0].total, 1);
   const long = 'word '.repeat(400);
   const again = M.mergeImported(first.items, [rec({ description: long })], ctx({ now: NOW + 1000 }));
-  // 120 x1.4 = 168 + 15 = 183 -> 185 min -> 4 parts
+  // 120 x1.4 = 168 + 15 = 183 -> 185 min -> 2 parts (about 90 minutes each)
   assert.strictEqual(again.items[0].estimate.minutes, 185);
-  assert.strictEqual(again.items[0].total, 4);
+  assert.strictEqual(again.items[0].total, 2);
   assert.strictEqual(again.items[0].updatedAt, NOW + 1000);
 });
 
 test('re-estimating keeps the parts of an item with progress, and never touches a user-set estimate', () => {
   const first = M.mergeImported([], [rec()], ctx());
-  const started = { ...first.items[0], done: 1, today: 1 };
+  const started = { ...first.items[0], total: 3, unit: 'part', done: 1, today: 1 }; // 3 parts, one finished: a new estimate would make 2
   const long = 'word '.repeat(400);
   const again = M.mergeImported([started], [rec({ description: long })], ctx());
   assert.strictEqual(again.items[0].estimate.minutes, 185);
-  assert.strictEqual(again.items[0].total, 2, 'progress is not reinterpreted');
+  assert.strictEqual(again.items[0].total, 3, 'progress is not reinterpreted');
   assert.strictEqual(again.items[0].done, 1);
 
   const mine = { ...first.items[0], estimate: global.TPEstimate.userEstimate(30) };
@@ -209,7 +209,7 @@ test('items imported before estimates existed get one on the next sync', () => {
   legacy.unit = 'assignment';
   const out = M.mergeImported([legacy], [rec()], ctx({ now: NOW + 1 }));
   assert.strictEqual(out.items[0].estimate.minutes, 115);
-  assert.strictEqual(out.items[0].total, 2);
+  assert.strictEqual(out.items[0].total, 1);
 });
 
 test('submission types and word limit reach the item and the estimate', () => {
@@ -242,9 +242,9 @@ test('when Moodle changes the description, the old Claude answer is dropped for 
   const out = M.mergeImported([it0], [rec({ description: 'Completely different instructions. '.repeat(30) })], ctx({ now: NOW + 5000 }));
   assert.strictEqual(out.items[0].estimate.basis, 'heuristic');
   assert.strictEqual(out.items[0].source.description.startsWith('Completely different'), true);
-  // 90 words -> x1; 120 base for 100 points + 15 for the handout = 135 minutes -> round(135/50) = 3 parts
+  // 90 words -> x1; 120 base for 100 points + 15 for the handout = 135 minutes -> round(135/90) = 2 parts
   assert.strictEqual(out.items[0].estimate.minutes, 135);
-  assert.strictEqual(out.items[0].total, 3);
+  assert.strictEqual(out.items[0].total, 2);
   assert.strictEqual(global.TPEstimate.stepsUsable(out.items[0]), false, 'the old step names are gone with the old answer');
   assert.notStrictEqual(out.items[0].estimate.key, it0.estimate.key);
 });
@@ -496,11 +496,11 @@ test('estimate map: entries merge newest-wins, null means "reset", old and junk 
 
 test('applyEstimates puts your own estimate on an item that only has the automatic one (a fresh device)', () => {
   const it = imported();
-  assert.strictEqual(M.applyEstimates([it], { 'moodle:7': { m: 90, at: 5 } }), true);
+  assert.strictEqual(M.applyEstimates([it], { 'moodle:7': { m: 180, at: 5 } }), true);
   assert.strictEqual(it.estimate.basis, 'user');
-  assert.strictEqual(it.estimate.minutes, 90);
-  assert.strictEqual(it.total, 2, 'an untouched item is re-split for the new time (90 min = 2 parts)');
-  assert.strictEqual(M.applyEstimates([it], { 'moodle:7': { m: 90, at: 5 } }), false, 'already applied: no change');
+  assert.strictEqual(it.estimate.minutes, 180);
+  assert.strictEqual(it.total, 2, 'an untouched item is re-split for the new time (180 min = 2 parts)');
+  assert.strictEqual(M.applyEstimates([it], { 'moodle:7': { m: 180, at: 5 } }), false, 'already applied: no change');
 });
 
 test('applyEstimates: a newer number replaces an older one, and a reset goes back to the automatic estimate', () => {

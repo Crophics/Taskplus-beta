@@ -113,8 +113,8 @@ test('userEstimate is exact, rounded to 5 and clamped', () => {
   assert.strictEqual(E.userEstimate(99999).minutes, 600);
 });
 
-test('partsFor splits work into roughly 50-minute parts, never more than 8, quizzes stay whole', () => {
-  const cases = [[20, 1], [40, 1], [70, 1], [75, 2], [100, 2], [125, 3], [150, 3], [200, 4], [400, 8], [600, 8]];
+test('partsFor: one sitting (up to ~90 minutes) is one part, then one part per ~90 minutes, never more than 8, quizzes stay whole', () => {
+  const cases = [[20, 1], [40, 1], [70, 1], [100, 1], [125, 1], [150, 2], [200, 2], [400, 4], [600, 7]];
   cases.forEach(([m, n]) => assert.strictEqual(E.partsFor(m, 'assign'), n, m + ' min -> ' + n));
   assert.strictEqual(E.partsFor(270, 'quiz'), 1);
 });
@@ -125,7 +125,7 @@ function imported(over = {}) {
 
 test('withEstimate re-splits an untouched imported item into parts', () => {
   const next = E.withEstimate(imported(), E.userEstimate(150));
-  assert.strictEqual(next.total, 3);
+  assert.strictEqual(next.total, 2);
   assert.strictEqual(next.unit, 'part');
   assert.strictEqual(next.estimate.minutes, 150);
   const small = E.withEstimate(imported({ total: 3, unit: 'part' }), E.userEstimate(30));
@@ -206,8 +206,8 @@ test('fromModel builds a model-basis estimate, drops steps for a quiz, and toler
 
 test('partsFor uses the number of named steps when there are some', () => {
   assert.strictEqual(E.partsFor(300, 'assign', [{ name: 'a', minutes: 150 }, { name: 'b', minutes: 150 }]), 2);
-  assert.strictEqual(E.partsFor(300, 'assign', []), 6, 'no steps: ~50 minutes each');
-  assert.strictEqual(E.partsFor(300, 'assign'), 6);
+  assert.strictEqual(E.partsFor(300, 'assign', []), 3, 'no steps: ~90 minutes each');
+  assert.strictEqual(E.partsFor(300, 'assign'), 3);
   assert.strictEqual(E.partsFor(300, 'quiz', [{ name: 'a', minutes: 1 }, { name: 'b', minutes: 1 }]), 1);
   assert.strictEqual(E.partsFor(60, 'assign', Array.from({ length: 12 }, (_, i) => ({ name: 's' + i, minutes: 5 }))), 8, 'capped at 8');
 });

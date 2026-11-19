@@ -143,6 +143,9 @@ for the one-time Cloudflare setup. What matters when touching code:
   steps into the last one (`capSteps`); `TPLearn.refitParts` re-applies this to untouched, not-your-own plans on load/sync.
   `modelInput` sends `workDays` and the prompt says `days_available_to_work`: NEVER more steps than that (`due_in_days` alone
   overstates it for a morning deadline). A plan you edited yourself is never capped. Prompt v6.
+- **Part size without the AI (2026-11-18).** `PART_MIN` = 90: work up to about 90 minutes is ONE part (one sitting), longer work gets
+  `round(minutes / 90)` parts (max 8), always capped by the usable days (`maxParts`). Parts are separate days. A finished
+  assignment's screen has a "Time taken" row (Add/Change) that opens the same time sheet, so past work can be given a time.
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
   today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
   slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can
@@ -463,15 +466,8 @@ the same data and push notifications work identically. Consequences:
 tests for `today-logic.js`, `all-logic.js`, `week-logic.js`, `courses.js`,
 `item-logic.js`, `html.js`, plus streak/day-complete logic. These load the
 real `js/*.js` files directly (`global.window = global; require('../js/x.js')`)
-so they exercise actual production code, not reimplementations — **except**
-`test/streak-notice.test.js`, whose own header says it "mirrors" (not
-imports) `js/app.js`'s `getDailyStreakNotice`/`dismissDailyStreakNotice` —
-**those two functions don't exist in `app.js` anymore** (the streak-banner
-UI was dropped from the mobile redesign in favor of the Today header's
-streak badge). That test file is currently testing a phantom copy of
-removed logic; it still passes because it never touches the real app, but
-it's not verifying anything live. Worth removing or rewriting, wasn't
-touched this session to avoid deleting test coverage without being asked.
+so they exercise actual production code, not reimplementations. (`test/streak-notice.test.js`, which only tested a phantom copy
+of removed streak-banner logic, was deleted 2026-11-18.)
 
 `npm run lint` runs `eslint js/`.
 

@@ -148,6 +148,8 @@
     if (filesToggle) filesToggle.onclick = () => api.setFilesOn(!api.filesOn);
     const llmToggle = document.getElementById('tp-llm-toggle');
     if (llmToggle) llmToggle.onclick = () => api.setLlmOn(!api.llmOn);
+    const itemTime = document.getElementById('tp-i-time');
+    if (itemTime) itemTime.onclick = () => { api.askTime(api.items.find((x) => x && x.id === api.itemDetailId)); api.render(); };
     /* ---- Edit the plan ---- */
     const planEdit = document.getElementById('tp-i-plan-edit');
     if (planEdit) planEdit.onclick = () => api.openPlanEditor();

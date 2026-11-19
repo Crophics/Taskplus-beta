@@ -89,6 +89,15 @@
       </div>`;
   }
 
+  /** Finished work: what you said it took, or a way to say it now (the sheet only appears on finishing otherwise). */
+  function timeTakenHtml(ctx) {
+    const { item, escapeHtml } = ctx;
+    if (!item.completed || !ctx.canTime) return '';
+    const a = item.actual;
+    return `<div class="tp-section-heading"><span>Time taken</span><span class="tp-section-rule"></span><button type="button" class="tp-pe-edit" id="tp-i-time">${a ? 'Change' : 'Add'}</button></div>
+      <div class="tp-i-hint">${a ? `You took ${escapeHtml(fmt(a.minutes))}. Taskplus uses it for similar work.` : 'Tell Taskplus how long it really took so similar work gets better estimates.'}</div>`;
+  }
+
   function partsHtml(ctx) {
     const { item, idx, escapeHtml } = ctx;
     if (ctx.planDraft) return planEditorHtml(ctx);
@@ -165,6 +174,7 @@
       <h1 class="tp-i-title">${escapeHtml(item.title)}</h1>
       <div class="tp-i-chips">${chips}</div>
       ${estimateCardHtml(ctx)}
+      ${timeTakenHtml(ctx)}
       ${partsHtml(ctx)}
       ${descriptionHtml(ctx)}
       <div class="tp-section-heading"><span>My notes</span><span class="tp-section-rule"></span></div>

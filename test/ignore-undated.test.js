@@ -78,7 +78,7 @@ test('an unfinished-work estimate does not split an undated item into parts', ()
   const E = global.TPEstimate;
   const base = { id: 'moodle:1', title: 'A', total: 1, unit: 'assignment', done: 0, today: 0, completed: false, source: { type: 'moodle', kind: 'assign' } };
   assert.strictEqual(E.withEstimate({ ...base, due: '' }, E.userEstimate(150)).total, 1);
-  assert.strictEqual(E.withEstimate({ ...base, due: '2026-12-01' }, E.userEstimate(150)).total, 3);
+  assert.strictEqual(E.withEstimate({ ...base, due: '2026-12-01' }, E.userEstimate(150)).total, 2);
 });
 
 test('Today and Week never see undated or ignored items (no overdue, no pacing, no crash)', () => {

@@ -16,7 +16,7 @@
      the user's own number         -> 'user'        (always wins; see userEstimate)
 */
 (function (global) {
-  const PART_MIN = 50;   // target length of one "part" an assignment is split into
+  const PART_MIN = 90;   // one sitting: work up to about this long is one part; longer work gets one part per ~90 minutes (parts are days)
   const MAX_PARTS = 8;
   const MIN_MIN = 15;
   const MAX_MIN = 600;
