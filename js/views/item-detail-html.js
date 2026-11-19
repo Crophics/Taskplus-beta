@@ -72,9 +72,11 @@
       const only = d.rows.length - d.locked <= 1;
       return `<div class="tp-pe-row">
         <input type="text" class="tp-pe-name" data-r="${i}" maxlength="60" value="${escapeHtml(r.name)}" placeholder="Part ${i + 1}" aria-label="Name of part ${i + 1}">
-        <input type="number" class="tp-pe-min" data-r="${i}" inputmode="numeric" min="5" max="600" step="5" value="${Number(r.minutes) || ''}" aria-label="Minutes for part ${i + 1}">
-        <span class="tp-pe-unit">min</span>
-        <button type="button" class="tp-pe-del" data-r="${i}" aria-label="Remove part ${i + 1}"${only ? ' disabled' : ''}>×</button>
+        <div class="tp-pe-sub">
+          <input type="number" class="tp-pe-min" data-r="${i}" inputmode="numeric" min="5" max="600" step="5" value="${Number(r.minutes) || ''}" aria-label="Minutes for part ${i + 1}">
+          <span class="tp-pe-unit">min</span>
+          <button type="button" class="tp-pe-del" data-r="${i}" aria-label="Remove part ${i + 1}"${only ? ' disabled' : ''}>×</button>
+        </div>
       </div>`;
     }).join('');
     const total = d.rows.reduce((s, r) => s + (Number(r.minutes) || 0), 0);
