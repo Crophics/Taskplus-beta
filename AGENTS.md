@@ -146,6 +146,15 @@ for the one-time Cloudflare setup. What matters when touching code:
 - **Part size without the AI (2026-11-18).** `PART_MIN` = 90: work up to about 90 minutes is ONE part (one sitting), longer work gets
   `round(minutes / 90)` parts (max 8), always capped by the usable days (`maxParts`). Parts are separate days. A finished
   assignment's screen has a "Time taken" row (Add/Change) that opens the same time sheet, so past work can be given a time.
+- **Push alerts are live (2026-11-18).** `FCM_SERVICE_ACCOUNT` is a key for a dedicated service account in project
+  `planner-88ab8` (role Firebase Cloud Messaging API Admin; the key file's name starts with the project id, so a `gen-lang-client-...`
+  key is from the wrong project and gives a 403). Traps found on the way: (1) `sw.js` has its OWN first-registered `push` listener
+  that always shows data-only alerts, because Firebase's SDK hands a message to an open page when it thinks a window is visible,
+  and on iPhone a suspended Home Screen app counts, so the alert vanished (`test/sw-push.test.js`); (2) the page-side foreground
+  handler must use `registration.showNotification`, never `new Notification()` (throws on iPhone); (3) the test route reports
+  Google's reason and the devices it went to (`deviceLabel`), and a 400 only forgets a device when Google says the token is
+  invalid; (4) every permission toggle or reinstall adds a registration (max 5), stale ones stay until Google reports them dead.
+  Verified on a real iPhone: the test alert. Not yet seen live: new-assignment, moved-date and due-soon alerts from the cron.
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
   today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
   slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can
