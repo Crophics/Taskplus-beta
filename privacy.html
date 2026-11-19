@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Taskplus privacy</title>
+<style>
+  :root { --bg:#fbfbfd; --fg:#1d1f2b; --muted:#5d6173; --line:#dfe1ea; --accent:#4c5bd4; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161826; --fg:#e7e9f5; --muted:#a0a5bd; --line:#2b2e44; --accent:#8f9bff; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 Inter, system-ui, -apple-system, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 18px; margin: 32px 0 6px; }
+  p, li { color: var(--fg); }
+  .muted { color: var(--muted); font-size: 14px; }
+  ul { padding-left: 20px; }
+  li { margin: 4px 0; }
+  a { color: var(--accent); }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+</style>
+</head>
+<body>
+<main>
+<p><a href="./">&larr; Back to Taskplus</a></p>
+<h1>Privacy</h1>
+<p class="muted">Taskplus (beta) is a small project run by one person, not a company. Last updated 18 November 2026.</p>
+
+<h2>The short version</h2>
+<ul>
+  <li>Taskplus never sees or stores your Moodle <strong>password</strong>. It is used once to get an access token.</li>
+  <li>No ads, no analytics, no selling or sharing your data.</li>
+  <li>You can delete everything from <strong>Settings &rarr; Delete my data</strong>.</li>
+</ul>
+
+<h2>What is stored, and where</h2>
+<p><strong>On your device:</strong> your assignments (including the ones imported from Moodle), your notes, settings and progress.</p>
+<p><strong>In your synced account (Google Firebase):</strong> your Google sign-in identifier, the assignments you added by hand, your courses and settings, and small records for imported assignments so they agree across your devices: what you finished, your notes, your own estimates, how long things took, and AI estimates.</p>
+<p><strong>On the Taskplus server (Cloudflare):</strong></p>
+<ul>
+  <li>Your Moodle site address, user number, the courses you chose, and your Moodle access token, <strong>encrypted</strong>. This lets the server check Moodle for you while the app is closed.</li>
+  <li>A snapshot of your assignments (title, course, due date, status) so it can tell what is new or moved, and a short list of recent changes. Titles are kept up to about five months.</li>
+  <li>Your notification setup: a registration for each device you turned alerts on for (with a short device description and your time zone), and your alert choices.</li>
+  <li>Saved AI estimates, so asking again is free. They hold the estimate and its reason, not your assignment text.</li>
+  <li>Daily usage counts, which hold no content and expire in two days.</li>
+</ul>
+
+<h2>The AI estimates</h2>
+<p>When AI estimates are on, Taskplus sends the assignment's title, course name, description, points, due time and submission type to the AI provider (Google Gemini or Anthropic Claude, whichever the server is set to use). If you turn on reading handouts, it also sends that assignment's PDF files. It also sends the title and minutes of up to 12 assignments you already finished, so the AI can judge similar work.</p>
+<p>It does <strong>not</strong> send your notes, grades, account identifiers or login details.</p>
+<p>Google's terms for free Gemini access may allow Google to use submitted content to improve its products. Anthropic's API terms differ. If that matters to you, leave AI estimates off in Settings; the app still gives a basic estimate without it.</p>
+
+<h2>Notifications</h2>
+<p>Alerts are delivered through Google's Firebase Cloud Messaging. Taskplus sends it a short message with the assignment name and due time so your phone can show it.</p>
+
+<h2>Other services involved</h2>
+<ul>
+  <li><strong>Cloudflare</strong> hosts the app and the server.</li>
+  <li><strong>Google</strong> provides sign-in, sync, notification delivery and the Inter font, so Google sees your IP address when the page loads.</li>
+  <li><strong>Your school's Moodle</strong> receives requests from the Taskplus server using your token, the same kind of requests the Moodle mobile app makes.</li>
+</ul>
+
+<h2>Deleting your data</h2>
+<p>In the app, open <strong>Settings &rarr; Delete my data</strong>. It removes your Moodle connection, snapshot, alerts, saved AI estimates and synced data from the server, signs you out, and clears the app's data on that device. Other devices keep their own copy until you delete there too. Your Moodle account is not affected. To stop Taskplus using Moodle without deleting everything, use <strong>Disconnect Moodle</strong>. You can also revoke the token from your Moodle security settings.</p>
+
+<h2>Questions or problems</h2>
+<p>Open an issue at <a href="https://github.com/Crophics/Taskplus-beta/issues">github.com/Crophics/Taskplus-beta/issues</a>. Please don't post passwords, tokens or personal details there.</p>
+<hr>
+<p class="muted">This is a student project provided as is, with no guarantees. Check due dates in Moodle for anything that matters.</p>
+</main>
+</body>
+</html>

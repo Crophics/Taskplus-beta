@@ -133,6 +133,8 @@
       rowHtml('Import backup', `<label class="tp-s-link" style="cursor:pointer;">Choose file<input type="file" id="tp-import" accept="application/json" style="display:none;"></label>`)
     );
 
+    const privacy = `<div class="tp-s-row"><div class="tp-s-row-main"><a class="tp-s-link" href="privacy.html" target="_blank" rel="noopener">Privacy: what is stored and sent</a></div></div>`;
+
     const manual = groupHtml('Manual', rowHtml('Add an assignment by hand', `<button type="button" class="tp-s-link" data-add-manual>Add</button>`, 'For work that is not in Moodle. Everything from Moodle arrives on its own.'));
 
     const clear = `<div class="tp-s-row">
@@ -146,7 +148,7 @@
 
     return `<div class="tp-screen tp-screen-settings">
       <div class="tp-a-header-top"><span class="tp-a-title-heading">Settings</span></div>
-      ${appearance}${reminders}${alerts}${moodleGroupHtml(ctx)}${estimates}${manual}${account}${clear}
+      ${appearance}${reminders}${alerts}${moodleGroupHtml(ctx)}${estimates}${manual}${account}${privacy}${clear}
     </div>`;
   }
 
