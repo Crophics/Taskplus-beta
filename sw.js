@@ -84,7 +84,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v104'; // bumped: Week plan splits a 2-part item over Friday and Saturday
+const CACHE_NAME = 'taskplus-cache-v105'; // bumped: new Add sheet (description, due time, no units)
 const urlsToCache = [
   './',
   './index.html',

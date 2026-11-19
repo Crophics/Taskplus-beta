@@ -287,16 +287,15 @@
       const course = window.TPCourses.byName(courses, it.course);
       editIndex = idx;
       draft = {
-        title: it.title, courseId: course ? course.id : null, due: it.due, amount: it.total, unit: it.unit || '',
-        notes: it.notes || '', subtasksText: (it.subtasks || []).map(s => s.text).join('\n'),
-        recurring: it.recurring || '', dependsOn: it.dependsOn || '',
+        title: it.title, courseId: course ? course.id : null, due: it.due, dueTime: it.dueTime || '',
+        description: it.description || '', notes: it.notes || '', subtasksText: (it.subtasks || []).map(s => s.text).join('\n'),
         minutes: it.estimate && it.estimate.basis === 'user' ? it.estimate.minutes : '',
         imported: window.TPMoodle.isImported(it), // imported work edits its estimate on its own detail screen
       };
     } else {
       editIndex = null;
       const preselected = lastAddedCourseId && window.TPCourses.byId(courses, lastAddedCourseId) ? lastAddedCourseId : null;
-      draft = { title: '', courseId: preselected, due: '', amount: 1, unit: '', notes: '', subtasksText: '', recurring: '', dependsOn: '', minutes: '', imported: false };
+      draft = { title: '', courseId: preselected, due: '', dueTime: '', description: '', notes: '', subtasksText: '', minutes: '', imported: false };
     }
     pickerOpen = false;
     moreOpen = false;
@@ -328,8 +327,8 @@
   function triggerCelebration(x, y, big){ celebrationPending = {x, y, big: !!big}; }
   function saveDevMode(){ localStorage.setItem(DEV_MODE_KEY, devMode ? '1' : '0'); }
   function saveDevPanelOpen(){ localStorage.setItem(DEV_PANEL_KEY, devPanelOpen ? '1' : '0'); }
-  function isDevModeTrigger(title, total){
-    return String(title || '').trim().toLowerCase() === 'dev mode' && Number(total) === 101;
+  function isDevModeTrigger(title, minutes){
+    return String(title || '').trim().toLowerCase() === 'dev mode' && Number(minutes) === 101; // title "dev mode" + a 101-minute estimate
   }
   function activateDevMode(){
     if(devMode) return;
@@ -1374,7 +1373,7 @@
       : V.tabBarHtml({ tab: tab==='item' ? itemDetailFrom : tab==='changes' ? changesFrom : tab }) + screenHtml;
 
     if(addOpen && draft){
-      html += V.addSheetHtml({ draft, courses, items, pickerOpen, moreOpen, prereqOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null, sheetJustOpened });
+      html += V.addSheetHtml({ draft, courses, items, pickerOpen, moreOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null, sheetJustOpened });
     }
     if(connectOpen){
       html += V.connectSheetHtml({ draft: connectDraft, needsInvite: connectNeedsInvite, error: connectError, busy: connectBusy, escapeHtml, sheetJustOpened: connectJustOpened });

@@ -310,6 +310,8 @@ body::-webkit-scrollbar{display:none;}
 .tp-add-course-option .tp-icon{margin-left:auto;color:var(--accent);}
 .tp-add-course-manage{padding:10px 12px;font-size:13px;color:var(--accent-bright);cursor:pointer;border-top:1px solid var(--border-soft);transition:background .12s ease;}
 .tp-add-course-manage:active{background:var(--accent-wash);}
+.tp-add-due-row{display:grid;grid-template-columns:1fr 120px;gap:8px;}
+.tp-add-due-row>input{min-width:0;}
 .tp-add-amount-row{display:flex;align-items:center;gap:8px;margin-bottom:0;}
 .tp-add-stepper{width:46px;height:48px;flex:0 0 auto;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:18px;cursor:pointer;transition:background .12s ease,transform .3s cubic-bezier(.34,1.56,.64,1);}
 .tp-add-stepper:active{background:var(--accent-wash);transform:scale(0.88);transition:background .05s ease,transform .05s ease;}

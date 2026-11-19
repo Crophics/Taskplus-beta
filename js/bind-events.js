@@ -530,31 +530,12 @@
       if (el) el.innerHTML = window.TPViews.pacingHintHtml(api.draft, api.today, api.daysBetween);
     }
 
-    const addUnit = document.getElementById('tp-add-unit');
-    if (addUnit) addUnit.oninput = (e) => { api.draft.unit = e.target.value; refreshHint(); };
     const addDue = document.getElementById('tp-add-due');
     if (addDue) addDue.oninput = (e) => { api.draft.due = e.target.value; refreshHint(); };
-    const addAmount = document.getElementById('tp-add-amount');
-    if (addAmount) addAmount.oninput = (e) => {
-      api.draft.amount = Math.max(1, parseInt(e.target.value) || 1);
-      refreshHint();
-    };
-    // Steppers are clicks, not typing, but they shouldn't steal focus from
-    // the amount field either - patch instead of a full render().
-    const addMinus = document.getElementById('tp-add-minus');
-    if (addMinus) addMinus.onclick = () => {
-      api.draft.amount = Math.max(1, (Number(api.draft.amount) || 1) - 1);
-      const inp = document.getElementById('tp-add-amount');
-      if (inp) inp.value = api.draft.amount;
-      refreshHint();
-    };
-    const addPlus = document.getElementById('tp-add-plus');
-    if (addPlus) addPlus.onclick = () => {
-      api.draft.amount = (Number(api.draft.amount) || 1) + 1;
-      const inp = document.getElementById('tp-add-amount');
-      if (inp) inp.value = api.draft.amount;
-      refreshHint();
-    };
+    const addDueTime = document.getElementById('tp-add-due-time');
+    if (addDueTime) addDueTime.oninput = (e) => { api.draft.dueTime = e.target.value; refreshHint(); };
+    const addDesc = document.getElementById('tp-add-desc');
+    if (addDesc) addDesc.oninput = (e) => { api.draft.description = e.target.value; };
     const courseTrigger = document.getElementById('tp-add-course-trigger');
     if (courseTrigger) courseTrigger.onclick = () => { api.pickerOpen = !api.pickerOpen; api.render(); };
     root.querySelectorAll('.tp-add-course-option[data-course-id]').forEach(opt => opt.onclick = () => {
@@ -581,20 +562,6 @@
       if (el) el.textContent = n ? n + (n === 1 ? ' subtask' : ' subtasks') : 'Each line becomes its own checkbox.';
     };
 
-    root.querySelectorAll('.tp-add-seg-opt[data-repeat]').forEach(b => b.onclick = () => {
-      api.draft.recurring = b.dataset.repeat;
-      api.render();
-    });
-
-    const prereqTrigger = document.getElementById('tp-add-prereq-trigger');
-    if (prereqTrigger) prereqTrigger.onclick = () => { api.prereqOpen = !api.prereqOpen; api.render(); };
-
-    root.querySelectorAll('.tp-add-course-option[data-prereq]').forEach(opt => opt.onclick = () => {
-      api.draft.dependsOn = opt.dataset.prereq;
-      api.prereqOpen = false;
-      api.render();
-    });
-
     const addSubmit = document.getElementById('tp-add-submit');
     if (addSubmit) addSubmit.onclick = () => {
       const titleEl = document.getElementById('tp-add-title');
@@ -607,27 +574,25 @@
         if (!due && dueEl) dueEl.classList.add('tp-field-error');
         return;
       }
-      const amount = Math.max(1, Number(api.draft.amount) || 1);
       const course = window.TPCourses.byId(api.courses, api.draft.courseId);
       const courseName = course ? course.name : '';
-      const unit = api.draft.unit.trim();
+      const dueTime = api.draft.dueTime || '';
+      const description = (api.draft.description || '').trim();
       const notes = (api.draft.notes || '').trim();
       // {text, done} matches the shape makeRecurringClone (js/app.js) and the
       // rest of the codebase already use - not {title, done}.
       const subtasks = (api.draft.subtasksText || '')
         .split('\n').map(s => s.trim()).filter(Boolean)
         .map(t => ({ text: t, done: false }));
-      const recurring = api.draft.recurring || '';
-      const dependsOn = api.draft.dependsOn || '';
       const minutes = Number(api.draft.minutes) || 0;
       if (api.editIndex !== null) {
         const it = api.items[api.editIndex];
         const oldTitle = it.title;
-        it.title = title; it.course = courseName; it.due = due; it.total = amount; it.unit = unit;
-        it.done = Math.min(it.done, amount);
+        // total/unit/recurring/dependsOn are left alone: older items keep the amount, repeat and dependency they were made with.
+        it.title = title; it.course = courseName; it.due = due;
+        if (!api.draft.imported) it.dueTime = dueTime; // imported work gets its due time from Moodle
         it.notes = notes;
-        it.recurring = recurring;
-        it.dependsOn = dependsOn;
+        if (!api.draft.imported) it.description = description; // imported work gets its description from Moodle
         it.subtasks = subtasks.map(st => {
           const prev = (it.subtasks || []).find(p => p.text === st.text);
           return prev ? { ...st, done: prev.done } : st;
@@ -643,18 +608,18 @@
           else if (it.estimate && it.estimate.basis === 'user') delete it.estimate;
         }
         api.touchItem(it);
-        if (api.isDevModeTrigger(it.title, it.total)) api.activateDevMode();
+        if (api.isDevModeTrigger(it.title, minutes)) api.activateDevMode();
       } else {
         const maxOrder = api.items.reduce((m, x) => Math.max(m, x.order ?? -1), -1);
         const created = {
-          id: api.newItemId(), title, course: courseName, due, total: amount, unit,
-          notes, done: 0, today: 0, completed: false, dependsOn, recurring,
+          id: api.newItemId(), title, course: courseName, due, dueTime, description, total: 1, unit: '',
+          notes, done: 0, today: 0, completed: false, dependsOn: '', recurring: '',
           subtasks, completedAt: null, createdAt: api.today(), archived: false,
           order: maxOrder + 1, updatedAt: Date.now(),
         };
         if (minutes > 0) created.estimate = window.TPEstimate.userEstimate(minutes);
         api.items.push(created);
-        if (api.isDevModeTrigger(title, amount)) api.activateDevMode();
+        if (api.isDevModeTrigger(title, minutes)) api.activateDevMode();
         api.tab = 'today';
         api.savePrefs();
       }
