@@ -167,8 +167,19 @@
     return true;
   }
 
+  // iPhone/iPad in a Safari tab (not the Home Screen app): push alerts do not work there, and the Home Screen app keeps its
+  // own separate storage, so installing is best done first.
+  function needsHomeScreen() {
+    const nav = global.navigator || {};
+    const ua = String(nav.userAgent || '');
+    const ios = /iPhone|iPad|iPod/.test(ua) || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
+    const standalone = nav.standalone === true || !!(global.matchMedia && global.matchMedia('(display-mode: standalone)').matches);
+    return ios && !standalone;
+  }
+
   global.TP = {
     DAY_OFFSET_KEY,
+    needsHomeScreen,
     asDate,
     today,
     daysBetween,

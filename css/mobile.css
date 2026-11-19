@@ -581,3 +581,7 @@ body.tp-tour-on{overflow:hidden;}
 .tp-tour-swipe span{position:absolute;left:0;top:6px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 0 6px rgba(255,255,255,.25);animation:tp-tour-swipe 2.2s ease-in-out infinite;}
 @keyframes tp-tour-swipe{0%,15%{left:0;opacity:0;}25%{opacity:1;}70%{left:calc(100% - 36px);opacity:1;}85%,100%{left:calc(100% - 36px);opacity:0;}}
 @media (prefers-reduced-motion: reduce){.tp-tour-swipe span{animation:none;left:calc(50% - 18px);opacity:1;}.tp-tour-spot{transition:none;}}
+
+.tp-ob-steps{margin:0 0 8px;padding-left:22px;font-size:16px;line-height:1.6;color:var(--text);}
+.tp-ob-steps li{margin:8px 0;}
+.tp-ob-share{vertical-align:-3px;color:var(--accent-bright);}

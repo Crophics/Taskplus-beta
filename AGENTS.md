@@ -184,6 +184,11 @@ for the one-time Cloudflare setup. What matters when touching code:
   group): **if you rename those, update `STEPS` in `tour.js`**. If the preview does not load in 9 s the same steps show as plain cards. The sample
   due dates are relative to today so Today always has a target, a + button and a Get ahead item (Problem set 5 is due in 2 days on purpose).
   Tested: `test/tour.test.js` and jsdom runs of every step's enter/target; never seen in a real browser.
+- **Add to Home Screen (2026-11-18).** `TP.needsHomeScreen()` (iPhone/iPad, not standalone) puts an `install` step FIRST in onboarding
+  (the Home Screen app has its own storage, so installing after signing in would lose the progress; "I will do it later" sets
+  `tp-install-skip`) and a warning line at the top of Settings -> Notifications. Push does not work from a Safari tab on iPhone.
+  Privacy page and the AI setting now say plainly that the free Gemini tier lets Google use what is sent to improve its products
+  (it is the unpaid tier's terms; paid tier is treated differently, and linking a billing account makes all use "paid").
 - **Onboarding and Settings layout (2026-11-18).** `js/views/onboarding-html.js` + the `ob*` functions in `app.js` (state `onboard`, `null` = off):
   invite code (only when the server has `INVITE_CODES`; `POST /api/invite/check`, public, answers required/valid/invalid/used and consumes nothing)
   -> Google sign-in -> connect Moodle (reuses the connect sheet) -> a 6-page tour. It starts only on a device with no items, no connection and no

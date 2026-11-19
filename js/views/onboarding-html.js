@@ -3,12 +3,21 @@
 (function (global) {
   function onboardingHtml(ctx) {
     const { ob, escapeHtml, busy } = ctx;
-    const steps = ob.required ? ['invite', 'signin', 'moodle', 'tour'] : ['signin', 'moodle', 'tour'];
+    const steps = (ob.install ? ['install'] : []).concat(ob.required ? ['invite'] : [], ['signin', 'moodle', 'tour']);
     const index = ob.replay ? -1 : steps.indexOf(ob.step);
     const dis = busy ? ' disabled' : '';
     const err = `<div class="tp-ob-error" role="alert">${ob.error ? escapeHtml(ob.error) : ''}</div>`;
     let body;
-    if (ob.step === 'invite') {
+    if (ob.step === 'install') {
+      body = `<h1 class="tp-ob-title">Add Taskplus to your Home Screen</h1>
+        <p class="tp-ob-text">On iPhone, alerts only work from the Home Screen app, and it keeps you signed in. Do this first, then continue there:</p>
+        <ol class="tp-ob-steps">
+          <li>Tap the <strong>Share</strong> button <svg class="tp-ob-share" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7"/></svg> at the bottom of Safari.</li>
+          <li>Scroll down and tap <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</li>
+          <li>Open <strong>Taskplus</strong> from your Home Screen and set up there.</li>
+        </ol>
+        <button type="button" class="tp-ob-link" data-ob="later">I will do it later, continue here</button>`;
+    } else if (ob.step === 'invite') {
       body = `<h1 class="tp-ob-title">Welcome to Taskplus</h1>
         <p class="tp-ob-text">Taskplus is invite-only for now. Enter the code you were given.</p>
         <input class="tp-ob-input" id="tp-ob-invite" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="Invite code" value="${escapeHtml(ob.invite || '')}"${dis}>

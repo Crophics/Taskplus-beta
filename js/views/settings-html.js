@@ -121,7 +121,10 @@
           ? `<span class="tp-s-status-dim">Blocked in browser settings</span>`
           : `<button type="button" class="tp-s-link" id="tp-enable-notify">Enable</button>`)
       : '';
+    const homeNote = (window.TP && window.TP.needsHomeScreen && window.TP.needsHomeScreen())
+      ? `<div class="tp-s-row"><div class="tp-s-row-sub tp-s-warn">On iPhone, alerts only work from the Home Screen app. Tap Share in Safari, then Add to Home Screen, and open Taskplus from there.</div></div>` : '';
     const notifications = groupHtml('Notifications',
+      homeNote +
       rowHtml('Permission', notifPermRow) +
       alertRowsHtml(ctx, granted) +
       rowHtml('Daily digest', pillToggleHtml('tp-notify-digest', notifyDigest !== false)) +
@@ -130,7 +133,7 @@
 
     const estimates = groupHtml('Time estimates',
       rowHtml('Use AI to estimate', pillToggleHtml('tp-llm-toggle', ctx.llmOn !== false),
-        'Sends an assignment\'s title, points and description to an AI service (Anthropic\'s Claude or Google\'s Gemini, whichever the server uses) so it can estimate the time and suggest steps. It also gets the titles and times you entered for your finished assignments, so it can judge similar work. Never your notes, grades or login.') +
+        'Sends an assignment\'s title, points and description to an AI service (Anthropic\'s Claude or Google\'s Gemini, whichever the server uses) so it can estimate the time and suggest steps. It also gets the titles and times you entered for your finished assignments, so it can judge similar work. Never your notes, grades or login. If the server uses Google\'s free Gemini tier, Google may use what is sent to improve its products.') +
       rowHtml('Also read attached PDFs', pillToggleHtml('tp-files-toggle', ctx.filesOn !== false && ctx.llmOn !== false),
         'Sends the PDF handouts attached to an assignment (up to 2, 5 MB each) so the AI can split the real questions into steps. Only files attached to the assignment itself, never your submissions.')
     );

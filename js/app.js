@@ -1170,7 +1170,7 @@
   document.addEventListener('tp-auth-changed', function(e){
     if(e.detail && e.detail.user){
       // Signed in during first run (or an account that already exists on a fresh device): on to Moodle.
-      if(onboard && !onboard.replay && (onboard.step === 'checking' || onboard.step === 'invite' || onboard.step === 'signin')){ onboard.busy = false; obGo('moodle'); }
+      if(onboard && !onboard.replay && (onboard.step === 'checking' || onboard.step === 'install' || onboard.step === 'invite' || onboard.step === 'signin')){ onboard.busy = false; obGo('moodle'); }
       moodleBoot();
     }
     else if(tab === 'settings' && !userIsTyping()) render();
@@ -1221,14 +1221,15 @@
     if(hasData){ try{ localStorage.setItem(OB_DONE_KEY, '1'); }catch(e){ /* ignore */ } return; }
     let saved = null;
     try{ saved = JSON.parse(localStorage.getItem(OB_STEP_KEY) || 'null'); }catch(e){ saved = null; }
-    onboard = { step: 'checking', page: 0, error: '', busy: false, required: false, invite: '', replay: false };
-    if(saved && ['invite','signin','moodle','tour'].includes(saved.step)){
+    const install = !!(window.TP && window.TP.needsHomeScreen && window.TP.needsHomeScreen()) && !localStorage.getItem('tp-install-skip');
+    onboard = { step: 'checking', page: 0, error: '', busy: false, required: false, invite: '', replay: false, install };
+    if(saved && ['install','invite','signin','moodle','tour'].includes(saved.step)){
       onboard.step = saved.step; onboard.required = !!saved.required; onboard.page = Number(saved.page) || 0;
     } else {
       window.TPMoodle.api.inviteCheck('').then(r=>{
         if(!onboard || onboard.step !== 'checking') return;
         onboard.required = !!r.required;
-        obGo(onboard.required ? 'invite' : 'signin');
+        obGo(onboard.install ? 'install' : onboard.required ? 'invite' : 'signin');
       });
     }
   }
@@ -1273,6 +1274,11 @@
       if(st === 'invite') obSubmitInvite();
     } else if(name === 'google') obSignIn();
     else if(name === 'connect'){ openConnectSheet(); render(); }
+    else if(name === 'later'){
+      try{ localStorage.setItem('tp-install-skip', '1'); }catch(e){ /* ignore */ }
+      onboard.install = false;
+      obGo(onboard.required ? 'invite' : 'signin');
+    }
     else if(name === 'skip'){ obGo('tour'); }
     else if(name === 'finish') obFinish();
   }
