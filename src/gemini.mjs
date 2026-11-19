@@ -35,15 +35,21 @@ export function buildGeminiRequest(input, { model = GEMINI_DEFAULT_MODEL, docume
 }
 
 export async function callGemini(input, opts = {}) {
-  const { apiKey, model = GEMINI_DEFAULT_MODEL, documents = [], fetchFn = fetch } = opts;
+  const { apiKey, model = GEMINI_DEFAULT_MODEL, documents = [], fetchFn = fetch, retryDelayMs = 1500 } = opts;
   if (!apiKey) return { ok: false, error: 'server_misconfigured' };
   let res;
+  const send = () => fetchFn(ENDPOINT + encodeURIComponent(model) + ':generateContent', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+    body: JSON.stringify(buildGeminiRequest(input, { model, documents })),
+  });
   try {
-    res = await fetchFn(ENDPOINT + encodeURIComponent(model) + ':generateContent', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify(buildGeminiRequest(input, { model, documents })),
-    });
+    res = await send();
+    // Free-tier rate limits and brief overloads usually clear within seconds: one quiet retry before giving up.
+    if (res.status === 429 || res.status === 503) {
+      await new Promise((r) => setTimeout(r, retryDelayMs));
+      res = await send();
+    }
   } catch (e) {
     console.error('estimate: gemini request failed', e && e.name);
     return { ok: false, error: 'model_error' };

@@ -631,7 +631,7 @@
     if(!cand.length){ if(force) showToast('Nothing to estimate'); return; }
     modelBusy = true;
     if(force) render();
-    let applied = 0, limited = false, errorMessage = '';
+    let applied = 0, limited = false, errorMessage = '', errorCodes = [];
     try{
       for(let i = 0; i < cand.length; i += 5){
         const chunk = cand.slice(i, i + 5);
@@ -651,6 +651,7 @@
         window.TPLearn.applyLearning(items);
         applied += out.stats.applied;
         if(out.stats.limited) limited = true;
+        errorCodes = errorCodes.concat(out.stats.errors);
         if(out.stats.unavailable) llmUnavailable = true;
         persistItems();
         if(out.stats.limited || out.stats.unavailable) break;
@@ -661,11 +662,27 @@
     if(force){
       showToast(applied ? 'Updated with an AI estimate'
         : limited ? 'Today\'s limit for AI estimates is used up'
-        : (errorMessage || 'The AI could not estimate that. Keeping the current estimate.'));
+        : (errorMessage || aiFailureText(errorCodes)));
     } else if(applied){
       showToast(`AI improved ${applied} estimate${applied === 1 ? '' : 's'}`);
     }
     if(!userIsTyping()) render();
+  }
+  // Plain words for why an AI answer did not come (the server's error codes).
+  function aiFailureText(codes){
+    const c = (codes || [])[0];
+    const why = ({
+      busy: 'The AI service is busy or rate-limited right now. Try again in a minute.',
+      daily_limit: 'Today\'s limit for AI estimates is used up.',
+      server_misconfigured: 'The AI key on the server is not working.',
+      not_configured: 'The AI is not set up on the server.',
+      refused: 'The AI declined to answer for this assignment.',
+      truncated: 'The AI\'s answer was cut off. Try again.',
+      bad_output: 'The AI\'s answer was not usable. Try again.',
+      model_error: 'The AI service returned an error. Try again in a minute.',
+      bad_input: 'That assignment could not be sent to the AI.',
+    })[c];
+    return (why || 'The AI could not estimate that.') + ' Keeping the current estimate.';
   }
   function askClaude(id){ return requestModelEstimates({ force: true, ids: [id] }); }
 

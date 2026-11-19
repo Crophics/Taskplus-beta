@@ -670,3 +670,17 @@ test('past work: only title and minutes reach the prompt, capped and cleaned, an
   assert.notStrictEqual(E.cacheMaterial(a, 'm'), E.cacheMaterial(input(), 'm'));
   assert.match(E.SYSTEM_PROMPT, /past_work/);
 });
+
+test('gemini: one quiet retry when rate-limited, and a repeated 429 is reported as busy', async () => {
+  const G = await import('../src/gemini.mjs');
+  const okBody = { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ minutes: 60, low: 45, high: 75, confidence: 'medium', rationale: 'r', steps: [{ name: 'Do it', minutes: 60 }] }) }] } }] };
+  let calls = 0;
+  const flaky = async () => (++calls === 1 ? { ok: false, status: 429, json: async () => ({ error: { message: 'quota' } }) } : { ok: true, status: 200, json: async () => okBody });
+  const r = await G.callGemini(input(), { apiKey: 'k', fetchFn: flaky, retryDelayMs: 0 });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(calls, 2);
+  let n = 0;
+  const always = async () => { n++; return { ok: false, status: 429, json: async () => ({}) }; };
+  const r2 = await G.callGemini(input(), { apiKey: 'k', fetchFn: always, retryDelayMs: 0 });
+  assert.deepStrictEqual([r2.ok, r2.error, n], [false, 'busy', 2]);
+});

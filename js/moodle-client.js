@@ -244,7 +244,7 @@
     const E = global.TPEstimate;
     const out = items.map((it) => it);
     const index = new Map(out.map((it, i) => [it && it.id, i]));
-    const stats = { applied: 0, failed: 0, stale: 0, limited: false, unavailable: false, appliedIds: [] };
+    const stats = { applied: 0, failed: 0, stale: 0, limited: false, unavailable: false, appliedIds: [], errors: [] };
     (results || []).forEach((r) => {
       const i = index.get(r.id);
       if (i === undefined) return;
@@ -265,6 +265,7 @@
         return;
       }
       stats.failed++;
+      if (r.error) stats.errors.push(r.error);
       if (r.error === 'daily_limit') stats.limited = true;
       if (r.error === 'server_misconfigured' || r.error === 'not_configured') stats.unavailable = true;
       if (r.error !== 'busy' && r.error !== 'daily_limit') out[i] = { ...item, modelTry: { key, day: ctx.today } };
@@ -574,19 +575,25 @@
     }
   }
 
-  async function call(path, method, body) {
+  async function call(path, method, body, timeoutMs) {
     const sync = global.tpSync;
     const token = sync && sync.getIdToken ? await sync.getIdToken() : null;
     if (!token) throw new MoodleClientError('signed_out', 'Sign in to Taskplus first (Settings > Sync)', 401);
     let res;
+    const ctl = timeoutMs && typeof global.AbortController === 'function' ? new global.AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
     try {
       res = await fetch(path, {
         method,
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
         body: body === undefined ? undefined : JSON.stringify(body),
+        signal: ctl ? ctl.signal : undefined,
       });
     } catch (e) {
+      if (ctl && ctl.signal.aborted) throw new MoodleClientError('timeout', 'The AI took too long to answer. Try again in a minute.', 0);
       throw new MoodleClientError('offline', 'Could not reach Taskplus. Check your connection.', 0);
+    } finally {
+      if (timer) clearTimeout(timer);
     }
     let json = null;
     try { json = await res.json(); } catch (e) { /* non-JSON error page */ }
@@ -601,7 +608,7 @@
     connect: (site, username, password) => call('/api/moodle/connect', 'POST', { site, username, password }),
     saveCourses: (selected) => call('/api/moodle/courses', 'POST', { selected }),
     sync: () => call('/api/moodle/sync', 'POST', {}),
-    estimate: (items, fresh, readFiles) => call('/api/estimate', 'POST', { items, fresh: !!fresh, readFiles: !!readFiles }),
+    estimate: (items, fresh, readFiles) => call('/api/estimate', 'POST', { items, fresh: !!fresh, readFiles: !!readFiles }, 90000),
     disconnect: () => call('/api/moodle/disconnect', 'POST', {}),
     pushStatus: () => call('/api/push/status', 'GET'),
     registerPush: (token) => call('/api/push/register', 'POST', { token, timeZone: tz(), userAgent: (global.navigator && global.navigator.userAgent) || '' }),
