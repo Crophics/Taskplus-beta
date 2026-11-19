@@ -35,31 +35,6 @@
     </div>`;
   }
 
-  function moreSectionHtml(ctx, draft, escapeHtml) {
-    const hasExtras = !!(draft.notes || (draft.subtasksText || '').trim());
-    const moreOpen = ctx.moreOpen || (ctx.isEdit && hasExtras);
-    const subCount = (draft.subtasksText || '').split('\n').map(s => s.trim()).filter(Boolean).length;
-
-    const moreBody = moreOpen ? `
-      <div class="tp-sheet-label" id="tp-lbl-notes">Notes</div>
-      <textarea class="tp-add-textarea" id="tp-add-notes" rows="2"
-        aria-labelledby="tp-lbl-notes"
-        placeholder="Anything to remember">${escapeHtml(draft.notes || '')}</textarea>
-
-      <div class="tp-sheet-label" id="tp-lbl-subtasks">Subtasks</div>
-      <textarea class="tp-add-textarea" id="tp-add-subtasks" rows="3"
-        aria-labelledby="tp-lbl-subtasks"
-        placeholder="One per line">${escapeHtml(draft.subtasksText || '')}</textarea>
-      <div class="tp-add-sublabel" id="tp-add-subcount">${subCount ? subCount + (subCount === 1 ? ' subtask' : ' subtasks') : 'Each line becomes its own checkbox.'}</div>
-    ` : '';
-
-    return `<button type="button" class="tp-sheet-more" id="tp-add-more" aria-expanded="${moreOpen}">
-      ${window.TPIcons.svg('chevron_down')}
-      ${moreOpen ? 'Fewer options' : 'Notes, subtasks'}
-    </button>
-    ${moreBody}`;
-  }
-
   function addSheetHtml(ctx) {
     const { draft, courses, pickerOpen, escapeHtml, today, daysBetween, isEdit } = ctx;
     const selectedCourse = window.TPCourses.byId(courses, draft.courseId);
@@ -93,7 +68,11 @@
         <input class="tp-add-input" id="tp-add-minutes" type="number" inputmode="numeric" min="5" step="5"
           aria-labelledby="tp-lbl-minutes" placeholder="Minutes in total, e.g. 90" value="${draft.minutes || ''}">
         <div class="tp-add-sublabel">Optional. Your own guess; it counts toward Today's time and the Week chart.</div>
-        ${moreSectionHtml(ctx, draft, escapeHtml)}
+        <div class="tp-add-sublabel">After you save, open the assignment to see its plan: the parts, one per day, which you can rename, resize, add to or remove.</div>
+
+        <div class="tp-sheet-label" id="tp-lbl-notes">Notes</div>
+        <textarea class="tp-add-textarea" id="tp-add-notes" rows="2" aria-labelledby="tp-lbl-notes"
+          placeholder="Anything to remember">${escapeHtml(draft.notes || '')}</textarea>
         <button type="button" class="tp-add-submit" id="tp-add-submit">${isEdit ? 'Save changes' : 'Add assignment'}</button>
       </div>
     </div>`;

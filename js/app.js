@@ -170,7 +170,7 @@
   let onboard = null; // first-run flow / replayed intro: {step, page, error, busy, required, invite, replay}; null = not showing
   let addOpen = false;
   let pickerOpen = false;
-  let moreOpen = false; // add-sheet "Notes, subtasks, repeat, dependency" disclosure
+  let moreOpen = false; // no longer used by the Add sheet
   let prereqOpen = false; // add-sheet "Do this after" picker
   let menuFor = null; // index into `items`, for the quick-action menu
   // One-shot "just opened" flags so the sheet/menu animate in on open only,
@@ -288,14 +288,14 @@
       editIndex = idx;
       draft = {
         title: it.title, courseId: course ? course.id : null, due: it.due, dueTime: it.dueTime || '',
-        description: (it.source && it.source.description) || it.description || '', notes: it.notes || '', subtasksText: (it.subtasks || []).map(s => s.text).join('\n'),
+        description: (it.source && it.source.description) || it.description || '', notes: it.notes || '',
         minutes: it.estimate && it.estimate.basis === 'user' ? it.estimate.minutes : '',
         imported: window.TPMoodle.isImported(it), // imported work edits its estimate on its own detail screen
       };
     } else {
       editIndex = null;
       const preselected = lastAddedCourseId && window.TPCourses.byId(courses, lastAddedCourseId) ? lastAddedCourseId : null;
-      draft = { title: '', courseId: preselected, due: '', dueTime: '', description: '', notes: '', subtasksText: '', minutes: '', imported: false };
+      draft = { title: '', courseId: preselected, due: '', dueTime: '', description: '', notes: '', minutes: '', imported: false };
     }
     pickerOpen = false;
     moreOpen = false;

@@ -210,7 +210,7 @@ for the one-time Cloudflare setup. What matters when touching code:
   later. A side effect: work due beyond the 7-day window does not appear in the chart until it has to be done.
   `todaySummary.aheadMin` still exists but is no longer shown. Tests: `test/plan-logic.test.js`, `test/due-time.test.js`.
 - **Manual items are estimable too (2026-11-19).** The Add sheet (title, course, due date + optional time, description, optional minutes,
-  notes/subtasks; no amount/unit/repeat/dependency) creates `total: 1`, `source: {type: 'manual', kind: 'assign', description}` and an
+  notes; no subtasks, amount/unit/repeat/dependency) creates `total: 1`, `source: {type: 'manual', kind: 'assign', description}` and an
   estimate (`TPEstimate.isEstimable(it)` = source.type moodle OR manual; use it, not `isImported`, for anything about estimates, parts,
   learning, the AI and the item screen). They are NOT imported (`TPMoodle.isImported` is false): they still sync as whole items through
   `items`, so no side maps are needed. Editing description/title re-estimates (your own minutes win; a blank field goes back to

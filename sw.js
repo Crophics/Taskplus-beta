@@ -84,7 +84,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v106'; // bumped: manual items get estimates, parts and the item screen
+const CACHE_NAME = 'taskplus-cache-v107'; // bumped: Add sheet drops subtasks (plan lives on the item screen)
 const urlsToCache = [
   './',
   './index.html',

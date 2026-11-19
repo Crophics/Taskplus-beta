@@ -551,17 +551,6 @@
       api.render();
     };
 
-    const addMore = document.getElementById('tp-add-more');
-    if (addMore) addMore.onclick = () => { api.moreOpen = !api.moreOpen; api.render(); };
-
-    const addSubtasks = document.getElementById('tp-add-subtasks');
-    if (addSubtasks) addSubtasks.oninput = (e) => {
-      api.draft.subtasksText = e.target.value;
-      const n = e.target.value.split('\n').map(s => s.trim()).filter(Boolean).length;
-      const el = document.getElementById('tp-add-subcount');
-      if (el) el.textContent = n ? n + (n === 1 ? ' subtask' : ' subtasks') : 'Each line becomes its own checkbox.';
-    };
-
     const addSubmit = document.getElementById('tp-add-submit');
     if (addSubmit) addSubmit.onclick = () => {
       const titleEl = document.getElementById('tp-add-title');
@@ -579,11 +568,6 @@
       const dueTime = api.draft.dueTime || '';
       const description = (api.draft.description || '').trim();
       const notes = (api.draft.notes || '').trim();
-      // {text, done} matches the shape makeRecurringClone (js/app.js) and the
-      // rest of the codebase already use - not {title, done}.
-      const subtasks = (api.draft.subtasksText || '')
-        .split('\n').map(s => s.trim()).filter(Boolean)
-        .map(t => ({ text: t, done: false }));
       const minutes = Number(api.draft.minutes) || 0;
       if (api.editIndex !== null) {
         const it = api.items[api.editIndex];
@@ -592,10 +576,6 @@
         it.title = title; it.course = courseName; it.due = due;
         if (!api.draft.imported) it.dueTime = dueTime; // imported work gets its due time from Moodle
         it.notes = notes;
-        it.subtasks = subtasks.map(st => {
-          const prev = (it.subtasks || []).find(p => p.text === st.text);
-          return prev ? { ...st, done: prev.done } : st;
-        });
         // dependsOn matches by title (see js/item-logic.js), so a rename has
         // to carry forward into anything that was depending on the old one.
         if (oldTitle !== title) {
@@ -629,7 +609,7 @@
         const created = {
           id: api.newItemId(), title, course: courseName, due, dueTime, description, total: 1, unit: '',
           notes, done: 0, today: 0, completed: false, dependsOn: '', recurring: '',
-          subtasks, completedAt: null, createdAt: api.today(), archived: false,
+          subtasks: [], completedAt: null, createdAt: api.today(), archived: false,
           order: maxOrder + 1, updatedAt: Date.now(),
         };
         // New-style work (like a Moodle import): the description goes on `source`, and it gets an estimate and parts.
