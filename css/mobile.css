@@ -553,3 +553,31 @@ body::-webkit-scrollbar{display:none;}
 .tp-ob-dots{display:flex;gap:8px;margin:4px 0 0;}
 .tp-ob-dot{width:8px;height:8px;border-radius:50%;background:var(--border);}
 .tp-ob-dot-on{background:var(--accent);}
+
+/* Intro tour: the real app in a sandboxed iframe, with a spotlight and one card at a time. Outside #tp-app, so plain selectors win. */
+body.tp-tour-on{overflow:hidden;}
+#tp-tour{position:fixed;inset:0;z-index:9000;background:var(--bg);font-family:inherit;}
+.tp-tour-stage{position:absolute;inset:0;display:flex;justify-content:center;}
+.tp-tour-frame{width:min(100%,480px);height:100%;border:0;background:var(--bg);display:block;}
+.tp-tour-plain .tp-tour-stage{display:none;}
+.tp-tour-dim{position:absolute;inset:0;background:rgba(8,10,20,.62);pointer-events:none;display:none;}
+.tp-tour-plain .tp-tour-dim{display:block !important;background:transparent;}
+.tp-tour-spot{position:absolute;display:none;border-radius:12px;box-shadow:0 0 0 9999px rgba(8,10,20,.66),0 0 0 2px var(--accent);pointer-events:none;transition:left .22s ease,top .22s ease,width .22s ease,height .22s ease;}
+.tp-tour-card{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(72px + env(safe-area-inset-bottom));width:min(calc(100% - 24px),440px);box-sizing:border-box;
+  background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:14px;padding:16px 16px 12px;box-shadow:0 10px 30px rgba(0,0,0,.35);}
+.tp-tour-card-top{bottom:auto;top:calc(12px + env(safe-area-inset-top));}
+.tp-tour-plain .tp-tour-card{bottom:auto;top:50%;transform:translate(-50%,-50%);}
+.tp-tour-kicker{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px;}
+.tp-tour-title{font-size:19px;font-weight:600;line-height:1.25;margin-bottom:6px;}
+.tp-tour-text{font-size:15px;line-height:1.5;color:var(--text-muted,var(--text-dim));}
+.tp-tour-actions{display:flex;align-items:center;gap:8px;margin-top:14px;}
+.tp-tour-grow{flex:1;}
+.tp-tour-actions button{font-family:inherit;font-size:15px;min-height:44px;padding:0 16px;border-radius:8px;cursor:pointer;margin:0;}
+.tp-tour-next{border:1px solid var(--accent);background:var(--accent-wash);color:var(--accent-bright);font-weight:500;}
+.tp-tour-back{border:1px solid var(--border);background:transparent;color:var(--text-dim);}
+.tp-tour-skip{border:none;background:none;color:var(--text-dim);padding:0 4px !important;font-size:14px !important;}
+.tp-tour-swipe{position:absolute;left:50%;top:38%;width:min(60%,240px);height:48px;transform:translateX(-50%);display:none;pointer-events:none;}
+.tp-tour-swiping .tp-tour-swipe{display:block;}
+.tp-tour-swipe span{position:absolute;left:0;top:6px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 0 6px rgba(255,255,255,.25);animation:tp-tour-swipe 2.2s ease-in-out infinite;}
+@keyframes tp-tour-swipe{0%,15%{left:0;opacity:0;}25%{opacity:1;}70%{left:calc(100% - 36px);opacity:1;}85%,100%{left:calc(100% - 36px);opacity:0;}}
+@media (prefers-reduced-motion: reduce){.tp-tour-swipe span{animation:none;left:calc(50% - 18px);opacity:1;}.tp-tour-spot{transition:none;}}

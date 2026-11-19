@@ -4,6 +4,7 @@
    js/today-logic.js, js/bind-events.js, js/boot.js, firebase-sync.js
 */
 (function(){
+  if(window.TP_DEMO_BROKEN) return; // the preview could not isolate its storage: do not start on real data
   /* ---- Storage keys & sync ---- */
   const KEY='tp-assignments';
   function syncPush(){
@@ -1270,15 +1271,13 @@
     const st = onboard.step;
     if(name === 'next'){
       if(st === 'invite') obSubmitInvite();
-      else if(st === 'tour'){ onboard.page = Math.min((onboard.page || 0) + 1, window.TPViews.TOUR_PAGES - 1); obSave(); render(); }
-    } else if(name === 'back'){
-      onboard.page = Math.max((onboard.page || 0) - 1, 0); obSave(); render();
     } else if(name === 'google') obSignIn();
     else if(name === 'connect'){ openConnectSheet(); render(); }
     else if(name === 'skip'){ obGo('tour'); }
     else if(name === 'finish') obFinish();
   }
   function replayIntro(){
+    if(window.TP_DEMO) return; // inside the tour's own preview there is nothing to replay
     onboard = { step: 'tour', page: 0, error: '', busy: false, required: false, invite: '', replay: true };
     render();
     if(typeof window.scrollTo === 'function') window.scrollTo(0, 0);
@@ -1393,6 +1392,10 @@
     root.querySelectorAll('[data-fill-key]').forEach(el=>{ prevFills[el.dataset.fillKey] = el.style.width; });
 
     root.innerHTML = html;
+    // The intro tour lives outside #tp-app (it must survive re-renders): start it once whenever its step is showing.
+    if(onboard && onboard.step === 'tour' && window.TPTour && !window.TPTour.active()){
+      window.TPTour.start({ replay: !!onboard.replay, onDone: ()=> obFinish() });
+    }
 
     if(celebrationPending){
       const c = celebrationPending;

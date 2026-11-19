@@ -39,7 +39,8 @@ if (window.visualViewport) {
   });
 })();
 
-if ('serviceWorker' in navigator) {
+// The intro tour's preview (index.html?demo=1) must never touch the real service worker or reload the page.
+if ('serviceWorker' in navigator && !window.TP_DEMO) {
   const SW_RESET_FLAG = 'tp-sw-reset-v4'; // bumped: force past a stale v21 cache that survived 3 icon fixes
   if (!localStorage.getItem(SW_RESET_FLAG)) {
     // One-time: wipe out whatever service worker is currently stuck registered

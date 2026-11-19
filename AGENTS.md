@@ -174,6 +174,16 @@ for the one-time Cloudflare setup. What matters when touching code:
   sheet then shows an "Invite code" field (remembered in `tp-invite`). Each code is ONE-TIME: after a successful connect `invite:<sha256(code)>` stores `sha256('uid:'+uid)`; another account gets 403 `invite_used`, the same account can reconnect, a failed login does not burn it (only hashes are stored; two truly simultaneous redemptions could both pass, KV is eventually consistent). Already-connected users are unaffected. `normalizeSite` rejects
   trailing-dot hosts, more internal suffixes, numeric TLDs and IP spellings; `postForm` uses `redirect: 'manual'` and refuses any 3xx
   (hinting the real host), so a redirect can never receive the password or token or point the Worker elsewhere. Tests: `test/moodle-worker.test.js`.
+- **The intro tour shows the real app (2026-11-18).** `js/tour.js` (`TPTour`) puts a layer outside `#tp-app` with an iframe of this same app
+  opened as `index.html?demo=1`, a spotlight over a real element, and one card at a time (10 steps; skip always available). `js/demo-data.js`
+  runs first in `<head>` and, only for `?demo=1`, replaces `localStorage` with an in-memory copy seeded with four sample imported assignments
+  (so nothing tapped in the preview can touch real data); if the browser refuses the swap it sets `TP_DEMO_BROKEN` and `app.js` refuses to start.
+  `TP_DEMO` also stops the preview from loading `firebase-sync.js` (index.html writes that tag with `document.write` to keep normal timing),
+  registering/resetting the service worker (`boot.js`), replaying the intro or starting a nested tour. The tour drives the preview by clicking its
+  own buttons and finds highlights by selector (`.tp-t-row`, `.tp-log`, `.tp-i-parts`, `.tp-w-chart-block`, `.tp-a-controls`, the Notifications
+  group): **if you rename those, update `STEPS` in `tour.js`**. If the preview does not load in 9 s the same steps show as plain cards. The sample
+  due dates are relative to today so Today always has a target, a + button and a Get ahead item (Problem set 5 is due in 2 days on purpose).
+  Tested: `test/tour.test.js` and jsdom runs of every step's enter/target; never seen in a real browser.
 - **Onboarding and Settings layout (2026-11-18).** `js/views/onboarding-html.js` + the `ob*` functions in `app.js` (state `onboard`, `null` = off):
   invite code (only when the server has `INVITE_CODES`; `POST /api/invite/check`, public, answers required/valid/invalid/used and consumes nothing)
   -> Google sign-in -> connect Moodle (reuses the connect sheet) -> a 6-page tour. It starts only on a device with no items, no connection and no
