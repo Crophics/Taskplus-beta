@@ -199,6 +199,77 @@ test('a successful test names the devices it went to, without exposing the user 
   assert.strictEqual(P.deviceLabel(''), 'a device');
 });
 
-test('the background sync is due about hourly, not every three hours', () => {
-  assert.ok(P.CRON_SYNC_EVERY_MS >= 50 * 60 * 1000 && P.CRON_SYNC_EVERY_MS <= 60 * 60 * 1000);
+/* ---------- the free plan: syncs every ~3 hours, daytime only, and no writes when nothing changed ---------- */
+
+function countingKv(env) {
+  const puts = [];
+  const orig = env.MOODLE_KV.put;
+  env.MOODLE_KV.put = async (k, v, o) => { puts.push(k); return orig(k, v, o); };
+  return puts;
+}
+
+test('inSyncWindow: 06:00 up to 21:00 in the user\'s own time zone', () => {
+  const at = (h, tz) => Date.UTC(2026, 10, 18, h, 0, 0) - 0 * 1; // helper for UTC
+  assert.strictEqual(P.inSyncWindow(Date.UTC(2026, 10, 18, 11, 0), 'UTC'), true);
+  assert.strictEqual(P.inSyncWindow(Date.UTC(2026, 10, 18, 5, 59), 'UTC'), false);
+  assert.strictEqual(P.inSyncWindow(Date.UTC(2026, 10, 18, 6, 0), 'UTC'), true);
+  assert.strictEqual(P.inSyncWindow(Date.UTC(2026, 10, 18, 20, 59), 'UTC'), true);
+  assert.strictEqual(P.inSyncWindow(Date.UTC(2026, 10, 18, 21, 0), 'UTC'), false);
+  assert.strictEqual(P.inSyncWindow(Date.UTC(2026, 10, 18, 0, 30), 'UTC'), false, 'midnight is not 24:30');
+  // 15:00 UTC is 10:00 in New York in November (EST), so inside; 03:00 UTC is 22:00 the evening before, so outside
+  assert.strictEqual(P.inSyncWindow(Date.UTC(2026, 10, 18, 15, 0), 'America/New_York'), true);
+  assert.strictEqual(P.inSyncWindow(Date.UTC(2026, 10, 18, 3, 0), 'America/New_York'), false);
+  assert.strictEqual(P.inSyncWindow(Date.UTC(2026, 10, 18, 10, 0), 'Not/AZone'), true, 'a bad zone falls back to UTC');
+  assert.ok(P.CRON_SYNC_EVERY_MS > 170 * 60 * 1000 && P.CRON_SYNC_EVERY_MS < 180 * 60 * 1000);
+});
+
+test('runCron: no sync inside 3 hours, none at night, one in the morning', async () => {
+  const env = await setup();
+  await S.saveRecord(env, 'u1', { site: 's', token: 't', userid: 1, courses: [], selected: [], lastSyncAt: 0 });
+  let n = 0;
+  const syncFn = async () => { n++; return result([rec('moodle:1')]); };
+  const run = (t) => P.runCron(env, t, { fetchFn: fakeFcm().fn, syncFn });
+  const day = (h, m = 0) => Date.UTC(2026, 10, 18, h, m);
+  await run(day(3, 0));            // 03:00: night, never synced before but not allowed
+  assert.strictEqual(n, 0);
+  await run(day(10, 0));           // 10:00: first sync
+  assert.strictEqual(n, 1);
+  await run(day(12, 30));          // 2.5 h later: too soon
+  assert.strictEqual(n, 1);
+  await run(day(13, 0));           // 3 h later (the cron may fire a few seconds early: slack allows it)
+  assert.strictEqual(n, 2);
+  await run(day(22, 0));           // 22:00: after hours
+  assert.strictEqual(n, 2);
+  await run(day(23, 30));
+  assert.strictEqual(n, 2);
+  await run(Date.UTC(2026, 10, 19, 6, 0)); // next morning 06:00
+  assert.strictEqual(n, 3);
+});
+
+test('an idle check and an unchanged sync write nothing to storage', async () => {
+  const env = await setup();
+  await S.saveRecord(env, 'u1', { site: 's', token: 't', userid: 1, courses: [{ id: 7, fullname: 'MATH' }], selected: [], lastSyncAt: 0 });
+  const syncFn = async () => result([rec('moodle:1')]);
+  const deps = (t) => ({ fetchFn: fakeFcm().fn, syncFn });
+  await P.runCron(env, Date.UTC(2026, 10, 18, 10, 0), deps());   // first sync: baseline, writes
+  const puts = countingKv(env);
+  await P.runCron(env, Date.UTC(2026, 10, 18, 10, 30), deps());  // an idle check, 30 minutes later
+  assert.deepStrictEqual(puts, [], 'an idle check writes nothing');
+  await P.runCron(env, Date.UTC(2026, 10, 18, 13, 0), deps());   // next sync, same assignments
+  assert.deepStrictEqual(puts.filter((k) => k.startsWith('snap:') || k.startsWith('evt:')), [], 'an unchanged sync writes no snapshot or feed');
+  assert.ok(puts.length <= 2, 'at most the last-sync time and the served-at stamp are written: ' + puts.join(','));
+});
+
+test('a sync that finds something still saves the snapshot and still notifies once', async () => {
+  const env = await setup();
+  await S.saveRecord(env, 'u1', { site: 's', token: 't', userid: 1, courses: [], selected: [], lastSyncAt: 0 });
+  let records = [rec('moodle:1')];
+  const f = fakeFcm();
+  const syncFn = async () => result(records);
+  await P.runCron(env, Date.UTC(2026, 10, 18, 10, 0), { fetchFn: f.fn, syncFn });   // baseline
+  records = [rec('moodle:1'), rec('moodle:2')];
+  const puts = countingKv(env);
+  await P.runCron(env, Date.UTC(2026, 10, 18, 13, 0), { fetchFn: f.fn, syncFn });
+  assert.ok(puts.some((k) => k.startsWith('snap:')));
+  assert.strictEqual(f.sent.length, 1, 'one notification for the one new assignment');
 });

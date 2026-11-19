@@ -155,6 +155,11 @@ for the one-time Cloudflare setup. What matters when touching code:
   Google's reason and the devices it went to (`deviceLabel`), and a 400 only forgets a device when Google says the token is
   invalid; (4) every permission toggle or reinstall adds a registration (max 5), stale ones stay until Google reports them dead.
   Verified on a real iPhone: the test alert. Not yet seen live: new-assignment, moved-date and due-soon alerts from the cron.
+- **Free-plan budget for the background sync (2026-11-18).** `src/push.mjs`: the cron (every 30 min) syncs a user at most every
+  `CRON_SYNC_EVERY_MS` (175 min, slack for an early tick) and only while `inSyncWindow` (06:00 to 21:00 in the user's stored time
+  zone). Due-soon reminders still run on every tick. To stay under KV's 1,000 writes/day an idle check writes nothing
+  (`notifyUser` saves push state only if it changed), `processSync` saves the snapshot only if its items changed (its own `at`
+  does not count), and the only per-sync writes are the last-sync time and the `lastCron` stamp (`touch`). Tests: `test/push.test.js`.
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
   today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
   slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can

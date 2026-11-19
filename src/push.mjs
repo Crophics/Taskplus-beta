@@ -11,8 +11,18 @@ import { syncCourses, MoodleError } from './moodle-client.mjs';
 
 export const MAX_TOKENS = 5;
 export const MAX_EVENTS = 50;
-// Hourly, with a little slack: the cron fires every 30 minutes, and a tick a few seconds early would otherwise skip a whole extra half hour.
-export const CRON_SYNC_EVERY_MS = 55 * 60 * 1000;
+// Every three hours, with a little slack (the cron fires every 30 minutes; a tick a few seconds early must not skip a half hour),
+// and only while it is daytime where the user is: 06:00 up to 21:00. Fewer syncs mean fewer storage writes on the free plan.
+export const CRON_SYNC_EVERY_MS = 175 * 60 * 1000;
+export const SYNC_WINDOW = { from: 6, to: 21 };
+
+export function localHour(nowMs, tz) {
+  try { return Number(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hourCycle: 'h23', timeZone: tz || 'UTC' }).format(nowMs)) % 24; } catch (e) { return new Date(nowMs).getUTCHours(); }
+}
+export function inSyncWindow(nowMs, tz) {
+  const h = localHour(nowMs, tz);
+  return h >= SYNC_WINDOW.from && h < SYNC_WINDOW.to;
+}
 export const DEFAULT_PREFS = { new: true, moved: true, due: true, quiet: { on: false, start: 22, end: 8 } };
 
 const key = (kind, uid) => `${kind}:${uid}`;
@@ -125,20 +135,24 @@ const PREF_OF = { new: 'new', moved: 'moved' };
  * Record what a sync found and (when `notify`) push it. A user's own in-app sync passes notify=false:
  * they are looking at the app, and the events still land in the feed. Returns the events found.
  */
-export async function processSync(env, uid, result, now, { notify, deps = {} } = {}) {
+export async function processSync(env, uid, result, now, opts = {}) {
+  const { notify, deps = {} } = opts;
   const prev = await load(env, 'snap', uid);
   const next = buildSnapshot(result.records, prev, now);
   const events = diffSnapshots(prev, next, now);
-  await save(env, 'snap', uid, next);
+  // (the snapshot's own timestamp does not count as a change: an identical sync writes nothing)
+  if (!prev || JSON.stringify(prev.items) !== JSON.stringify(next.items)) await save(env, 'snap', uid, next);
   await addEvents(env, uid, events, now);
-  if (notify) await notifyUser(env, uid, events, next, now, deps);
+  if (notify) await notifyUser(env, uid, events, next, now, deps, { touch: opts.touch });
   return events;
 }
 
 /** Push events (those the user wants), plus any held back earlier, plus due-soon reminders. */
-export async function notifyUser(env, uid, events, snapshot, now, deps = {}) {
+export async function notifyUser(env, uid, events, snapshot, now, deps = {}, { touch } = {}) {
   const p = await loadPush(env, uid);
   if (!p.tokens.length) return { sent: 0 };
+  const before = JSON.stringify(p);
+  if (touch) p.lastCron = now; // this user was just served (the cron serves the least recently served first)
   const wanted = events.filter((e) => p.prefs[PREF_OF[e.kind]]);
   p.pending = p.pending.concat(wanted).slice(-MAX_EVENTS);
   const reminders = p.prefs.due ? dueSoon(snapshot, now, p.reminders) : [];
@@ -157,7 +171,7 @@ export async function notifyUser(env, uid, events, snapshot, now, deps = {}) {
     }
   }
   p.reminders = pruneReminders(p.reminders, now);
-  await savePush(env, uid, p);
+  if (JSON.stringify(p) !== before) await savePush(env, uid, p); // an idle check writes nothing
   return { sent };
 }
 
@@ -192,7 +206,7 @@ export async function runCron(env, now, deps = {}) {
     try {
       const rec = await loadRecord(env, uid);
       const reserve = 4 + p.tokens.length * 2;
-      if (rec && now - (rec.lastSyncAt || 0) >= CRON_SYNC_EVERY_MS && budget - reserve >= 12) {
+      if (rec && now - (rec.lastSyncAt || 0) >= CRON_SYNC_EVERY_MS && inSyncWindow(now, p.tz) && budget - reserve >= 12) {
         const per = Math.min(Number(env.SUBREQUEST_BUDGET) > 0 ? Number(env.SUBREQUEST_BUDGET) : 40, budget - reserve);
         rec.lastSyncAt = now;
         await saveRecord(env, uid, rec);
@@ -204,17 +218,15 @@ export async function runCron(env, now, deps = {}) {
           throw e;
         }
         budget -= per;
+        const coursesBefore = JSON.stringify(rec.courses);
         rec.courses = result.courses.map((c) => ({ id: c.id, fullname: c.fullname }));
-        await saveRecord(env, uid, rec);
-        await processSync(env, uid, result, now, { notify: true, deps });
+        if (JSON.stringify(rec.courses) !== coursesBefore) await saveRecord(env, uid, rec);
+        await processSync(env, uid, result, now, { notify: true, deps, touch: true });
       } else if (rec) {
         const snap = await load(env, 'snap', uid);
         if (snap) await notifyUser(env, uid, [], snap, now, deps);
       }
       budget -= reserve;
-      const fresh = await loadPush(env, uid);
-      fresh.lastCron = now;
-      await savePush(env, uid, fresh);
       done++;
     } catch (e) { /* one user's failure must not stop the rest */ }
   }
