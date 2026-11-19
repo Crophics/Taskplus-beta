@@ -10,6 +10,28 @@
    conflict. See FCM-SETUP.md.
 */
 
+/* Show our own (data-only) alerts directly from the push event. Firebase's SDK hands a message to an open
+   page instead of calling onBackgroundMessage whenever it thinks a window is visible, and on iPhone a
+   suspended Home Screen app still counts as visible: the page is frozen, nothing is shown, and the alert is
+   lost. iOS also requires every push to show a notification. This listener is registered first and always
+   shows one (same tag as the page's own display, so nothing doubles). */
+function tpPushPayload(event) {
+  try { return event.data ? event.data.json() : null; } catch (e) { return null; }
+}
+self.addEventListener('push', (event) => {
+  const payload = tpPushPayload(event);
+  const d = payload && payload.data;
+  if (!d || !d.title || payload.notification) return; // not ours: Firebase handles those
+  event.waitUntil(self.registration.showNotification(String(d.title), {
+    body: String(d.body || ''),
+    icon: d.icon || './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    data: d,
+    tag: d.tag || 'taskplus',
+    renotify: true,
+  }));
+});
+
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
@@ -25,6 +47,7 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
+  if (payload.data && payload.data.title && !payload.notification) return; // already shown by the push listener above
   const title = (payload.data && payload.data.title) || (payload.notification && payload.notification.title) || 'Taskplus';
   const body =
     (payload.data && payload.data.body) ||
@@ -61,7 +84,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v93'; // bumped: record how long it took; estimates learn from it
+const CACHE_NAME = 'taskplus-cache-v94'; // bumped: record how long it took; estimates learn from it
 const urlsToCache = [
   './',
   './index.html',
