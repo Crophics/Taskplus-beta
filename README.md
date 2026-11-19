@@ -2,47 +2,50 @@
 
 A mobile-first rebuild of [Taskplus](https://taskplus.cc), a task and
 assignment planner PWA for tracking coursework. This is the **beta**:
-a five-tab, thumb-friendly redesign of the original single-scroll desktop
-app, live at [beta.taskplus.cc](https://beta.taskplus.cc). Production
+a three-tab (Today, Week, All), thumb-friendly redesign of the original
+single-scroll desktop app, built around importing work from Moodle, live at [beta.taskplus.cc](https://beta.taskplus.cc). Production
 (`taskplus.cc`, [`Crophics/Taskplus`](https://github.com/Crophics/Taskplus))
 is untouched — this is a separate repo/deploy on purpose, so nothing here
 can break it.
 
 ## Features
 
-- **Today** — the day's required work, one thumb, top of the app. Each
-  multi-part assignment tracks a units-logged-today counter against a
-  daily pacing target; hit it and the item drops into "Get ahead" instead
-  of disappearing.
-- **All** — search, sort (urgency / due date / course), filter by course,
-  drag to reorder, long-press for quick actions (log, complete, push out a
-  day, edit, delete).
-- **Week** — a paced-load chart: each open item spreads its remaining
-  units evenly across the days it has left, so the chart shows real daily
-  workload, not just a due-date count. Broken down by course, with a
-  by-course completion view and a plain-language advice line.
-- **Settings** — theme (dark "Nocturne" / light / blue / auto), daily
-  digest hour, sync, backup/import, calendar export.
-- **Courses** — a real collection with per-course colors, replacing the
-  old free-text course field. Renaming a course relabels every assignment
-  under it; deleting one leaves existing assignments alone.
-- Multi-part assignments get a daily target so you stay on pace; task
-  dependencies (locked until a same-course prerequisite is done); weekly/
-  monthly recurring assignments; notes and subtasks (behind a disclosure
-  in the add sheet, to keep the common case — title/course/due/amount —
-  fast one-handed).
-- Installable PWA with offline support; cross-device sync via Firestore
-  with tombstone-based deletion; daily push notification digest at
-  whatever local hour you pick.
+- **Moodle import** — connect your school's Moodle once and your assignments
+  and quizzes arrive on their own, with due dates and times. Your password is
+  used once to get an access token and is never stored; the token is kept
+  encrypted on the server so it can also check for changes while the app is closed.
+- **Today** — the day's required work. Multi-part assignments get a daily
+  target; hit it and the item drops into "Get ahead" (optional) instead of
+  disappearing.
+- **Time estimates** — each imported assignment gets an estimate, split into
+  parts (one part per day, never more parts than usable days). The estimate
+  comes from an AI service (Gemini or Claude, whichever the server uses) or a
+  rule of thumb, and learns from how long your finished work really took. You can
+  edit the plan or the numbers yourself.
+- **Week** — a paced-load chart of what lands on each day, in minutes.
+- **All** — every assignment, grouped by due date or by course, with search and
+  a course filter. Overdue work you no longer need can be ignored.
+- **Alerts** — push notifications for new assignments, moved due dates and
+  things due soon, even with the app closed (on iPhone, from the Home Screen app).
+- **Onboarding** — a first-run flow (invite code when the server asks for one,
+  Google sign-in, Moodle), then a tour that shows the real app with sample data.
+  Replay it from Settings → About.
+- **Your data** — sync across devices through your Google account, backup and
+  import, calendar export, and a **Delete my data** button that removes
+  everything from the server and the device. A plain-language privacy page is
+  at [`/privacy`](./privacy.html).
+- Installable PWA with offline support.
 
 ## Tech stack
 
 - Vanilla JS, HTML, CSS — no framework, no bundler. Every module attaches
   to `window` under a `TPXxx` namespace and loads via a plain `<script>`
   tag in a fixed order (see `index.html`).
-- Firebase (Firestore, Cloud Functions v2, Cloud Messaging) — shared with
-  production's `planner-88ab8` project for auth/sync/push.
-- Cloudflare Workers for hosting, custom domain `beta.taskplus.cc`.
+- Firebase (Auth, Firestore, Cloud Messaging) — shared with production's
+  `planner-88ab8` project for sign-in, sync and push delivery.
+- A Cloudflare Worker (`src/`) hosts the app and the `/api` routes: Moodle
+  import, AI estimates, alerts and a 30-minute background check, with KV storage
+  for the encrypted token and snapshots. Custom domain `beta.taskplus.cc`.
 - GitHub Actions for CI/CD — **every push to `main` that passes tests
   deploys automatically**, no manual step.
 
@@ -58,6 +61,7 @@ taskplus-beta/
 │   ├── app.js                 state, storage, sync, render()/patch()/buildApi()
 │   ├── bind-events.js         wires every DOM event handler after each render
 │   ├── boot.js                auth UI + service worker registration
+│   ├── tour.js / demo-data.js  the intro tour (real app in a sandboxed preview)
 │   ├── courses.js             courses collection: migration, rename/delete/add
 │   ├── all-logic.js           All-tab search/sort/filter/grouping (pure)
 │   ├── week-logic.js          paced-load computation (pure)
@@ -75,7 +79,11 @@ taskplus-beta/
 │   ├── tokens.css               theme tokens (--bg/--surface/--accent/etc)
 │   ├── mobile.css               page shell + every component
 │   └── animations.css           @keyframes + prefers-reduced-motion
-├── test/                        node --test unit tests for the pure logic modules
+├── src/                         the Worker: routes, Moodle client, estimates, alerts, push
+├── docs/                        setup, plan and cutover notes
+├── tools/                       small one-off scripts (vault comparison)
+├── privacy.html                 the privacy page
+├── test/                        node --test tests (logic, Worker, tour isolation)
 ├── functions/                   present but inert - production owns this deploy
 ├── firebase-sync.js             cross-device sync + push token management
 ├── sw.js                        service worker (offline cache + FCM background)
@@ -112,27 +120,24 @@ secrets (already configured):
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
 
-Cloud Functions (the scheduled digest) are **not** deployed from this
-repo — see `AGENTS.md`'s "Firebase" section for why.
+Cloud Functions (production's scheduled digest) are **not** deployed from this
+repo — see `AGENTS.md`'s "Firebase" section for why. The Worker's secrets
+(`TOKEN_ENC_KEY`, `FCM_SERVICE_ACCOUNT`, an AI key, optionally `INVITE_CODES`) are
+set with `wrangler secret put`; the one-time setup is in
+[`docs/SETUP-moodle-worker.md`](./docs/SETUP-moodle-worker.md).
 
 ## Push notifications
 
-Background reminders (app closed) need the same three pieces as
-production, since this shares its Firebase project:
-
-Note: the FCM background handler lives inside [`sw.js`](./sw.js), the same
-service worker that handles offline caching, not a separate file. Don't
-register a second service worker at the same scope, a browser origin can
-only have one active service worker per scope.
-
-1. **VAPID key** — already copied into [`js/fcm-config.js`](./js/fcm-config.js)
-   from production's Firebase Console (Project settings → Cloud Messaging
-   → Web Push certificates). Redeploy the site if it ever changes.
-2. **Enable reminders in the app** — sign in, then tap Enable Reminders
-   under Settings and allow notifications. Tokens save under
-   `users/{uid}/taskplus/fcm` in Firestore.
-3. **Scheduled digests** — handled entirely by production's
-   `dailyDueDigest` Cloud Function; nothing to deploy from this repo.
+Alerts are sent by this repo's Worker (`src/push.mjs`, `src/fcm.mjs`) through
+Firebase Cloud Messaging, using a service-account key stored as the Worker secret
+`FCM_SERVICE_ACCOUNT` (see [`docs/SETUP-moodle-worker.md`](./docs/SETUP-moodle-worker.md)).
+The background handler lives inside [`sw.js`](./sw.js), the same service worker
+that does offline caching; a browser origin can have only one service worker per
+scope, so don't register a second. The VAPID key in
+[`js/fcm-config.js`](./js/fcm-config.js) is public and copied from production.
+iPhone has several traps (alerts only from the Home Screen app, the page must not
+use `new Notification()`); `AGENTS.md` lists them. Production's own daily digest
+still comes from its Cloud Function.
 
 ## The pacing model, briefly
 
