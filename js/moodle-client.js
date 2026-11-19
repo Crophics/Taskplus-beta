@@ -226,6 +226,9 @@
       timeLimitMin: s.timeLimitMin == null ? null : s.timeLimitMin, wordLimit: s.wordLimit == null ? null : s.wordLimit,
       submissionTypes: s.submissionTypes || [], dueInDays,
     };
+    // The days the student can really work (due before noon: the due-day morning does not count), so the AI
+    // never plans more daily sessions than that.
+    if (global.TPEstimate && global.TPEstimate.maxParts && item.due) input.workDays = global.TPEstimate.maxParts(item);
     // Finished work and the minutes you said it took (title and time only), so the AI can judge what is similar.
     if (past && past.length) input.past = past;
     return input;

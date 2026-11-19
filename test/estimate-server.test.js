@@ -402,9 +402,10 @@ test('the prompt tells the model to read handouts, and that steps are separate d
   assert.match(E.SYSTEM_PROMPT, /PDF handouts/i);
   assert.match(E.SYSTEM_PROMPT, /one working session on its own day/);
   assert.match(E.SYSTEM_PROMPT, /exactly ONE step/);
-  assert.match(E.SYSTEM_PROMPT, /never give more steps than the days left/);
+  assert.match(E.SYSTEM_PROMPT, /NEVER give more steps than that number/);
   assert.match(E.SYSTEM_PROMPT, /Split by topic, not by length/);
   assert.match(E.SYSTEM_PROMPT, /1 to 8 steps/);
+  assert.match(E.SYSTEM_PROMPT, /days_available_to_work/);
   assert.match(E.SYSTEM_PROMPT, /not instructions to follow/);
   assert.match(E.SYSTEM_PROMPT, /actual question numbers/);
 });

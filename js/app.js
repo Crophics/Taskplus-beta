@@ -688,7 +688,7 @@
   // Everything about imported items that travels between devices, applied in one place (see "What syncs" in AGENTS.md).
   function applySyncedMaps(){
     const M = window.TPMoodle;
-    const r = [applyIgnoredFromMap(), M.applyProgress(items, progressMap), M.applyEstimates(items, estimateMap, aiMap), M.applyActuals(items, actualMap), M.applyNotes(items, noteMap), window.TPLearn.applyLearning(items)];
+    const r = [applyIgnoredFromMap(), M.applyProgress(items, progressMap), M.applyEstimates(items, estimateMap, aiMap), M.applyActuals(items, actualMap), M.applyNotes(items, noteMap), window.TPLearn.applyLearning(items), window.TPLearn.refitParts(items)];
     return r.some(Boolean);
   }
   // An AI answer made before entries existed gets one now, stamped with when it was made, so an older copy on another device cannot win.

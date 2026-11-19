@@ -172,6 +172,27 @@
     return clamp(Math.round(minutes / PART_MIN), 1, MAX_PARTS);
   }
 
+  /** Merges the tail of a step list so there are at most `n` steps (the extra ones are folded into the last kept). */
+  function capSteps(steps, n) {
+    if (!Array.isArray(steps) || steps.length <= n) return steps;
+    const keep = steps.slice(0, n).map((s) => ({ name: s.name, minutes: s.minutes }));
+    const tail = steps.slice(n);
+    const last = keep[n - 1];
+    last.minutes += tail.reduce((s, x) => s + x.minutes, 0);
+    last.name = [last.name, ...tail.map((x) => x.name)].join(' + ').slice(0, 60);
+    return keep;
+  }
+
+  /** Parts are done on separate days, so there can be no more of them than days you can work before it is due. */
+  function maxParts(item) {
+    const D = global.TPDue;
+    if (!D || !item || !item.due) return MAX_PARTS;
+    const t = global.TP && global.TP.today ? global.TP.today() : null;
+    if (!t) return MAX_PARTS;
+    const dueIn = Math.round((new Date(item.due + 'T00:00:00') - new Date(t + 'T00:00:00')) / 86400000);
+    return Math.max(1, Math.min(MAX_PARTS, Math.ceil(D.workDays(item, dueIn) - 1e-9)));
+  }
+
   function sameEstimate(a, b) {
     if (!a || !b) return false;
     return a.minutes === b.minutes && a.low === b.low && a.high === b.high && a.basis === b.basis && a.key === b.key;
@@ -188,7 +209,12 @@
     const untouched = !(item.done > 0) && !(item.today > 0) && !item.completed;
     // No due date means no days to spread parts over, so undated work stays one piece.
     if (imported && untouched && item.due) {
-      const n = partsFor(est.minutes, item.source.kind, est.steps);
+      let n = partsFor(est.minutes, item.source.kind, est.steps);
+      const cap = maxParts(item);
+      if (n > cap) {
+        n = cap;
+        if (Array.isArray(est.steps) && est.steps.length > cap) next.estimate = { ...est, steps: capSteps(est.steps, cap) };
+      }
       next.total = n;
       next.unit = n > 1 ? 'part' : (item.source.kind === 'quiz' ? 'quiz' : 'assignment');
     }
@@ -235,5 +261,5 @@
     return next;
   }
 
-  global.TPEstimate = { planRows, checkPlan, withPlan, PART_MIN, MAX_PARTS, MIN_MIN, MAX_MIN, countWords, estimateRecord, estimateForItem, inputsKey, scaleSteps, userEstimate, fromModel, stepsUsable, stepName, partsFor, sameEstimate, withEstimate };
+  global.TPEstimate = { capSteps, maxParts, planRows, checkPlan, withPlan, PART_MIN, MAX_PARTS, MIN_MIN, MAX_MIN, countWords, estimateRecord, estimateForItem, inputsKey, scaleSteps, userEstimate, fromModel, stepsUsable, stepName, partsFor, sameEstimate, withEstimate };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -135,5 +135,21 @@
     return changed;
   }
 
-  global.TPLearn = { MIN_SIMILAR, stem, label, keyOf, rawEstimate, canAsk, recordActual, pastWork, learnedFactor, applyLearning };
+  /**
+   * Re-fits untouched, not-your-own plans to the days left: never more parts than days you can work. Idempotent.
+   * (A plan you edited yourself, or any item with progress, is never touched.)
+   */
+  function refitParts(items) {
+    const E = global.TPEstimate;
+    let changed = false;
+    (items || []).forEach((it) => {
+      if (!isImported(it) || it.completed || it.archived || !it.due || !it.estimate || it.estimate.basis === 'user') return;
+      if (it.done > 0 || it.today > 0 || !(it.total > E.maxParts(it))) return;
+      Object.assign(it, E.withEstimate(it, it.estimate));
+      changed = true;
+    });
+    return changed;
+  }
+
+  global.TPLearn = { refitParts, MIN_SIMILAR, stem, label, keyOf, rawEstimate, canAsk, recordActual, pastWork, learnedFactor, applyLearning };
 })(typeof window !== 'undefined' ? window : globalThis);

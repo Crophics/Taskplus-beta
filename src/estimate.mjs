@@ -9,7 +9,7 @@
 // so it is fenced as data, the output is constrained to a JSON schema, and nothing the
 // model returns is ever executed or used as anything but numbers and short labels.
 
-export const PROMPT_VERSION = 'v5';
+export const PROMPT_VERSION = 'v6';
 export const DEFAULT_MODEL = 'claude-opus-5-5';
 
 const MIN_MIN = 15;
@@ -42,7 +42,7 @@ How to split into steps (this matters, because the app uses the steps as a day-b
 - Keep work together in one step when it is the same topic or builds directly on what was just done: sections that use the same method, a draft and its immediate revision, questions that depend on the previous answer. Do not split those just because the total is long or short.
 - If the whole assignment is one topic, or is small and hangs together, give exactly ONE step.
 - A step should be worth a day: at least about 20 minutes and, when you can help it, no more than about 90. If one topic alone is bigger than that, split it at a natural stopping point ("Draft the introduction and first section").
-- Give 1 to 8 steps. If due_in_days is given, never give more steps than the days left.
+- Give 1 to 8 steps. If days_available_to_work is given, NEVER give more steps than that number: with 1 day available, give exactly one step however large the work is (use one longer step; the student will have to do it all that day). due_in_days alone can overstate the days, because a morning deadline leaves no time on the due day.
 - Name each step by what is done in that session, using the actual question numbers or section names from the handout when you have it, and never generic words like "Part 1" or "Do the work". Step names are short (under 50 characters).
 - Step minutes are multiples of 5 and should add up to "minutes".
 
@@ -141,6 +141,7 @@ export function sanitizeInput(raw) {
     wordLimit: num(raw.wordLimit, 1, 100000),
     submissionTypes: (Array.isArray(raw.submissionTypes) ? raw.submissionTypes : []).slice(0, 6).map((t) => clean(t, 20)).filter(Boolean),
     dueInDays: num(raw.dueInDays, -3650, 3650),
+    workDays: num(raw.workDays, 1, 8),
     past: sanitizePast(raw.past),
   };
 }
@@ -155,6 +156,7 @@ export function buildUserContent(input, handouts = []) {
   ];
   if (input.points !== null) lines.push(`points: ${input.points}`);
   if (input.dueInDays !== null) lines.push(`due_in_days: ${input.dueInDays}`);
+  if (input.workDays !== null) lines.push(`days_available_to_work: ${input.workDays} (the student can only work on this many separate days before it is due)`);
   if (input.timeLimitMin !== null) lines.push(`quiz_time_limit_minutes: ${input.timeLimitMin}`);
   if (input.submissionTypes.length) lines.push(`handed_in_as: ${input.submissionTypes.join(', ')}`);
   if (input.wordLimit !== null) lines.push(`word_limit: ${input.wordLimit}`);

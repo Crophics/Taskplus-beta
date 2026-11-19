@@ -279,7 +279,7 @@ test('needsModel: an item that failed today is not retried today, but is tomorro
 test('modelInput sends the assignment details only', () => {
   const it0 = { ...M.mergeImported([], [rec({ submissionTypes: ['file'], wordLimit: 500 })], ctx()).items[0], notes: 'my private note', completed: false };
   const inp = M.modelInput(it0, 2);
-  assert.deepStrictEqual(Object.keys(inp).sort(), ['course', 'description', 'dueInDays', 'files', 'id', 'kind', 'points', 'submissionTypes', 'timeLimitMin', 'title', 'wordLimit']);
+  assert.deepStrictEqual(Object.keys(inp).sort(), ['course', 'description', 'dueInDays', 'files', 'id', 'kind', 'points', 'submissionTypes', 'timeLimitMin', 'title', 'wordLimit', 'workDays']);
   assert.strictEqual(inp.dueInDays, 2);
   assert.deepStrictEqual(inp.files, [{ name: 'a.pdf', size: 10 }], 'no download address unless handout reading is on');
   assert.strictEqual(inp.wordLimit, 500);

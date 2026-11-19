@@ -296,3 +296,28 @@ test('withPlan sets the parts, their minutes and your own estimate, and keeps pr
   assert.strictEqual(one.done, 0, 'progress never exceeds the parts left');
   assert.strictEqual(one.unit, 'assignment');
 });
+
+/* ---------- parts are days: never more than the days you can work ---------- */
+test('capSteps folds the extra steps into the last one that is kept', () => {
+  const steps = [{ name: 'Read', minutes: 30 }, { name: 'Draft', minutes: 60 }, { name: 'Edit', minutes: 30 }];
+  const one = E.capSteps(steps, 1);
+  assert.deepStrictEqual(one, [{ name: 'Read + Draft + Edit', minutes: 120 }]);
+  assert.deepStrictEqual(E.capSteps(steps, 3), steps);
+  assert.strictEqual(steps.length, 3, 'input untouched');
+});
+
+test('an item due tomorrow at 9 AM is one part however big (the due-day morning is not a work day)', () => {
+  global.TP = { today: () => '2026-11-18' };
+  require('../js/due-time.js');
+  const steps = [{ name: 'Read', minutes: 60 }, { name: 'Draft', minutes: 90 }, { name: 'Edit', minutes: 30 }];
+  const mk = (dueTime, due = '2026-11-19') => ({ id: 'moodle:1', title: 'Paper', due, dueTime, total: 1, done: 0, today: 0, completed: false, source: { type: 'moodle', kind: 'assign' }, estimate: { minutes: 180, basis: 'model', steps } });
+  const early = E.withEstimate(mk('09:00'), { minutes: 180, basis: 'model', steps });
+  assert.strictEqual(early.total, 1);
+  assert.strictEqual(early.estimate.steps.length, 1);
+  assert.strictEqual(early.estimate.minutes, 180);
+  const late = E.withEstimate(mk('17:00'), { minutes: 180, basis: 'model', steps });
+  assert.strictEqual(late.total, 2, 'due tomorrow evening: today plus tomorrow morning');
+  const far = E.withEstimate(mk('09:00', '2026-11-25'), { minutes: 180, basis: 'model', steps });
+  assert.strictEqual(far.total, 3);
+  assert.strictEqual(E.maxParts(mk('09:00', '2026-11-18')), 1, 'due today');
+});

@@ -138,6 +138,11 @@ for the one-time Cloudflare setup. What matters when touching code:
   spots in `firebase-sync.js` (`readLocalPayload`, `writeLocalPayload`, `applyRemoteMerge`).** Deliberately per device: theme,
   open tab, the AI and handout switches (`tp-llm-on`, `tp-llm-files`; privacy choices), the What's-new feed, Moodle connection
   cache, `modelTry`, push tokens (server side), dev-mode keys. Moodle itself provides title/course/due/description on each device.
+- **Parts are days, so never more parts than usable days (2026-11-18).** `TPEstimate.maxParts(item)` = ceil of
+  `TPDue.workDays` (due tomorrow before noon = 1; due tomorrow after noon = 2). `withEstimate` caps `total` to it and folds extra
+  steps into the last one (`capSteps`); `TPLearn.refitParts` re-applies this to untouched, not-your-own plans on load/sync.
+  `modelInput` sends `workDays` and the prompt says `days_available_to_work`: NEVER more steps than that (`due_in_days` alone
+  overstates it for a morning deadline). A plan you edited yourself is never capped. Prompt v6.
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
   today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
   slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can
