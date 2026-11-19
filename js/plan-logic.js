@@ -121,12 +121,14 @@
     return out;
   }
 
-  /** `units` whole units over days with the given weights; the extra units go to the earliest days. */
+  /** `units` whole units over days with the given weights (largest remainder; ties go to the earliest day). */
   function spreadWeighted(units, weights) {
     const sum = weights.reduce((a, b) => a + b, 0);
-    const out = weights.map((w) => Math.floor((units * w) / sum + 1e-9));
+    const exact = weights.map((w) => (units * w) / sum);
+    const out = exact.map((x) => Math.floor(x + 1e-9));
     let rest = units - out.reduce((a, b) => a + b, 0);
-    for (let i = 0; rest > 0 && i < out.length; i = (i + 1) % out.length, rest--) out[i] += 1;
+    const order = exact.map((x, i) => ({ i, frac: x - out[i] })).sort((a, b) => b.frac - a.frac || a.i - b.i);
+    for (let k = 0; rest > 0 && order.length; k = (k + 1) % order.length, rest--) out[order[k].i] += 1;
     return out;
   }
 

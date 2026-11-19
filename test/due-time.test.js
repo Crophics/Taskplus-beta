@@ -151,3 +151,8 @@ test('Today flags a single item overdue once its due time passed (the real clock
   if (mm > 0) assert.strictEqual(pan(past).requiredTight[0].overdue, true);
   if (mm < 24 * 60 - 61) assert.strictEqual(pan(future).requiredTight[0].overdue, false);
 });
+
+test('a 2-part item due in 2 days after noon is one part on each of the last two days, not both on the first', () => {
+  const x = item({ total: 2, due: addDays(TODAY, 2), dueTime: '23:59' });
+  assert.deepStrictEqual(P.allocateItem(x, TODAY, daysBetween).map((a) => [a.dayIndex, a.units]), [[1, 1], [2, 1]]);
+});
