@@ -954,7 +954,7 @@
     }catch(e){
       connectBusy = false;
       connectError = (e && e.message) || 'Could not connect. Try again.';
-      if(e && (e.code === 'invite_required' || e.code === 'invite_invalid')) connectNeedsInvite = true;
+      if(e && (e.code === 'invite_required' || e.code === 'invite_invalid' || e.code === 'invite_used')) connectNeedsInvite = true;
       d.password = '';
       pendingFocus = {id: connectNeedsInvite ? 'tp-connect-invite' : 'tp-connect-pass'};
       render();

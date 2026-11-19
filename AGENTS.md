@@ -171,7 +171,7 @@ for the one-time Cloudflare setup. What matters when touching code:
   `/api/push/status` returns it and Settings -> Moodle alerts shows a warning line. Look at the Worker's logs in the Cloudflare dashboard.
 - **Who can connect, and what address it may reach (2026-11-18).** `INVITE_CODES` (Worker secret, comma-separated, unset = open): when set,
   `/api/moodle/connect` answers 403 `invite_required`/`invite_invalid` before looking at the password or contacting Moodle; the connect
-  sheet then shows an "Invite code" field (remembered in `tp-invite`). Already-connected users are unaffected. `normalizeSite` rejects
+  sheet then shows an "Invite code" field (remembered in `tp-invite`). Each code is ONE-TIME: after a successful connect `invite:<sha256(code)>` stores `sha256('uid:'+uid)`; another account gets 403 `invite_used`, the same account can reconnect, a failed login does not burn it (only hashes are stored; two truly simultaneous redemptions could both pass, KV is eventually consistent). Already-connected users are unaffected. `normalizeSite` rejects
   trailing-dot hosts, more internal suffixes, numeric TLDs and IP spellings; `postForm` uses `redirect: 'manual'` and refuses any 3xx
   (hinting the real host), so a redirect can never receive the password or token or point the Worker elsewhere. Tests: `test/moodle-worker.test.js`.
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on

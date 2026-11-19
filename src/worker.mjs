@@ -167,12 +167,21 @@ export async function handleApi(request, env, deps = {}) {
     if (route === '/api/moodle/connect') {
       // Optional invite gate: with INVITE_CODES set (comma-separated), connecting needs one of them. Checked before the
       // password is looked at or Moodle is contacted. Unset = open, as before.
+      // Each code works for ONE account: it is marked used only after a successful connect (a mistyped password does not burn it),
+      // and the same account can use it again (reconnecting). Only hashes are stored (of the code and of the account).
       const codes = String(env.INVITE_CODES || '').split(',').map((s) => s.trim()).filter(Boolean);
+      let inviteKey = null;
+      let inviteUser = null;
       if (codes.length) {
         const given = typeof body.invite === 'string' ? body.invite.trim() : '';
         let ok = false;
         for (const c of codes) if (sameText(given, c)) ok = true; // no early exit: every code is compared
         if (!ok) return fail(given ? 'invite_invalid' : 'invite_required', given ? 'That invite code is not valid.' : 'Enter your invite code to connect.', 403);
+        inviteKey = 'invite:' + await sha256Hex(given);
+        inviteUser = await sha256Hex('uid:' + uid);
+        const usedBy = await env.MOODLE_KV.get(inviteKey);
+        if (usedBy && usedBy !== inviteUser) return fail('invite_used', 'That invite code was already used. Ask for a new one.', 403);
+        if (usedBy) inviteKey = null; // already ours: nothing to record
       }
       const username = typeof body.username === 'string' ? body.username.trim() : '';
       const password = typeof body.password === 'string' ? body.password : '';
@@ -190,6 +199,7 @@ export async function handleApi(request, env, deps = {}) {
         createdAt: now, lastSyncAt: null,
       };
       await saveRecord(env, uid, rec);
+      if (inviteKey) await env.MOODLE_KV.put(inviteKey, inviteUser);
       return json(statusView(rec));
     }
 

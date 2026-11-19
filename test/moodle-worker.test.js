@@ -473,9 +473,30 @@ test('with INVITE_CODES set, connecting needs a valid code, checked before Moodl
   assert.strictEqual(moodleCallsBefore, 0, 'Moodle is never contacted without a valid code');
   r = await connect(env, 'other-code-abcdefghij', spy);
   assert.strictEqual(r.res.status, 200);
+  // one-time use: a different account cannot use the same code, the same account can (reconnecting)
+  r = await api('/api/moodle/connect', { env, fetchFn: f, token: await makeToken({ sub: 'user-2' }), body: { site: 'moodle.example.edu/moodle', username: 'student', password: 'pw-secret', invite: 'other-code-abcdefghij' } });
+  assert.strictEqual(r.res.status, 403); assert.strictEqual(r.json.error, 'invite_used');
+  r = await connect(env, 'other-code-abcdefghij', spy);
+  assert.strictEqual(r.res.status, 200, 'the account that used the code can reconnect with it');
+  assert.ok([...env.MOODLE_KV.m.entries()].filter(([k]) => k.startsWith('invite:')).every(([k, v]) => !k.includes('other-code') && !v.includes('user-')), 'only hashes are stored');
+  // a different code is still free for the second account
+  r = await api('/api/moodle/connect', { env, fetchFn: f, token: await makeToken({ sub: 'user-2' }), body: { site: 'moodle.example.edu/moodle', username: 'student', password: 'pw-secret', invite: 'friend-code-0123456789' } });
+  assert.strictEqual(r.res.status, 200);
   // a connected user is unaffected by the gate for everything else
   assert.strictEqual((await api('/api/moodle/status', { method: 'GET', env, fetchFn: f })).json.connected, true);
   // unset = open
   const open = newEnv();
   assert.strictEqual((await connect(open, undefined, makeFetch())).res.status, 200);
+});
+
+test('a failed connect (wrong password) does not use up the invite code', async () => {
+  const env = newEnv();
+  env.INVITE_CODES = 'one-time-code-xyz-123';
+  const f = makeFetch();
+  let r = await api('/api/moodle/connect', { env, fetchFn: f, body: { site: 'moodle.example.edu/moodle', username: 'student', password: 'wrong', invite: 'one-time-code-xyz-123' } });
+  assert.strictEqual(r.res.status, 401);
+  assert.ok(![...env.MOODLE_KV.m.keys()].some((k) => k.startsWith('invite:')));
+  r = await api('/api/moodle/connect', { env, fetchFn: f, body: { site: 'moodle.example.edu/moodle', username: 'student', password: 'pw-secret', invite: 'one-time-code-xyz-123' } });
+  assert.strictEqual(r.res.status, 200);
+  assert.ok([...env.MOODLE_KV.m.keys()].some((k) => k.startsWith('invite:')));
 });
