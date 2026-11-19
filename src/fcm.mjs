@@ -47,9 +47,14 @@ export async function accessToken(sa, fetchFn, nowMs) {
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${jwt}`,
   });
-  if (!res.ok) throw new Error('fcm_auth_failed');
+  if (!res.ok) {
+    // Google says what is wrong ("invalid_grant", "Invalid JWT Signature", ...). Nothing secret is in it.
+    let why = '';
+    try { const e = await res.json(); why = [e.error, e.error_description].filter(Boolean).join(': '); } catch (e) { /* ignore */ }
+    throw new Error('Google refused the push key' + (why ? ' (' + why.slice(0, 160) + ')' : ' (HTTP ' + res.status + ')'));
+  }
   const j = await res.json();
-  if (!j.access_token) throw new Error('fcm_auth_failed');
+  if (!j.access_token) throw new Error('Google refused the push key');
   cached = { email: sa.client_email, token: j.access_token, exp: nowMs + (Number(j.expires_in) || 3600) * 1000 };
   return cached.token;
 }
@@ -74,6 +79,9 @@ export async function sendPush(sa, deviceToken, msg, { fetchFn = fetch, now = Da
   });
   if (res.ok) return { ok: true };
   let status = '';
-  try { status = ((await res.json()).error || {}).status || ''; } catch (e) { /* ignore */ }
-  return { ok: false, dead: res.status === 404 || status === 'NOT_FOUND' || status === 'UNREGISTERED' || (res.status === 400 && status === 'INVALID_ARGUMENT') };
+  let message = '';
+  try { const e = (await res.json()).error || {}; status = e.status || ''; message = String(e.message || ''); } catch (e) { /* ignore */ }
+  // A bad request can be a bad payload as well as a bad token: only forget the device when Google says the token is bad.
+  const badToken = res.status === 404 || status === 'NOT_FOUND' || status === 'UNREGISTERED' || (res.status === 400 && /registration token|not a valid fcm/i.test(message));
+  return { ok: false, dead: badToken, reason: `Google answered ${res.status}${status ? ' ' + status : ''}${message ? ': ' + message.slice(0, 160) : ''}` };
 }

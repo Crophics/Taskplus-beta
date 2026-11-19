@@ -93,18 +93,20 @@ async function addEvents(env, uid, events, now) {
 
 async function deliver(env, uid, p, msg, deps, now) {
   const sa = parseServiceAccount(env.FCM_SERVICE_ACCOUNT);
-  if (!sa || !p.tokens.length) return { sent: 0 };
+  if (!sa || !p.tokens.length) return { sent: 0, errors: [] };
   let sent = 0;
   const alive = [];
+  const errors = [];
   for (const t of p.tokens) {
     try {
       const r = await sendPush(sa, t.t, msg, { fetchFn: deps.fetchFn || fetch, now });
       if (r.ok) sent++;
+      else if (r.reason) errors.push(r.dead ? r.reason + ' (device forgotten, enable alerts again)' : r.reason);
       if (r.ok || !r.dead) alive.push(t);
-    } catch (e) { alive.push(t); }
+    } catch (e) { alive.push(t); errors.push(String((e && e.message) || 'push failed').slice(0, 200)); }
   }
   p.tokens = alive;
-  return { sent };
+  return { sent, errors };
 }
 
 const PREF_OF = { new: 'new', moved: 'moved' };

@@ -161,3 +161,28 @@ test('runCron stops when the subrequest budget is spent', async () => {
   await P.runCron(env, NOW + 60000, { fetchFn: fakeFcm().fn, syncFn: async (s, t, uid) => { seen.push(uid); return result([]); } });
   assert.ok(!first.includes(seen[first.length]));
 });
+
+test('a failed test push says why: a refused key, a permission error, a bad payload keeps the device, a bad token drops it', async () => {
+  const env = await setup();
+  const mk = (tokenRes, sendRes) => async (url) => (String(url).startsWith('https://oauth2.googleapis.com/token') ? tokenRes() : sendRes());
+  // 1. Google refuses the key
+  F.resetFcmCache();
+  let r = await P.sendTest(env, 'u1', NOW, { fetchFn: mk(() => new Response(JSON.stringify({ error: 'invalid_grant', error_description: 'Invalid JWT Signature.' }), { status: 400 }), () => null) });
+  assert.strictEqual(r.sent, 0);
+  assert.match(r.errors[0], /Google refused the push key \(invalid_grant: Invalid JWT Signature/);
+  // 2. the key works but may not send (the role or the API is missing)
+  F.resetFcmCache();
+  r = await P.sendTest(env, 'u1', NOW, { fetchFn: mk(() => new Response(JSON.stringify({ access_token: 'oauth', expires_in: 3600 })), () => new Response(JSON.stringify({ error: { status: 'PERMISSION_DENIED', message: 'Firebase Cloud Messaging API has not been used in project 1 before' } }), { status: 403 })) });
+  assert.match(r.errors[0], /Google answered 403 PERMISSION_DENIED: Firebase Cloud Messaging API has not been used/);
+  assert.strictEqual((await P.loadPush(env, 'u1')).tokens.length, 1, 'a permission error never forgets the device');
+  // 3. a bad request that is not about the token keeps the device
+  F.resetFcmCache();
+  r = await P.sendTest(env, 'u1', NOW, { fetchFn: mk(() => new Response(JSON.stringify({ access_token: 'oauth', expires_in: 3600 })), () => new Response(JSON.stringify({ error: { status: 'INVALID_ARGUMENT', message: 'Invalid JSON payload received.' } }), { status: 400 })) });
+  assert.match(r.errors[0], /400 INVALID_ARGUMENT/);
+  assert.strictEqual((await P.loadPush(env, 'u1')).tokens.length, 1);
+  // 4. a bad token drops it and says so
+  F.resetFcmCache();
+  r = await P.sendTest(env, 'u1', NOW, { fetchFn: mk(() => new Response(JSON.stringify({ access_token: 'oauth', expires_in: 3600 })), () => new Response(JSON.stringify({ error: { status: 'INVALID_ARGUMENT', message: 'The registration token is not a valid FCM registration token' } }), { status: 400 })) });
+  assert.match(r.errors[0], /device forgotten/);
+  assert.strictEqual((await P.loadPush(env, 'u1')).tokens.length, 0);
+});

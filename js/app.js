@@ -1113,7 +1113,7 @@
   async function sendTestAlert(){
     try{
       const r = await window.TPMoodle.api.testPush();
-      showToast(r.sent ? 'Test sent' : 'Nothing was delivered. Check notification permission.');
+      showToast(r.sent ? 'Test sent' : 'Nothing was delivered. ' + (r.reason || 'Check notification permission.'));
     }catch(e){ showToast((e && e.message) || 'Could not send a test'); }
   }
   async function moodleBoot(){
