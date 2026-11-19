@@ -106,13 +106,11 @@
       const left = s.leftMin > 0 ? P.fmtMinutes(P.roundDisplay(s.leftMin)) : 'Done';
       const sub = s.leftMin > 0 ? `left today · ${s.tasks} task${s.tasks === 1 ? '' : 's'}` : 'with today\'s time';
       const notes = [];
-      if (s.doneMin > 0) notes.push(`${P.fmtMinutes(P.roundDisplay(s.doneMin))} done today`);
-      if (s.aheadMin > 0) notes.push(`+${P.fmtMinutes(P.roundDisplay(s.aheadMin))} of get-ahead work planned`);
       if (s.unestimated) notes.push(`${s.unestimated} task${s.unestimated === 1 ? '' : 's'} without a time estimate`);
       block = `<div class="tp-t-plan">
         <div class="tp-t-plan-main"><span class="tp-t-plan-left">${escapeHtml(left)}</span><span class="tp-t-plan-sub">${escapeHtml(sub)}</span></div>
         <div class="tp-t-plan-track"><div class="tp-t-plan-fill" style="width:${Math.round(s.pct * 100)}%"></div></div>
-        <div class="tp-t-plan-note">${escapeHtml(notes.join(' · '))}</div>
+        ${notes.length ? `<div class="tp-t-plan-note">${escapeHtml(notes.join(' · '))}</div>` : ''}
       </div>`;
     }
     const heavyLine = heavy ? `<button type="button" class="tp-t-heavy" id="tp-t-heavy">

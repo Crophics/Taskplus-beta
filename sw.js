@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v71'; // bumped: removed Today's explanatory footer text
+const CACHE_NAME = 'taskplus-cache-v72'; // bumped: simpler Today summary, more space under the weekday
 const urlsToCache = [
   './',
   './index.html',
