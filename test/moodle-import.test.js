@@ -479,3 +479,46 @@ test('a sync completes an item once, when Moodle first reports it submitted; reo
   const again = M.mergeImported(reopened, [rec('submitted')], { today: '2026-11-19', now: 3 }).items;
   assert.strictEqual(again[0].completed, false);
 });
+
+/* ---------- your own estimates sync ---------- */
+
+const imported = (over = {}) => ({ id: 'moodle:7', title: 'Essay', course: 'PHIL 2202', due: '2026-11-25', total: 3, unit: 'part', done: 0, today: 0, completed: false,
+  source: { type: 'moodle', kind: 'assign', cmid: 7 }, estimate: { minutes: 150, low: 120, high: 180, basis: 'heuristic', confidence: 'low', factors: [], steps: [] }, ...over });
+
+test('estimate map: entries merge newest-wins, null means "reset", old and junk entries are dropped', () => {
+  const a = { x: { m: 90, at: 100 }, y: { m: 60, at: 500 } };
+  const b = { x: { m: null, at: 200 }, y: { m: 30, at: 400 }, z: { m: 'junk' }, w: null };
+  assert.deepStrictEqual(M.mergeEstimateMap(a, b, 1000), { x: { m: null, at: 200 }, y: { m: 60, at: 500 } });
+  assert.deepStrictEqual(M.mergeEstimateMap({ old: { m: 45, at: 1 } }, {}, 1 + 366 * 24 * 3600 * 1000), {});
+  assert.deepStrictEqual(M.setEstimateEntry({ a: { m: 5, at: 1 } }, 'b', 120, 9), { a: { m: 5, at: 1 }, b: { m: 120, at: 9 } });
+  assert.deepStrictEqual(M.setEstimateEntry({}, 'b', null, 9), { b: { m: null, at: 9 } });
+});
+
+test('applyEstimates puts your own estimate on an item that only has the automatic one (a fresh device)', () => {
+  const it = imported();
+  assert.strictEqual(M.applyEstimates([it], { 'moodle:7': { m: 90, at: 5 } }), true);
+  assert.strictEqual(it.estimate.basis, 'user');
+  assert.strictEqual(it.estimate.minutes, 90);
+  assert.strictEqual(it.total, 2, 'an untouched item is re-split for the new time (90 min = 2 parts)');
+  assert.strictEqual(M.applyEstimates([it], { 'moodle:7': { m: 90, at: 5 } }), false, 'already applied: no change');
+});
+
+test('applyEstimates: a newer number replaces an older one, and a reset goes back to the automatic estimate', () => {
+  const it = imported({ estimate: { minutes: 60, low: 60, high: 60, basis: 'user', confidence: 'high', factors: ['set by you'], steps: [] } });
+  assert.strictEqual(M.applyEstimates([it], { 'moodle:7': { m: 120, at: 9 } }), true);
+  assert.strictEqual(it.estimate.minutes, 120);
+  assert.strictEqual(M.applyEstimates([it], { 'moodle:7': { m: null, at: 10 } }), true);
+  assert.notStrictEqual(it.estimate.basis, 'user');
+  // a reset entry never touches an item that is not on your own estimate
+  const ai = imported({ estimate: { minutes: 75, low: 60, high: 90, basis: 'model', confidence: 'medium', factors: [], steps: [] } });
+  assert.strictEqual(M.applyEstimates([ai], { 'moodle:7': { m: null, at: 10 } }), false);
+  assert.strictEqual(ai.estimate.basis, 'model');
+});
+
+test('applyEstimates ignores manual items, items with no entry, and junk numbers', () => {
+  const manual = { id: 'm1', title: 'Hand-made', total: 1, done: 0, estimate: { minutes: 30, basis: 'heuristic' } };
+  const plain = imported({ id: 'moodle:8' });
+  assert.strictEqual(M.applyEstimates([manual, plain], { m1: { m: 60, at: 1 } }), false);
+  assert.strictEqual(M.applyEstimates([imported()], { 'moodle:7': { m: NaN, at: 1 } }), false);
+  assert.strictEqual(M.applyEstimates([imported()], undefined), false);
+});

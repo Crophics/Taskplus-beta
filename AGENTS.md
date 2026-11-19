@@ -97,6 +97,12 @@ for the one-time Cloudflare setup. What matters when touching code:
   Overdue is time-aware too (2026-11-18): `TPDue.isOverdue(item, todayStr)` is true for a past day, or on the due day once
   `dueTime` has passed (an item with no time stays due today all day). Today's flags, All's Overdue group and row status,
   the item screen's chip, `canIgnore` and `applyIgnored` use it; Week and the planner still treat due-today work as today's.
+- **Your own estimates sync (2026-11-18).** Imported items are device-only, so an estimate you set yourself did not
+  follow you. `tp-imported-estimates` = `{itemId: {m: minutes | null, at}}` (null = you reset to automatic), synced in the
+  Firestore doc as `estimates` and merged newest-wins (`TPMoodle.mergeEstimateMap`). Entries are written ONLY by
+  `adjustEstimate`/`resetEstimate` in `app.js` (never derived from the items: a device that has not received the map yet
+  must not overwrite it), and applied by `TPMoodle.applyEstimates` after cloud data arrives and after each Moodle import.
+  AI estimates are not synced; each device asks and the Worker's per-account cache answers the repeat ask.
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
   today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
   slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can

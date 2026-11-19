@@ -327,6 +327,50 @@
     return changed;
   }
 
+  /* ---- Your own estimates of imported items, which sync ----
+     An estimate you set yourself (basis 'user') lived only on one device because imported items stay off the cloud
+     document. It travels as a map {itemId: {m: minutes, at}}; m is null when you reset it to the automatic estimate.
+     Entries are written when you change an estimate (never derived from the items, so a device that has not yet
+     received the map cannot overwrite it) and merged newest-wins. AI estimates are not synced: each device asks,
+     and the Worker's per-account cache answers the second ask for free. */
+  const ESTIMATE_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
+
+  function setEstimateEntry(map, id, minutes, now) {
+    return { ...(map || {}), [id]: { m: minutes == null ? null : Number(minutes), at: now } };
+  }
+
+  function mergeEstimateMap(a, b, now) {
+    const out = {};
+    [a || {}, b || {}].forEach((m) => {
+      Object.entries(m).forEach(([id, e]) => {
+        if (!e || typeof e.at !== 'number' || now - e.at > ESTIMATE_MAX_AGE_MS) return;
+        if (!out[id] || e.at > out[id].at) out[id] = { m: e.m == null ? null : Number(e.m), at: e.at };
+      });
+    });
+    return out;
+  }
+
+  /** Sets (or clears) the user's own estimate on imported items from the map. Mutates; true if anything changed. */
+  function applyEstimates(items, map) {
+    const E = global.TPEstimate;
+    let changed = false;
+    if (!E) return false;
+    (items || []).forEach((it) => {
+      const e = map && it && it.id && isImported(it) ? map[it.id] : null;
+      if (!e || !it.estimate) return;
+      const isUser = it.estimate.basis === 'user';
+      if (e.m != null && Number.isFinite(e.m)) {
+        if (isUser && it.estimate.minutes === E.userEstimate(e.m).minutes) return;
+        Object.assign(it, E.withEstimate(it, E.userEstimate(e.m, it.estimate.steps)));
+        changed = true;
+      } else if (e.m == null && isUser) {
+        Object.assign(it, E.withEstimate(it, E.estimateForItem(it)));
+        changed = true;
+      }
+    });
+    return changed;
+  }
+
   /** Plain-language lines for the Worker's sync warnings (codes like 'state_failed:7'). */
   function explainWarnings(warnings) {
     const list = Array.isArray(warnings) ? warnings : [];
@@ -422,5 +466,5 @@
     }
   }
 
-  global.TPMoodle = { localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, progressMap, mergeProgress, applyProgress, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_MS, IMPORT_SHAPE, RETRY_MS, mergeFeed, unreadCount, markFeedSeen, feedLine };
+  global.TPMoodle = { setEstimateEntry, mergeEstimateMap, applyEstimates, localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, progressMap, mergeProgress, applyProgress, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_MS, IMPORT_SHAPE, RETRY_MS, mergeFeed, unreadCount, markFeedSeen, feedLine };
 })(typeof window !== 'undefined' ? window : globalThis);

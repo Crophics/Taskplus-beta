@@ -19,6 +19,7 @@
       deletedCourses,
       ignored: ignoredMap,
       progress: progressMap,
+      estimates: estimateMap,
       dayCompleteLog,
       deletedLog,
       prefs: syncPrefs
@@ -30,6 +31,7 @@
   const DELETED_COURSES_KEY='tp-deleted-courses';
   const IGNORED_KEY='tp-ignored';
   const PROGRESS_KEY='tp-imported-progress';
+  const ESTIMATES_KEY='tp-imported-estimates';
   const LAST_ACTIVE_DATE_KEY='tp-last-active-date';
   const DAY_COMPLETE_LOG_KEY='tp-day-complete-log';
   const DELETED_LOG_KEY='tp-deleted-log';
@@ -128,7 +130,8 @@
     dedupeCourses();
     ignoredMap = readJsonObject(IGNORED_KEY, {});
     progressMap = readJsonObject(PROGRESS_KEY, {});
-    if(applyIgnoredFromMap() | window.TPMoodle.applyProgress(items, progressMap)) persistItems();
+    estimateMap = readJsonObject(ESTIMATES_KEY, {});
+    if(applyIgnoredFromMap() | window.TPMoodle.applyProgress(items, progressMap) | window.TPMoodle.applyEstimates(items, estimateMap)) persistItems();
     try{ dayCompleteLog = JSON.parse(localStorage.getItem(DAY_COMPLETE_LOG_KEY)) || []; }catch(e){ dayCompleteLog = []; }
     try{ deletedLog = JSON.parse(localStorage.getItem(DELETED_LOG_KEY)) || []; }catch(e){ deletedLog = []; }
     let p = {};
@@ -667,6 +670,12 @@
   }
   // Imported items never reach the cloud, so the ignored flag travels as its own small map (item id -> {on, at}).
   let progressMap = readJsonObject(PROGRESS_KEY, {});
+  let estimateMap = readJsonObject(ESTIMATES_KEY, {});
+  // Your own estimates of imported items sync through this map (see TPMoodle.setEstimateEntry).
+  function recordEstimate(id, minutes){
+    estimateMap = window.TPMoodle.setEstimateEntry(estimateMap, id, minutes, Date.now());
+    try{ localStorage.setItem(ESTIMATES_KEY, JSON.stringify(estimateMap)); }catch(e){}
+  }
   // Done / progress on imported items syncs as its own small map (they never reach the cloud document).
   function refreshProgressMap(){
     const next = window.TPMoodle.progressMap(items, progressMap, Date.now());
@@ -743,11 +752,14 @@
     const i = itemIndexById(id);
     if(i < 0 || !items[i].estimate) return;
     const minutes = items[i].estimate.minutes + delta;
-    replaceItem(i, window.TPEstimate.withEstimate(items[i], window.TPEstimate.userEstimate(minutes, items[i].estimate.steps)));
+    const mine = window.TPEstimate.userEstimate(minutes, items[i].estimate.steps);
+    if(window.TPMoodle.isImported(items[i])) recordEstimate(items[i].id, mine.minutes);
+    replaceItem(i, window.TPEstimate.withEstimate(items[i], mine));
   }
   function resetEstimate(id){
     const i = itemIndexById(id);
     if(i < 0) return;
+    if(window.TPMoodle.isImported(items[i])) recordEstimate(items[i].id, null);
     replaceItem(i, window.TPEstimate.withEstimate(items[i], window.TPEstimate.estimateForItem(items[i])));
   }
   function itemDetailCtx(){
@@ -847,6 +859,7 @@
       items = merged.items;
       // Items Moodle just created (e.g. on a second device) have no ignore flag yet: apply the synced list.
       applyIgnoredFromMap();
+      window.TPMoodle.applyEstimates(items, estimateMap); // ...nor your own estimates
       // A course with no assignments yet still gets its card: every course picked for syncing is listed.
       const names = (res.records||[]).map(r=>r.course).concat((res.courses||[]).filter(c=>c.selected).map(c=>c.code));
       if(window.TPMoodle.ensureCourseNames(courses, names, undefined, deletedCourses)) saveCourses();
