@@ -72,6 +72,14 @@ export async function unregisterToken(env, uid, token) {
   await savePush(env, uid, p);
 }
 
+/** A short readable name for a device from its user agent ("iPhone", "Chrome on Windows"). The agent itself is never returned. */
+export function deviceLabel(ua) {
+  const s = String(ua || '');
+  const os = /iPhone|iPad/.test(s) ? 'iPhone' : /Android/.test(s) ? 'Android' : /Windows/.test(s) ? 'Windows' : /Macintosh|Mac OS X/.test(s) ? 'Mac' : /Linux/.test(s) ? 'Linux' : '';
+  const br = /Edg\//.test(s) ? 'Edge' : /Firefox\//.test(s) ? 'Firefox' : /Chrome\/|CriOS/.test(s) ? 'Chrome' : /Safari\//.test(s) ? 'Safari' : '';
+  return [br, os].filter(Boolean).join(' on ') || 'a device';
+}
+
 export function pushStatus(p, env) {
   return { configured: !!parseServiceAccount(env.FCM_SERVICE_ACCOUNT), devices: p.tokens.length, prefs: p.prefs, tz: p.tz };
 }
@@ -93,20 +101,21 @@ async function addEvents(env, uid, events, now) {
 
 async function deliver(env, uid, p, msg, deps, now) {
   const sa = parseServiceAccount(env.FCM_SERVICE_ACCOUNT);
-  if (!sa || !p.tokens.length) return { sent: 0, errors: [] };
+  if (!sa || !p.tokens.length) return { sent: 0, errors: [], targets: [] };
   let sent = 0;
   const alive = [];
   const errors = [];
+  const targets = [];
   for (const t of p.tokens) {
     try {
       const r = await sendPush(sa, t.t, msg, { fetchFn: deps.fetchFn || fetch, now });
-      if (r.ok) sent++;
+      if (r.ok) { sent++; targets.push(deviceLabel(t.ua)); }
       else if (r.reason) errors.push(r.dead ? r.reason + ' (device forgotten, enable alerts again)' : r.reason);
       if (r.ok || !r.dead) alive.push(t);
     } catch (e) { alive.push(t); errors.push(String((e && e.message) || 'push failed').slice(0, 200)); }
   }
   p.tokens = alive;
-  return { sent, errors };
+  return { sent, errors, targets };
 }
 
 const PREF_OF = { new: 'new', moved: 'moved' };

@@ -232,7 +232,7 @@ async function pushRoute(route, request, env, uid, now, deps) {
   p.lastTest = now;
   await savePush(env, uid, p);
   const r = await sendTest(env, uid, now, deps);
-  return json({ sent: r.sent, reason: r.sent ? '' : ((r.errors || [])[0] || '') });
+  return json({ sent: r.sent, targets: r.targets || [], reason: r.sent ? '' : ((r.errors || [])[0] || '') });
 }
 
 /**

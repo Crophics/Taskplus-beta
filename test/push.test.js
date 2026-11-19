@@ -186,3 +186,15 @@ test('a failed test push says why: a refused key, a permission error, a bad payl
   assert.match(r.errors[0], /device forgotten/);
   assert.strictEqual((await P.loadPush(env, 'u1')).tokens.length, 0);
 });
+
+test('a successful test names the devices it went to, without exposing the user agent', async () => {
+  const env = await setup();
+  await P.registerToken(env, 'u1', { token: 'phone-token-bbbbbbbbbbbbbbbbbbbbbb', tz: 'UTC', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605 Version/18 Safari/604.1' }, NOW + 1);
+  await P.registerToken(env, 'u1', { token: 'win-token-cccccccccccccccccccccccc', tz: 'UTC', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36' }, NOW + 2);
+  const f = fakeFcm();
+  const r = await P.sendTest(env, 'u1', NOW, { fetchFn: f.fn });
+  assert.strictEqual(r.sent, 3);
+  assert.deepStrictEqual(r.targets.slice(0, 2).sort(), ['Chrome on Windows', 'Safari on iPhone']);
+  assert.ok(!JSON.stringify(r.targets).includes('Mozilla'));
+  assert.strictEqual(P.deviceLabel(''), 'a device');
+});
