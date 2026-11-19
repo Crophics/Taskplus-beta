@@ -105,11 +105,12 @@
   function itemDetailHtml(ctx) {
     const { item, idx, color, escapeHtml, relativeDueLabel, fromLabel, daysToDue } = ctx;
     const src = item.source || {};
-    const dueTone = item.completed || item.ignored || daysToDue === null ? '' : daysToDue < 0 ? ' tp-i-chip-bad' : daysToDue <= 1 ? ' tp-i-chip-warn' : '';
+    const pastDue = daysToDue !== null && (daysToDue < 0 || window.TPDue.isOverdue(item, window.TP.today()));
+    const dueTone = item.completed || item.ignored || daysToDue === null ? '' : pastDue ? ' tp-i-chip-bad' : daysToDue <= 1 ? ' tp-i-chip-warn' : '';
     const chips = [
       daysToDue === null
         ? '<span class="tp-i-chip">No due date</span>'
-        : `<span class="tp-i-chip${dueTone}">${daysToDue < 0 && !item.completed && !item.ignored ? 'Overdue · ' : 'Due '}${escapeHtml(window.TPDue.label(item, relativeDueLabel))}</span>`,
+        : `<span class="tp-i-chip${dueTone}">${pastDue && !item.completed && !item.ignored ? 'Overdue · ' : 'Due '}${escapeHtml(window.TPDue.label(item, relativeDueLabel))}</span>`,
       item.ignored ? '<span class="tp-i-chip">Ignored</span>' : '',
       item.completed ? '<span class="tp-i-chip tp-i-chip-ok">Done</span>' : '',
       src.kind === 'quiz' ? `<span class="tp-i-chip">Quiz${src.timeLimitMin ? ' · ' + src.timeLimitMin + ' min' : ''}</span>` : '',

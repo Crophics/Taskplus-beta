@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v78'; // bumped: Week plan leaves get-ahead work off today
+const CACHE_NAME = 'taskplus-cache-v79'; // bumped: overdue follows the due time
 const urlsToCache = [
   './',
   './index.html',

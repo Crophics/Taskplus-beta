@@ -11,7 +11,7 @@
 */
 (function (global) {
   // Due-time rules live in js/due-time.js; without it (a bare test) the old date-only behaviour applies.
-  const D = global.TPDue || { workDays: (it, dueIn) => Math.max(dueIn, 1), morningUsable: () => false };
+  const D = global.TPDue || { workDays: (it, dueIn) => Math.max(dueIn, 1), morningUsable: () => false, isOverdue: (it, t) => !!it.due && it.due < t };
 
   /** left/target-day-target formulas from the design spec, usable per item. */
   function dayTarget(it) {
@@ -77,7 +77,7 @@
       today: progressToday,
       met: met(it),
       tight: it.due<=today(),
-      overdue: it.due<today(),
+      overdue: D.isOverdue(it, today()),
       dueToday: it.due===today(),
       noSlack: left>=daysLeft
     };
@@ -104,7 +104,7 @@
         today: it.today||0,
         met: met(it),
         tight:true,
-        overdue: daysBetween(today(), it.due)<0,
+        overdue: D.isOverdue(it, today()),
         dueToday: it.due===today()
       })))
     .sort((a,b)=> a.it.due.localeCompare(b.it.due));
@@ -145,7 +145,7 @@
   // to mark tomorrow's singles as highly urgent inside their layout bucket
   optionalBuckets.filter(b=>b.pickCount && b.pickCount===b.entries.length).forEach(b=>{
     b.entries.forEach(e=>{
-      const isOverdue = daysBetween(today(), e.it.due) < 0;
+      const isOverdue = D.isOverdue(e.it, today());
       const isDueToday = e.it.due === today();
       const isDueTomorrow = daysBetween(today(), e.it.due) === 1;
 

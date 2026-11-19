@@ -663,7 +663,7 @@
   const isPlanned = window.TPItemLogic.isPlanned;
   // Only overdue, unfinished work can be ignored; once ignored, "stop ignoring" is always available.
   function canIgnore(it){
-    return !!it && !it.completed && !it.ignored && !!it.due && daysBetween(today(), it.due) < 0;
+    return !!it && !it.completed && !it.ignored && !!it.due && window.TPDue.isOverdue(it, today());
   }
   // Imported items never reach the cloud, so the ignored flag travels as its own small map (item id -> {on, at}).
   let progressMap = readJsonObject(PROGRESS_KEY, {});

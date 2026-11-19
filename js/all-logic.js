@@ -74,7 +74,7 @@
       if (isLocked(it)) { groups.blocked.push(r); return; }
       if (!it.due) { groups.noDue.push(r); return; }
       const d = daysBetween(today(), it.due);
-      if (d < 0) groups.overdue.push(r);
+      if (d < 0 || (global.TPDue && global.TPDue.isOverdue(it, today()))) groups.overdue.push(r);
       else if (d <= 6) groups.thisWeek.push(r);
       else groups.later.push(r);
     });

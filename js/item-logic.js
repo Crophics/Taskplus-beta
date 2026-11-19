@@ -53,7 +53,7 @@
     (items || []).forEach((it) => {
       const e = map && it && it.id ? map[it.id] : null;
       if (!e) return;
-      const overdue = !!it.due && !it.completed && daysBetween(today, it.due) < 0;
+      const overdue = !!it.due && !it.completed && (daysBetween(today, it.due) < 0 || !!(global.TPDue && global.TPDue.isOverdue(it, today)));
       const want = e.on && overdue;
       if (want && !it.ignored) { it.ignored = true; changed = true; }
       else if (!want && it.ignored) { delete it.ignored; changed = true; }

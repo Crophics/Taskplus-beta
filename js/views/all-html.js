@@ -14,7 +14,7 @@
     } = ctx;
     const locked = isLocked(it);
     const daysLeft = it.due ? daysBetween(today(), it.due) : NaN;
-    const overdue = !it.completed && !locked && !it.ignored && daysLeft < 0;
+    const overdue = !it.completed && !locked && !it.ignored && (daysLeft < 0 || window.TPDue.isOverdue(it, today()));
     const dt = it.dailyTarget;
     const cls = locked ? 'tp-locked' : (it.ignored || !it.due) ? '' : urgencyClass(daysLeft, it.completed);
     const color = it.course ? courseColorFor(it.course) : 'var(--text-faint)';

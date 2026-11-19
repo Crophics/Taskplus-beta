@@ -75,3 +75,18 @@ test('within a group, completed sinks below blocked, which sinks below open', ()
   }));
   assert.deepStrictEqual(groups[0].rows.map(r => r.it.title), ['Open', 'Blocked', 'Done']);
 });
+
+test('an item due today at a time that has passed is listed under Overdue; with no time it stays in This week', () => {
+  require('../js/due-time.js');
+  const now = new Date(); const mm = now.getHours() * 60 + now.getMinutes();
+  if (mm === 0) return; // nothing can be "earlier today" at midnight
+  const real = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const earlier = String(Math.floor((mm - 1) / 60)).padStart(2, '0') + ':' + String((mm - 1) % 60).padStart(2, '0');
+  const items = [
+    { title: 'Timed, passed', due: real, dueTime: earlier, completed: false },
+    { title: 'No time', due: real, completed: false },
+  ];
+  const groups = TPAllLogic.buildGroups(baseCtx({ items, today: () => real }));
+  assert.deepStrictEqual(groups.find((g) => g.key === 'overdue').rows.map((r) => r.it.title), ['Timed, passed']);
+  assert.deepStrictEqual(groups.find((g) => g.key === 'thisWeek').rows.map((r) => r.it.title), ['No time']);
+});

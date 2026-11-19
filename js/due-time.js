@@ -52,6 +52,21 @@
     return Math.max(morningUsable(it) && dueIn >= 1 ? dueIn : dueIn - 1, 0);
   }
 
+  /**
+   * Is the item past its due date AND time? A day-only item is overdue from the day after; one with a due time
+   * is overdue once that time has passed on the due day (due 9 AM today, it is 3 PM: overdue). `nowMin` (minutes
+   * since midnight) is for tests; the real clock is used otherwise.
+   */
+  function isOverdue(it, todayStr, nowMin) {
+    if (!it || !it.due) return false;
+    if (it.due < todayStr) return true;
+    if (it.due > todayStr) return false;
+    const m = minutesOf(it.dueTime);
+    if (m === null) return false;
+    if (nowMin === undefined) { const n = new Date(); nowMin = n.getHours() * 60 + n.getMinutes(); }
+    return nowMin >= m;
+  }
+
   /** '09:00' -> '9:00 AM', '23:59' -> '11:59 PM', '00:00' -> '12:00 AM'. '' when unknown. */
   function fmtTime(hhmm) {
     const m = minutesOf(hhmm);
@@ -67,5 +82,5 @@
     return day && t ? day + ' · ' + t : day;
   }
 
-  global.TPDue = { NOON, DUE_DAY_SHARE, timeOf, minutesOf, morningUsable, workDays, singleLastDay, fmtTime, label };
+  global.TPDue = { NOON, DUE_DAY_SHARE, timeOf, minutesOf, morningUsable, workDays, singleLastDay, isOverdue, fmtTime, label };
 })(typeof window !== 'undefined' ? window : globalThis);

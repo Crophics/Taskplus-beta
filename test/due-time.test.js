@@ -122,3 +122,32 @@ test('a Moodle import keeps the due time, and a time-only change updates it with
   const undated = M.mergeImported([], [rec(null)], { today: '2026-11-17', now: 3 });
   assert.strictEqual(undated.items[0].dueTime, '');
 });
+
+/* ---------- overdue follows the due time ---------- */
+
+test('isOverdue: a day-only item is overdue from the next day; a timed item once its time has passed on the due day', () => {
+  const at = (h, m = 0) => h * 60 + m;
+  assert.strictEqual(D.isOverdue({ due: addDays(TODAY, -1), dueTime: '17:00' }, TODAY, at(8)), true, 'a past day is overdue whatever the time');
+  assert.strictEqual(D.isOverdue({ due: addDays(TODAY, -1) }, TODAY, at(8)), true);
+  assert.strictEqual(D.isOverdue({ due: TODAY, dueTime: '09:00' }, TODAY, at(8, 59)), false, 'before the time');
+  assert.strictEqual(D.isOverdue({ due: TODAY, dueTime: '09:00' }, TODAY, at(9)), true, 'at the time');
+  assert.strictEqual(D.isOverdue({ due: TODAY, dueTime: '09:00' }, TODAY, at(15)), true, 'after the time');
+  assert.strictEqual(D.isOverdue({ due: TODAY, dueTime: '23:59' }, TODAY, at(23, 58)), false);
+  assert.strictEqual(D.isOverdue({ due: TODAY }, TODAY, at(23, 59)), false, 'no time: due today stays due today');
+  assert.strictEqual(D.isOverdue({ due: addDays(TODAY, 1), dueTime: '00:00' }, TODAY, at(23)), false, 'tomorrow is never overdue');
+  assert.strictEqual(D.isOverdue({ due: '' }, TODAY, at(12)), false, 'undated');
+  assert.strictEqual(D.isOverdue(null, TODAY, at(12)), false);
+});
+
+test('Today flags a single item overdue once its due time passed (the real clock decides)', () => {
+  const now = new Date(); const mm = now.getHours() * 60 + now.getMinutes();
+  const hhmm = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  const mk = (dueTime) => item({ id: 'x', due: TODAY, dueTime });
+  // the panel uses its own today(); pin it to the real date so the clock comparison is meaningful
+  const real = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const pan = (it) => T.computeTodayPanel({ items: [it], storageKey: 'k', isLocked: () => false, unlockedToday: () => false, today: () => real, daysBetween });
+  const past = { ...mk(hhmm(Math.max(mm - 1, 0))), due: real }; // one minute ago (or midnight)
+  const future = { ...mk(hhmm(Math.min(mm + 60, 24 * 60 - 1))), due: real };
+  if (mm > 0) assert.strictEqual(pan(past).requiredTight[0].overdue, true);
+  if (mm < 24 * 60 - 61) assert.strictEqual(pan(future).requiredTight[0].overdue, false);
+});

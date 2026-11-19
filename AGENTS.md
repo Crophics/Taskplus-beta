@@ -94,7 +94,9 @@ for the one-time Cloudflare setup. What matters when touching code:
   and `plan-logic.js` both use it and must keep agreeing (the cross-check test covers it); without TPDue loaded
   they fall back to the old date-only behaviour, which is also what no-time items get. `dailyTarget` caches
   `dueTime`. Labels show it via `TPDue.label(item, relativeDueLabel)`; use that, not `relativeDueLabel(it.due)`.
-  Not done: time-aware overdue (something due 9 AM today still counts as due today after 9 AM).
+  Overdue is time-aware too (2026-11-18): `TPDue.isOverdue(item, todayStr)` is true for a past day, or on the due day once
+  `dueTime` has passed (an item with no time stays due today all day). Today's flags, All's Overdue group and row status,
+  the item screen's chip, `canIgnore` and `applyIgnored` use it; Week and the planner still treat due-today work as today's.
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
   today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
   slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can
