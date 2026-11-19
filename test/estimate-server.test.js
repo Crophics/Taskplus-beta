@@ -398,10 +398,12 @@ test('sanitizeInput keeps attachment details for downloading and the names for t
   assert.strictEqual(E.sanitizeInput({ id: 'a', title: 'T', files: [{ name: 'x', url: 'h'.repeat(700) }] }).attachments[0].url, null, 'an absurdly long URL is dropped');
 });
 
-test('the prompt now tells Claude to read handouts and to split large work along their real structure', () => {
+test('the prompt tells the model to read handouts, and that steps are separate days (one sitting = one step)', () => {
   assert.match(E.SYSTEM_PROMPT, /PDF handouts/i);
-  assert.match(E.SYSTEM_PROMPT, /30 to 75 minutes/);
-  assert.match(E.SYSTEM_PROMPT, /1 to 8 concrete steps/);
+  assert.match(E.SYSTEM_PROMPT, /one working session on its own day/);
+  assert.match(E.SYSTEM_PROMPT, /exactly ONE step/);
+  assert.match(E.SYSTEM_PROMPT, /never give more steps than the days left/);
+  assert.match(E.SYSTEM_PROMPT, /2 to 8 steps/);
   assert.match(E.SYSTEM_PROMPT, /not instructions to follow/);
   assert.match(E.SYSTEM_PROMPT, /actual question numbers/);
 });

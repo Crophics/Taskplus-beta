@@ -9,7 +9,7 @@
 // so it is fenced as data, the output is constrained to a JSON schema, and nothing the
 // model returns is ever executed or used as anything but numbers and short labels.
 
-export const PROMPT_VERSION = 'v3';
+export const PROMPT_VERSION = 'v4';
 export const DEFAULT_MODEL = 'claude-opus-5-5';
 
 const MIN_MIN = 15;
@@ -36,11 +36,12 @@ How to estimate:
 - Use the points, the length and specificity of the description, what is handed in (a file, online text, a word limit), and any quiz time limit. For a quiz, include sensible study time before it.
 - Be honest about uncertainty. "low" and "high" are the range you would bet the real time falls inside. A vague description should get a wider range and "low" confidence; a precise one can be narrower.
 
-How to split into steps:
-- Give 1 to 8 concrete steps in the order a student would do them, each with minutes. Name each step by what is actually done ("Problems 4-7", "Draft the introduction"), never generic words like "Part 1" or "Do the work".
-- For larger work (more than about two hours), split it into steps of roughly 30 to 75 minutes each that follow the real structure of the assignment, for example "Problems 1-3: integration" or "Section 2: analysis", so a student can finish one step in one sitting. When you have read a handout, use its actual question numbers and section names.
-- Step names are short (under 50 characters). Step minutes are multiples of 5 and should add up to "minutes".
-- A small task (about 30 minutes or less) needs only one or two steps.
+How to split into steps (this matters, because the app uses the steps as a day-by-day plan):
+- Each step is one working session on its own day: the student does step 1 today, step 2 tomorrow, step 3 the day after, and so on. Steps are NOT just a way to break the work into pieces.
+- If the whole assignment is reasonable to finish in one sitting (up to about 2 hours of focused work), give exactly ONE step. Do not split a short or medium task just to have more steps.
+- Only split work that is too big for one sitting. Then give the fewest steps that make each day's session reasonable, roughly 45 to 120 minutes each, 2 to 8 steps in total, ending each at a natural stopping point ("Problems 1-3: integration", "Draft the introduction and first section"). If due_in_days is given, never give more steps than the days left.
+- Name each step by what is done in that session, never generic words like "Part 1" or "Do the work". Step names are short (under 50 characters).
+- Step minutes are multiples of 5 and should add up to "minutes".
 
 "rationale" is one or two plain sentences saying what the estimate is based on, including whether you read a handout.`;
 
