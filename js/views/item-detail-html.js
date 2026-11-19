@@ -113,8 +113,7 @@
       </button>`;
     }
     return `<div class="tp-section-heading"><span>Plan</span><span class="tp-section-rule"></span><span class="tp-section-count">${item.total} ${P().stepsUsable(item) ? 'steps' : 'parts'}</span>${editBtn}</div>
-      <div class="tp-i-parts">${rows}</div>
-      <div class="tp-i-hint">Tap the next one when you finish it. Tap the last finished one to undo it. Taskplus spreads them over the days before it is due.</div>`;
+      <div class="tp-i-parts">${rows}</div>`;
   }
 
   function descriptionHtml(ctx) {
