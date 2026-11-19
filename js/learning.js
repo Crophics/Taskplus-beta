@@ -43,7 +43,8 @@
     return (it.course || '').trim().toLowerCase() + '|' + ((it.source && it.source.kind) || 'assign') + '|' + s;
   }
 
-  const isImported = (it) => !!(it && it.source && it.source.type === 'moodle');
+  // Moodle work and work added by hand with the new Add sheet both learn from what you took.
+  const isImported = (it) => !!(it && it.source && (it.source.type === 'moodle' || it.source.type === 'manual'));
 
   /** The estimate before any adjustment from your own times. */
   function rawEstimate(it) {

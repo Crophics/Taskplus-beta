@@ -288,7 +288,7 @@
       editIndex = idx;
       draft = {
         title: it.title, courseId: course ? course.id : null, due: it.due, dueTime: it.dueTime || '',
-        description: it.description || '', notes: it.notes || '', subtasksText: (it.subtasks || []).map(s => s.text).join('\n'),
+        description: (it.source && it.source.description) || it.description || '', notes: it.notes || '', subtasksText: (it.subtasks || []).map(s => s.text).join('\n'),
         minutes: it.estimate && it.estimate.basis === 'user' ? it.estimate.minutes : '',
         imported: window.TPMoodle.isImported(it), // imported work edits its estimate on its own detail screen
       };
@@ -854,7 +854,7 @@
   /* ---- Edit the plan: parts, their names and their minutes (TPEstimate.planRows/checkPlan/withPlan) ---- */
   let planDraft = null; // {rows: [{name, minutes}], locked: finished parts that cannot change, error}
   function canEditPlan(it){
-    return !!it && window.TPMoodle.isImported(it) && !it.completed && !!it.estimate && !!it.due && !(it.source && it.source.kind === 'quiz');
+    return !!it && window.TPEstimate.isEstimable(it) && !it.completed && !!it.estimate && !!it.due && !(it.source && it.source.kind === 'quiz');
   }
   function openPlanEditor(){
     const it = items[itemIndexById(itemDetailId)];
@@ -1381,7 +1381,7 @@
     }
     if(menuFor!=null && items[menuFor]){
       const it = items[menuFor];
-      html += V.quickMenuHtml({ it, i: menuFor, escapeHtml, relativeDueLabel, unit: it.unit || 'units', menuJustOpened, canIgnore: canIgnore(it), color: courseColorFor(it.course), imported: window.TPMoodle.isImported(it), canOpen: !!(it.source && it.source.type === 'moodle' && it.estimate) });
+      html += V.quickMenuHtml({ it, i: menuFor, escapeHtml, relativeDueLabel, unit: it.unit || 'units', menuJustOpened, canIgnore: canIgnore(it), color: courseColorFor(it.course), imported: window.TPMoodle.isImported(it), canOpen: !!(window.TPEstimate.isEstimable(it) && it.estimate) });
     }
 
     if(timeFor!=null){
@@ -1486,7 +1486,7 @@
       get connectDraft(){ return connectDraft; },
       get connectBusy(){ return connectBusy; },
       openChanges, closeChanges, savePrefsToServer, sendTestAlert, get alerts(){ return alerts; },
-      setIgnored, canIgnore, recordCourseDeleted, openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate, askClaude, setLlmOn, setFilesOn,
+      setIgnored, canIgnore, recordCourseDeleted, openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate, askClaude, setLlmOn, setFilesOn, requestModelEstimates,
       get llmOn(){ return llmOn; }, get filesOn(){ return filesOn; },
       get itemDetailId(){ return itemDetailId; },
       get planDraft(){ return planDraft; }, openPlanEditor, closePlanEditor, savePlan,

@@ -121,7 +121,7 @@
         if (Number.isNaN(idx)) return;
         const it = api.items[idx];
         // Imported work opens its plan-first detail screen; manual items keep the quick-action menu.
-        if (it && it.source && it.source.type === 'moodle' && it.estimate) api.openItem(it.id);
+        if (it && window.TPEstimate.isEstimable(it) && it.estimate) api.openItem(it.id);
         else { api.menuFor = idx; api.render(); }
       };
     });
@@ -592,7 +592,6 @@
         it.title = title; it.course = courseName; it.due = due;
         if (!api.draft.imported) it.dueTime = dueTime; // imported work gets its due time from Moodle
         it.notes = notes;
-        if (!api.draft.imported) it.description = description; // imported work gets its description from Moodle
         it.subtasks = subtasks.map(st => {
           const prev = (it.subtasks || []).find(p => p.text === st.text);
           return prev ? { ...st, done: prev.done } : st;
@@ -602,9 +601,25 @@
         if (oldTitle !== title) {
           api.items.forEach(x => { if (x.dependsOn === oldTitle) x.dependsOn = title; });
         }
-        if (!api.draft.imported) {
-          // A time estimate typed here is the user's own; clearing the field removes it.
-          if (minutes > 0) it.estimate = window.TPEstimate.userEstimate(minutes);
+        const E = window.TPEstimate;
+        if (E.isEstimable(it)) {
+          // New-style work: the description feeds the estimate. Your own minutes win; a blank field goes back to the
+          // automatic estimate; changed text (description, title) gets a fresh automatic one (and the AI may be asked again).
+          it.source = { ...it.source, description };
+          delete it.modelTry;
+          const cur = it.estimate;
+          let est = null;
+          if (minutes > 0) {
+            const mine = E.userEstimate(minutes, cur && cur.steps);
+            if (!(cur && cur.basis === 'user' && cur.minutes === mine.minutes)) est = mine;
+          } else if (!cur || cur.basis === 'user' || cur.key !== E.inputsKey(it)) {
+            est = E.estimateForItem(it);
+          }
+          if (est) Object.assign(it, E.withEstimate(it, est));
+        } else {
+          // Older items (made with an amount and a unit) keep their own estimate handling.
+          it.description = description;
+          if (minutes > 0) it.estimate = E.userEstimate(minutes);
           else if (it.estimate && it.estimate.basis === 'user') delete it.estimate;
         }
         api.touchItem(it);
@@ -617,7 +632,12 @@
           subtasks, completedAt: null, createdAt: api.today(), archived: false,
           order: maxOrder + 1, updatedAt: Date.now(),
         };
-        if (minutes > 0) created.estimate = window.TPEstimate.userEstimate(minutes);
+        // New-style work (like a Moodle import): the description goes on `source`, and it gets an estimate and parts.
+        delete created.description;
+        created.source = { type: 'manual', kind: 'assign', description };
+        const E = window.TPEstimate;
+        const made = E.withEstimate(created, minutes > 0 ? E.userEstimate(minutes) : E.estimateForItem(created));
+        Object.assign(created, made);
         api.items.push(created);
         if (api.isDevModeTrigger(title, minutes)) api.activateDevMode();
         api.tab = 'today';
@@ -625,6 +645,7 @@
       }
       api.closeAddSheet();
       api.save();
+      if (api.requestModelEstimates) api.requestModelEstimates().catch(() => {}); // the AI, if switched on, refines the rule of thumb (a no-op when off)
     };
 
     // Restore focus to whatever the user was interacting with before this render.

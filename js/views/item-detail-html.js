@@ -45,7 +45,7 @@
       ? ''
       : est.basis === 'model'
         ? `<div class="tp-i-est-why">${escapeHtml((est.factors || [])[0] || 'The AI read the assignment description.')} Change it if you know better.</div>${readLineHtml(est, escapeHtml)}`
-        : `<div class="tp-i-est-why">Based on: ${escapeHtml((est.factors || []).join(', ') || 'the details from Moodle')}. ${est.basis === 'heuristic' ? 'It is a rule of thumb, so change it if you know better.' : 'Study time is a guess; change it if you know better.'}</div>`;
+        : `<div class="tp-i-est-why">Based on: ${escapeHtml((est.factors || []).join(', ') || (item.source && item.source.type === 'manual' ? 'your title and description' : 'the details from Moodle'))}. ${est.basis === 'heuristic' ? 'It is a rule of thumb, so change it if you know better.' : 'Study time is a guess; change it if you know better.'}</div>`;
     const learned = est.learned && est.basis !== 'user'
       ? `<div class="tp-i-est-why">Adjusted using ${est.learned.n} similar finished ${escapeHtml(est.learned.label || 'assignments')} (you took about ${Math.round(est.learned.factor * 100)}% of the estimate).</div>` : '';
     const ask = ctx.llm && ctx.llm.available
@@ -139,7 +139,7 @@
     if (src.wordLimit) facts.push(`${src.wordLimit}-word limit`);
     if (!text && !files && !facts.length) return '';
     const long = text.length > 220 || text.split('\n').length > 4;
-    return `<div class="tp-section-heading"><span>From Moodle</span><span class="tp-section-rule"></span></div>
+    return `<div class="tp-section-heading"><span>${src.type === 'manual' ? 'Description' : 'From Moodle'}</span><span class="tp-section-rule"></span></div>
       <section class="tp-i-card">
         ${facts.length ? `<div class="tp-i-facts">${facts.map((f) => `<span>${escapeHtml(f)}</span>`).join('')}</div>` : ''}
         ${text ? `<div class="tp-i-desc${descOpen ? '' : ' tp-i-desc-clamp'}">${escapeHtml(text)}</div>` : ''}
@@ -160,7 +160,7 @@
       item.ignored ? '<span class="tp-i-chip">Ignored</span>' : '',
       item.completed ? '<span class="tp-i-chip tp-i-chip-ok">Done</span>' : '',
       src.kind === 'quiz' ? `<span class="tp-i-chip">Quiz${src.timeLimitMin ? ' · ' + src.timeLimitMin + ' min' : ''}</span>` : '',
-      '<span class="tp-i-chip">From Moodle</span>',
+      src.type === 'manual' ? '' : '<span class="tp-i-chip">From Moodle</span>',
     ].join('');
     const parts = item.total > 1;
     const primary = item.completed

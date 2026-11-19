@@ -198,6 +198,12 @@
     return a.minutes === b.minutes && a.low === b.low && a.high === b.high && a.basis === b.basis && a.key === b.key;
   }
 
+  /** Work that gets estimates and parts: imported from Moodle, or added by hand with the new Add sheet (source.type 'manual'). */
+  function isEstimable(item) {
+    const t = item && item.source && item.source.type;
+    return t === 'moodle' || t === 'manual';
+  }
+
   /**
    * Returns a NEW item carrying `est`. An imported item that has no progress yet is
    * re-split into parts for the new estimate; one with progress keeps its parts
@@ -205,7 +211,7 @@
    */
   function withEstimate(item, est) {
     const next = { ...item, estimate: est };
-    const imported = item.source && item.source.type === 'moodle';
+    const imported = isEstimable(item);
     const untouched = !(item.done > 0) && !(item.today > 0) && !item.completed;
     // No due date means no days to spread parts over, so undated work stays one piece.
     if (imported && untouched && item.due) {
@@ -261,5 +267,5 @@
     return next;
   }
 
-  global.TPEstimate = { capSteps, maxParts, planRows, checkPlan, withPlan, PART_MIN, MAX_PARTS, MIN_MIN, MAX_MIN, countWords, estimateRecord, estimateForItem, inputsKey, scaleSteps, userEstimate, fromModel, stepsUsable, stepName, partsFor, sameEstimate, withEstimate };
+  global.TPEstimate = { isEstimable, capSteps, maxParts, planRows, checkPlan, withPlan, PART_MIN, MAX_PARTS, MIN_MIN, MAX_MIN, countWords, estimateRecord, estimateForItem, inputsKey, scaleSteps, userEstimate, fromModel, stepsUsable, stepName, partsFor, sameEstimate, withEstimate };
 })(typeof window !== 'undefined' ? window : globalThis);

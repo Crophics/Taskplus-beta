@@ -206,7 +206,7 @@
   }
 
   function needsModel(item, today, force, filesOn) {
-    if (!isImported(item) || item.completed || item.archived || item.ignored || !item.estimate || !global.TPEstimate) return false;
+    if (!global.TPEstimate || !global.TPEstimate.isEstimable(item) || item.completed || item.archived || item.ignored || !item.estimate) return false;
     if (force) return true;
     if (item.estimate.basis !== 'heuristic' && !wantsHandoutUpgrade(item, filesOn)) return false;
     const tried = item.modelTry;

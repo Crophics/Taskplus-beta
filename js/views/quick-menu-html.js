@@ -19,7 +19,7 @@
     if (it.due && !ctx.imported) rows.push(row('tp-qm-push', 'Push out a day')); // Moodle owns the due date
     if (ctx.canIgnore) rows.push(row('tp-qm-ignore', 'Ignore (stop showing as overdue)'));
     else if (it.ignored) rows.push(row('tp-qm-unignore', 'Stop ignoring'));
-    if (!ctx.canOpen) rows.push(row('tp-qm-edit', 'Edit assignment'));
+    if (!ctx.canOpen || !ctx.imported) rows.push(row('tp-qm-edit', 'Edit assignment')); // your own work is always editable
 
     const meta = [window.TPDue.label(it, relativeDueLabel), it.ignored ? 'Ignored' : ''].filter(Boolean).map(escapeHtml).join(' · ');
     return `<div class="tp-backdrop" id="tp-qmenu-backdrop">
