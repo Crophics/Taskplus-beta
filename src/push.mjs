@@ -11,7 +11,8 @@ import { syncCourses, MoodleError } from './moodle-client.mjs';
 
 export const MAX_TOKENS = 5;
 export const MAX_EVENTS = 50;
-export const CRON_SYNC_EVERY_MS = 3 * 3600 * 1000;
+// Hourly, with a little slack: the cron fires every 30 minutes, and a tick a few seconds early would otherwise skip a whole extra half hour.
+export const CRON_SYNC_EVERY_MS = 55 * 60 * 1000;
 export const DEFAULT_PREFS = { new: true, moved: true, due: true, quiet: { on: false, start: 22, end: 8 } };
 
 const key = (kind, uid) => `${kind}:${uid}`;

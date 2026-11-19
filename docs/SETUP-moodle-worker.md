@@ -101,7 +101,7 @@ The Worker now imports the Anthropic SDK, so the GitHub workflow runs `npm ci` b
 ## 3c. Alerts when the app is closed (optional)
 
 Without this the app still shows **What's new** (the bell on Today) after every sync. With it, the Worker
-syncs Moodle in the background every 3 hours (a cron runs every 30 minutes) and sends a push for new
+syncs Moodle in the background about every hour (a cron runs every 30 minutes) and sends a push for new
 assignments, moved due dates, and "due tomorrow" / "due within the hour".
 
 1. Firebase console > Project settings > Service accounts. Create a **dedicated** service account (Google Cloud

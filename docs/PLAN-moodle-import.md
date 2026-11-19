@@ -563,7 +563,7 @@ Each phase ships on its own and leaves the app working.
   date (over an hour), grade posted, feedback posted. First sync is a baseline and announces nothing.
 - **Feed**: events are stored per user and shown under the bell on Today ("What's new"), whether or not push is set up.
 - **Push** (`src/fcm.mjs`, `src/push.mjs`): FCM HTTP v1 from the Worker using a service-account secret
-  (`FCM_SERVICE_ACCOUNT`). A cron every 30 minutes syncs users about every 3 hours within a subrequest budget and
+  (`FCM_SERVICE_ACCOUNT`). A cron every 30 minutes syncs users about every hour (changed from 3 hours on 2026-11-18) within a subrequest budget and
   sends events plus due-soon reminders (about 24 h and 1 h before). Quiet hours hold and batch.
 - **Settings**: Moodle alerts group (per-kind switches, quiet hours, test button), shown once Moodle is connected.
 - **Not built**: a minutes-based "today's plan" digest (the Worker would need the client's plan; production's

@@ -198,3 +198,7 @@ test('a successful test names the devices it went to, without exposing the user 
   assert.ok(!JSON.stringify(r.targets).includes('Mozilla'));
   assert.strictEqual(P.deviceLabel(''), 'a device');
 });
+
+test('the background sync is due about hourly, not every three hours', () => {
+  assert.ok(P.CRON_SYNC_EVERY_MS >= 50 * 60 * 1000 && P.CRON_SYNC_EVERY_MS <= 60 * 60 * 1000);
+});
