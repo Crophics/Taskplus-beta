@@ -82,6 +82,7 @@ Optional Worker variables (set in `wrangler.toml` under `[vars]` or in the dashb
 | `ESTIMATE_DAILY_LIMIT` / `ESTIMATE_GLOBAL_DAILY_LIMIT` | Change the 60 / 300 daily caps. |
 | `ESTIMATE_READ_FILES` | `off` turns off reading PDF handouts for everyone (the per-user Settings switch still exists). |
 | `ESTIMATE_FILE_DAILY_LIMIT` | Handout-reading requests per user per day (default 20). Reading a PDF costs far more than reading text. |
+| `INVITE_CODES` | Optional, a secret (`npx wrangler secret put INVITE_CODES`): comma-separated invite codes. When set, connecting Moodle needs one (the app asks for it when needed; use long random codes, 16+ characters, and give each friend their own so one can be removed). People already connected are not affected. Leave unset to keep connecting open. |
 | `ALLOWED_UIDS` | Comma-separated Firebase user ids allowed to use Claude estimates. Leave unset to allow every connected user. |
 
 Only the assignment's title, points, description, file names and submission type go to Anthropic. Never

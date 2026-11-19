@@ -399,7 +399,7 @@
     const connectCancel = document.getElementById('tp-connect-cancel');
     if (connectCancel) connectCancel.onclick = () => { api.closeConnectSheet(); api.render(); };
     // Model-only fields (same rule as the Add sheet): typing never re-renders.
-    [['tp-connect-site', 'site'], ['tp-connect-user', 'username'], ['tp-connect-pass', 'password']].forEach(([id, key]) => {
+    [['tp-connect-site', 'site'], ['tp-connect-user', 'username'], ['tp-connect-pass', 'password'], ['tp-connect-invite', 'invite']].forEach(([id, key]) => {
       const el = document.getElementById(id);
       if (!el) return;
       el.oninput = (e) => { api.connectDraft[key] = e.target.value; };

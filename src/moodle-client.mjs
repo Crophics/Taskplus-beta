@@ -30,10 +30,13 @@ export function normalizeSite(input) {
   if (u.protocol !== 'https:') throw new MoodleError('bad_site', 'Moodle must be reached over https');
   if (u.username || u.password) throw new MoodleError('bad_site', 'Do not put a username or password in the address');
   if (u.port && u.port !== '443') throw new MoodleError('bad_site', 'Custom ports are not supported');
-  const host = u.hostname.toLowerCase();
+  // A trailing dot ("localhost.", "x.internal.") names the same host but slipped past the checks below.
+  const host = u.hostname.toLowerCase().replace(/\.+$/, '');
   const isIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':') || host.startsWith('[');
-  const internal = host === 'localhost' || /\.(local|localhost|internal|lan|home|corp)$/.test(host);
-  if (isIp || internal || !host.includes('.')) throw new MoodleError('bad_site', 'Use your school\'s Moodle web address');
+  const internal = host === 'localhost' || /\.(local|localhost|localdomain|internal|intranet|lan|home|corp|private|test|example|invalid|arpa|onion)$/.test(host);
+  // a real public name ends in a letters-only top-level domain (or punycode), never a number
+  const realTld = /\.(xn--[a-z0-9-]{1,59}|[a-z]{2,63})$/.test(host) && !host.includes('..');
+  if (isIp || internal || !realTld || !host.includes('.')) throw new MoodleError('bad_site', 'Use your school\'s Moodle web address');
   const path = u.pathname.replace(/\/+$/, '');
   return 'https://' + host + path;
 }
@@ -55,9 +58,15 @@ async function postForm(url, body, fetchFn) {
       headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
       body: body.toString(),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      redirect: 'manual', // a redirect would re-send the password (or the token) wherever it points
     });
   } catch (e) {
     throw new MoodleError('moodle_unreachable', 'Could not reach Moodle', 502);
+  }
+  if (res.status >= 300 && res.status < 400) {
+    let to = '';
+    try { to = new URL(normalizeSite(new URL(res.headers.get('location'), url).origin)).host; } catch (e) { /* no usable hint */ }
+    throw new MoodleError('bad_site', to ? 'That address redirects to ' + to + '. Use that address instead.' : 'That address redirects somewhere else. Use the address your school\'s Moodle uses.');
   }
   let json;
   try { json = await res.json(); } catch (e) {

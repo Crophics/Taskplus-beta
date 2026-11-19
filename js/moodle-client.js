@@ -605,7 +605,7 @@
 
   const api = {
     status: () => call('/api/moodle/status', 'GET'),
-    connect: (site, username, password) => call('/api/moodle/connect', 'POST', { site, username, password }),
+    connect: (site, username, password, invite) => call('/api/moodle/connect', 'POST', { site, username, password, invite: invite || '' }),
     saveCourses: (selected) => call('/api/moodle/courses', 'POST', { selected }),
     sync: () => call('/api/moodle/sync', 'POST', {}),
     estimate: (items, fresh, readFiles) => call('/api/estimate', 'POST', { items, fresh: !!fresh, readFiles: !!readFiles }, 90000),

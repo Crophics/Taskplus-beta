@@ -123,7 +123,7 @@ test('normalizeSite accepts bare hosts and full urls', () => {
 
 test('normalizeSite rejects unsafe or malformed addresses', () => {
   const bad = ['', 'http://school.edu', 'https://localhost', 'https://127.0.0.1', 'https://[::1]/', 'https://10.0.0.5',
-    'https://intranet', 'https://x.internal', 'https://u:p@school.edu', 'https://school.edu:8443', 'ftp://school.edu', 'not a url', 'a'.repeat(300)];
+    'https://intranet', 'https://x.internal', 'https://localhost.', 'https://x.internal.', 'https://printer.lan', 'https://a.test', 'https://host.example', 'https://x.intranet', 'https://school.123', 'https://0x7f.1', 'https://127.1', 'https://2130706433', 'https://a..edu', 'https://u:p@school.edu', 'https://school.edu:8443', 'ftp://school.edu', 'not a url', 'a'.repeat(300)];
   bad.forEach((b) => assert.throws(() => C.normalizeSite(b), (e) => e.code === 'bad_site', 'should reject: ' + b));
 });
 
@@ -441,4 +441,41 @@ test('delete my data needs a signed-in user and works with nothing stored', asyn
   const empty = await api('/api/account/delete', { env, fetchFn: makeFetch(), body: {} });
   assert.strictEqual(empty.res.status, 200);
   assert.deepStrictEqual(empty.json, { ok: true, more: false });
+});
+
+/* ---------- redirects and the invite gate ---------- */
+
+test('a Moodle address that redirects is refused (the password is never re-sent), with a hint to the real address', async () => {
+  const redirecting = async () => new Response('', { status: 307, headers: { location: 'https://lms.realschool.edu/login/token.php' } });
+  await assert.rejects(() => C.requestToken('https://moodle.school.edu', 'u', 'pw', redirecting), (e) => e.code === 'bad_site' && /lms\.realschool\.edu/.test(e.message));
+  const toInternal = async () => new Response('', { status: 302, headers: { location: 'https://127.0.0.1/x' } });
+  await assert.rejects(() => C.requestToken('https://moodle.school.edu', 'u', 'pw', toInternal), (e) => e.code === 'bad_site' && !/127/.test(e.message));
+  const seen = [];
+  const spy = async (url, init) => { seen.push(init.redirect); return new Response(JSON.stringify({ token: 't' })); };
+  assert.strictEqual(await C.requestToken('https://moodle.school.edu', 'u', 'pw', spy), 't');
+  assert.deepStrictEqual(seen, ['manual']);
+});
+
+test('with INVITE_CODES set, connecting needs a valid code, checked before Moodle is contacted; unset stays open', async () => {
+  const connect = (env, invite, f) => api('/api/moodle/connect', { env, fetchFn: f, body: { site: 'moodle.example.edu/moodle', username: 'student', password: 'pw-secret', ...(invite === undefined ? {} : { invite }) } });
+  const env = newEnv();
+  env.INVITE_CODES = ' friend-code-0123456789 , other-code-abcdefghij ';
+  const f = makeFetch();
+  const calls = [];
+  const spy = async (...a) => { calls.push(a[0]); return f(...a); };
+  let r = await connect(env, undefined, spy);
+  assert.strictEqual(r.res.status, 403); assert.strictEqual(r.json.error, 'invite_required');
+  r = await connect(env, 'wrong-code', spy);
+  assert.strictEqual(r.res.status, 403); assert.strictEqual(r.json.error, 'invite_invalid');
+  r = await connect(env, 'friend-code-0123456', spy);
+  assert.strictEqual(r.json.error, 'invite_invalid', 'a prefix of a code is not the code');
+  const moodleCallsBefore = calls.filter((u) => String(u).includes('moodle.example.edu')).length;
+  assert.strictEqual(moodleCallsBefore, 0, 'Moodle is never contacted without a valid code');
+  r = await connect(env, 'other-code-abcdefghij', spy);
+  assert.strictEqual(r.res.status, 200);
+  // a connected user is unaffected by the gate for everything else
+  assert.strictEqual((await api('/api/moodle/status', { method: 'GET', env, fetchFn: f })).json.connected, true);
+  // unset = open
+  const open = newEnv();
+  assert.strictEqual((await connect(open, undefined, makeFetch())).res.status, 200);
 });

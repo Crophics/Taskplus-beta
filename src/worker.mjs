@@ -78,6 +78,14 @@ function statusView(rec) {
   };
 }
 
+/** Compares two strings without stopping at the first difference. */
+function sameText(a, b) {
+  let diff = a.length ^ b.length;
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+
 export async function handleApi(request, env, deps = {}) {
   const fetchFn = deps.fetchFn || fetch;
   const now = deps.now ? deps.now() : Date.now();
@@ -157,6 +165,15 @@ export async function handleApi(request, env, deps = {}) {
     const body = await readJson(request);
 
     if (route === '/api/moodle/connect') {
+      // Optional invite gate: with INVITE_CODES set (comma-separated), connecting needs one of them. Checked before the
+      // password is looked at or Moodle is contacted. Unset = open, as before.
+      const codes = String(env.INVITE_CODES || '').split(',').map((s) => s.trim()).filter(Boolean);
+      if (codes.length) {
+        const given = typeof body.invite === 'string' ? body.invite.trim() : '';
+        let ok = false;
+        for (const c of codes) if (sameText(given, c)) ok = true; // no early exit: every code is compared
+        if (!ok) return fail(given ? 'invite_invalid' : 'invite_required', given ? 'That invite code is not valid.' : 'Enter your invite code to connect.', 403);
+      }
       const username = typeof body.username === 'string' ? body.username.trim() : '';
       const password = typeof body.password === 'string' ? body.password : '';
       if (!username || !password || username.length > 256 || password.length > 256) {

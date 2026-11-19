@@ -900,7 +900,8 @@
   let connectJustOpened = false;
   // The draft lives in memory only. The password is never written to storage
   // and is cleared as soon as the attempt finishes, successful or not.
-  let connectDraft = { site: '', username: '', password: '' };
+  let connectDraft = { site: '', username: '', password: '', invite: '' };
+  let connectNeedsInvite = false; // set when the server asks for an invite code; then the sheet shows the field
 
   function moodleSignedIn(){ return !!(window.tpSync && window.tpSync.getUser && window.tpSync.getUser()); }
   function appendMoodleEvents(events){
@@ -916,7 +917,7 @@
     return addOpen || connectOpen || !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
   }
   function openConnectSheet(){
-    connectDraft = { site: localStorage.getItem(MOODLE_SITE_KEY) || '', username: '', password: '' };
+    connectDraft = { site: localStorage.getItem(MOODLE_SITE_KEY) || '', username: '', password: '', invite: localStorage.getItem('tp-invite') || '' };
     connectError = '';
     connectBusy = false;
     connectOpen = true;
@@ -928,7 +929,7 @@
     connectBusy = false;
     connectError = '';
     connectJustOpened = false;
-    connectDraft = { site: '', username: '', password: '' };
+    connectDraft = { site: '', username: '', password: '', invite: '' };
   }
   async function moodleConnect(){
     if(connectBusy) return;
@@ -942,8 +943,9 @@
     connectError = '';
     render();
     try{
-      const status = await window.TPMoodle.api.connect(d.site, d.username.trim(), d.password);
+      const status = await window.TPMoodle.api.connect(d.site, d.username.trim(), d.password, d.invite);
       localStorage.setItem(MOODLE_SITE_KEY, d.site.trim());
+      if(d.invite) localStorage.setItem('tp-invite', d.invite.trim());
       moodleState = status;
       saveMoodleState();
       closeConnectSheet();
@@ -952,8 +954,9 @@
     }catch(e){
       connectBusy = false;
       connectError = (e && e.message) || 'Could not connect. Try again.';
+      if(e && (e.code === 'invite_required' || e.code === 'invite_invalid')) connectNeedsInvite = true;
       d.password = '';
-      pendingFocus = {id:'tp-connect-pass'};
+      pendingFocus = {id: connectNeedsInvite ? 'tp-connect-invite' : 'tp-connect-pass'};
       render();
     }
   }
@@ -1274,7 +1277,7 @@
       html += V.addSheetHtml({ draft, courses, items, pickerOpen, moreOpen, prereqOpen, escapeHtml, today, daysBetween, isEdit: editIndex!==null, sheetJustOpened });
     }
     if(connectOpen){
-      html += V.connectSheetHtml({ draft: connectDraft, error: connectError, busy: connectBusy, escapeHtml, sheetJustOpened: connectJustOpened });
+      html += V.connectSheetHtml({ draft: connectDraft, needsInvite: connectNeedsInvite, error: connectError, busy: connectBusy, escapeHtml, sheetJustOpened: connectJustOpened });
       connectJustOpened = false;
     }
     if(menuFor!=null && items[menuFor]){
