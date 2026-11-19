@@ -633,7 +633,7 @@
         chunk.forEach(it=>{ keys[it.id] = window.TPEstimate.inputsKey(it); });
         let res;
         try{
-          res = await window.TPMoodle.api.estimate(chunk.map(it=> window.TPMoodle.modelInput(it, it.due ? daysBetween(t, it.due) : null, filesOn)), force, filesOn);
+          res = await window.TPMoodle.api.estimate(chunk.map(it=> window.TPMoodle.modelInput(it, it.due ? daysBetween(t, it.due) : null, filesOn, window.TPLearn.pastWork(it, items))), force, filesOn);
         }catch(e){
           if(e && (e.code === 'not_configured' || e.code === 'not_allowed')) llmUnavailable = true;
           errorMessage = (e && e.message) || '';

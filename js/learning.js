@@ -73,6 +73,17 @@
     return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
   }
 
+  /** Finished work with your own times, as {title, minutes, sameCourse}: what the AI is shown (nothing else). */
+  function pastWork(item, items, max) {
+    const course = ((item && item.course) || '').trim().toLowerCase();
+    return (items || [])
+      .filter((o) => o && o !== item && o.id !== (item && item.id) && o.actual && o.actual.minutes > 0 && o.title)
+      .map((o) => ({ title: String(o.title), minutes: Math.round(o.actual.minutes), at: o.actual.at || 0, sameCourse: ((o.course || '').trim().toLowerCase()) === course }))
+      .sort((a, b) => (b.sameCourse - a.sameCourse) || (b.at - a.at))
+      .slice(0, max || 12)
+      .map(({ title, minutes, sameCourse }) => ({ title, minutes, sameCourse }));
+  }
+
   /** {factor, n, label} for an item from finished similar work, or null. */
   function learnedFactor(item, items) {
     const key = keyOf(item);
@@ -100,6 +111,7 @@
       if (!isImported(it) || it.completed || it.archived || !it.estimate) return;
       const est = it.estimate;
       if (est.basis !== 'heuristic' && est.basis !== 'model') return; // your own number and quiz limits stand
+      if (est.basis === 'model' && est.usedHistory) return; // the AI already weighed your finished work
       const raw = rawEstimate(it);
       if (!raw || !(raw.minutes > 0)) return;
       const f = learnedFactor(it, items);
@@ -123,5 +135,5 @@
     return changed;
   }
 
-  global.TPLearn = { MIN_SIMILAR, stem, label, keyOf, rawEstimate, canAsk, recordActual, learnedFactor, applyLearning };
+  global.TPLearn = { MIN_SIMILAR, stem, label, keyOf, rawEstimate, canAsk, recordActual, pastWork, learnedFactor, applyLearning };
 })(typeof window !== 'undefined' ? window : globalThis);

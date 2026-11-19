@@ -121,7 +121,7 @@
     const courseDots = courses.slice(0, 5).map(c => `<span class="tp-s-course-dot" style="background:${c.color}"></span>`).join('');
     const estimates = groupHtml('Time estimates',
       rowHtml('Use AI to estimate', pillToggleHtml('tp-llm-toggle', ctx.llmOn !== false),
-        'Sends an assignment\'s title, points and description to an AI service (Anthropic\'s Claude or Google\'s Gemini, whichever the server uses) so it can estimate the time and suggest steps. Never your notes or login. Google may use content sent on its free tier to improve its products.') +
+        'Sends an assignment\'s title, points and description to an AI service (Anthropic\'s Claude or Google\'s Gemini, whichever the server uses) so it can estimate the time and suggest steps. It also gets the titles and times you entered for your finished assignments, so it can tell which are similar. Never your notes, descriptions of past work or login. Google may use content sent on its free tier to improve its products.') +
       rowHtml('Also read attached PDFs', pillToggleHtml('tp-files-toggle', ctx.filesOn !== false && ctx.llmOn !== false),
         'Sends the PDF handouts attached to an assignment (up to 2, 5 MB each) so the AI can split the real questions into steps. Only files attached to the assignment itself, never your submissions.')
     );

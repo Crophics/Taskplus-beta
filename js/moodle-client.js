@@ -214,18 +214,21 @@
   }
 
   /** What is sent to /api/estimate: the assignment's own details, never grades, notes or identity. */
-  function modelInput(item, dueInDays, withFiles) {
+  function modelInput(item, dueInDays, withFiles, past) {
     const s = item.source || {};
     // Download addresses are only sent when handout reading is on: with it off the server never needs them.
     const files = (s.files || []).slice(0, 6).map((f) => (withFiles
       ? { name: f.name, size: f.size || 0, url: f.url || null, mime: f.mime || null, modified: f.modified || null }
       : { name: f.name, size: f.size || 0 }));
-    return {
+    const input = {
       id: item.id, course: item.course, title: item.title, kind: s.kind === 'quiz' ? 'quiz' : 'assign',
       points: s.points == null ? null : s.points, description: s.description || '', files,
       timeLimitMin: s.timeLimitMin == null ? null : s.timeLimitMin, wordLimit: s.wordLimit == null ? null : s.wordLimit,
       submissionTypes: s.submissionTypes || [], dueInDays,
     };
+    // Finished work and the minutes you said it took (title and time only), so the AI can judge what is similar.
+    if (past && past.length) input.past = past;
+    return input;
   }
 
   /**

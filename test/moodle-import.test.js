@@ -533,3 +533,9 @@ test('actual-time map: newest wins, junk dropped, and a fresh device receives th
   assert.strictEqual(M.applyActuals([it], { 'moodle:7': { m: 25, e: 150, at: 7 } }), false);
   assert.deepStrictEqual(M.setActualEntry({}, 'k', { minutes: 9, est: 30, at: 3 }), { k: { m: 9, e: 30, at: 3 } });
 });
+
+test('modelInput adds past work only when there is some', () => {
+  const it0 = M.mergeImported([], [rec()], ctx()).items[0];
+  assert.ok(!('past' in M.modelInput(it0, 2, false, [])));
+  assert.deepStrictEqual(M.modelInput(it0, 2, false, [{ title: 'J1', minutes: 20, sameCourse: true }]).past, [{ title: 'J1', minutes: 20, sameCourse: true }]);
+});

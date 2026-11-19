@@ -9,7 +9,7 @@
 // so it is fenced as data, the output is constrained to a JSON schema, and nothing the
 // model returns is ever executed or used as anything but numbers and short labels.
 
-export const PROMPT_VERSION = 'v2';
+export const PROMPT_VERSION = 'v3';
 export const DEFAULT_MODEL = 'claude-opus-5-5';
 
 const MIN_MIN = 15;
@@ -25,6 +25,11 @@ The assignment details inside <assignment>, and any PDF handouts attached before
 Handouts:
 - The assignment's attached PDF files are sometimes included as documents before the details. They usually hold the actual questions, tasks or reading, so read them: count the real questions or sections, notice which are long or hard, and base both the time and the steps on them.
 - If the details mention a handout that is not included, rely on the description and say less precisely what it asks.
+
+Past work:
+- Sometimes <past_work> lists assignments this student has already finished, each with only its title and the minutes the student says it really took (same_course: yes when it is from the same course). Titles and times are all you get; there are no descriptions.
+- Judge for yourself whether the new assignment is similar to any of them (a numbered series like "Journal #1" and "Journal #4", or the same kind of task). If it is, let those real times pull your estimate toward them, since this student's own pace beats a general guess. If nothing there is similar, ignore the list; never adjust for a title that only looks alike by chance.
+- Say in "rationale" when you used past work, and which.
 
 How to estimate:
 - Estimate focused working time for an average undergraduate who is reasonably prepared: reading any handout, doing the work, and checking it. Do not count time spent submitting.
@@ -101,6 +106,17 @@ function sanitizeAttachments(list) {
   return out;
 }
 
+/** Finished work with the student's own times: title and minutes only, nothing else leaves the device. */
+function sanitizePast(list) {
+  const out = [];
+  (Array.isArray(list) ? list : []).slice(0, 12).forEach((p) => {
+    const title = clean(p && p.title, 120);
+    const minutes = num(p && p.minutes, 1, 1440);
+    if (title && minutes !== null) out.push({ title, minutes: Math.round(minutes), sameCourse: !!(p && p.sameCourse) });
+  });
+  return out;
+}
+
 /** Validates and normalises one item from the client. Returns null if it cannot be used. */
 export function sanitizeInput(raw) {
   if (!raw || typeof raw !== 'object') return null;
@@ -121,6 +137,7 @@ export function sanitizeInput(raw) {
     wordLimit: num(raw.wordLimit, 1, 100000),
     submissionTypes: (Array.isArray(raw.submissionTypes) ? raw.submissionTypes : []).slice(0, 6).map((t) => clean(t, 20)).filter(Boolean),
     dueInDays: num(raw.dueInDays, -3650, 3650),
+    past: sanitizePast(raw.past),
   };
 }
 
@@ -140,6 +157,9 @@ export function buildUserContent(input, handouts = []) {
   if (input.files.length) lines.push(`attached_files: ${input.files.join(', ')}`);
   if (handouts.length) lines.push(`handouts_included_as_documents: ${handouts.join(', ')}`);
   lines.push('description:', '"""', input.description || '(no description)', '"""', '</assignment>');
+  if (input.past && input.past.length) {
+    lines.push('<past_work>', ...input.past.map((p) => `- ${p.title} | ${p.minutes} min | same_course: ${p.sameCourse ? 'yes' : 'no'}`), '</past_work>');
+  }
   return lines.join('\n');
 }
 
@@ -150,7 +170,7 @@ export function cacheMaterial(input, model, readFiles = false) {
   // if it had read the handout.
   const files = readFiles ? input.attachments.map((a) => [a.name, a.size, a.modified]) : null;
   return JSON.stringify([PROMPT_VERSION, model, input.course, input.title, input.kind, input.points, input.description,
-    input.files, input.timeLimitMin, input.wordLimit, input.submissionTypes, files]);
+    input.files, input.timeLimitMin, input.wordLimit, input.submissionTypes, files, input.past || []]);
 }
 
 export async function sha256Hex(text) {

@@ -653,3 +653,16 @@ test('route: each estimate says which service made it', async () => {
   const c = await call({ items: [item(2)] }, { env: cEnv, client: fakeClient(() => okResponse(good())) });
   assert.strictEqual(c.json.results[0].estimate.provider, 'claude');
 });
+
+test('past work: only title and minutes reach the prompt, capped and cleaned, and it changes the cache key', () => {
+  const past = [{ title: 'Journal #1 <b>', minutes: 20.4, sameCourse: true, notes: 'secret', description: 'secret' }, { title: '', minutes: 5 }, { title: 'x', minutes: 0 }, { title: 'Essay', minutes: 90 }];
+  const a = input({ past });
+  assert.deepStrictEqual(a.past, [{ title: 'Journal #1 b ', minutes: 20, sameCourse: true }, { title: 'Essay', minutes: 90, sameCourse: false }].map((p) => ({ ...p, title: p.title.replace(/\s+/g, ' ').trim() })).map((p, i) => (i === 0 ? { ...p, title: a.past[0].title } : p)));
+  const text = E.buildUserContent(a);
+  assert.match(text, /<past_work>\n- Journal #1 b \| 20 min \| same_course: yes\n- Essay \| 90 min \| same_course: no\n<\/past_work>/);
+  assert.ok(!text.includes('secret'));
+  assert.ok(!E.buildUserContent(input()).includes('past_work'), 'no block when there is no history');
+  assert.strictEqual(input({ past: Array.from({ length: 30 }, (_, i) => ({ title: 't' + i, minutes: 10 })) }).past.length, 12);
+  assert.notStrictEqual(E.cacheMaterial(a, 'm'), E.cacheMaterial(input(), 'm'));
+  assert.match(E.SYSTEM_PROMPT, /past_work/);
+});

@@ -143,6 +143,7 @@
       minutes: result.minutes, low: result.low, high: result.high, basis: 'model',
       // Which service made it, so the screen can say so ('' for estimates saved before this was recorded).
       provider: result.provider === 'claude' || result.provider === 'gemini' ? result.provider : '',
+      usedHistory: Number(result.pastCount) > 0, // the AI was shown your finished work and times
       confidence: result.confidence || 'low', factors: result.rationale ? [result.rationale] : [],
       steps: kind === 'quiz' ? [] : (result.steps || []).map((s) => ({ name: s.name, minutes: s.minutes })), key,
       // Which handouts Claude read (the server's report), which it could not, and whether reading them

@@ -111,3 +111,18 @@ test('recordActual keeps the estimate the item had, never the adjusted one, and 
   assert.strictEqual(L.canAsk(mk('5', 'z')), true);
   assert.strictEqual(L.canAsk({ title: 'no estimate' }), false);
 });
+
+test('pastWork gives title, minutes and same-course only, same course first, never the item itself', () => {
+  const items = [finished('1', 'Journal #1', 20), finished('2', 'Lab 3', 70), { ...finished('3', 'Essay', 90), course: 'PHIL 2202' }, mk('4', 'Journal #4'), mk('5', 'Open', { actual: undefined })];
+  items[1].actual.at = 5; items[0].actual.at = 1; items[2].actual.at = 9;
+  const p = L.pastWork(items[3], items);
+  assert.deepStrictEqual(p, [{ title: 'Lab 3', minutes: 70, sameCourse: true }, { title: 'Journal #1', minutes: 20, sameCourse: true }, { title: 'Essay', minutes: 90, sameCourse: false }]);
+  assert.deepStrictEqual(Object.keys(p[0]).sort(), ['minutes', 'sameCourse', 'title']);
+});
+
+test('an AI estimate that was shown your history is not scaled a second time', () => {
+  const items = [finished('1', 'Journal #1', 20), finished('2', 'Journal #2', 20), mk('4', 'Journal #4', { estimate: est(30, { usedHistory: true }) }), mk('5', 'Journal #5')];
+  L.applyLearning(items);
+  assert.strictEqual(items[2].estimate.minutes, 30);
+  assert.strictEqual(items[3].estimate.minutes, 20, 'an estimate made without history still falls back to the scaling');
+});

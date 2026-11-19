@@ -111,6 +111,14 @@ for the one-time Cloudflare setup. What matters when touching code:
   course + kind + title with numbers removed: "Journal #1..#4" yes, an essay no). The original is kept in `estimate.raw`,
   the reason in `estimate.learned`; it is undone when the data goes away. User estimates and quiz limits are never scaled.
   `applyLearning(items)` is idempotent and runs on load, after Moodle import/AI results and after cloud data.
+- **The AI is shown your finished work (2026-11-18, your request).** `modelInput(..., past)` adds `past` = up to 12
+  `{title, minutes, sameCourse}` from `TPLearn.pastWork` (items with an `actual`; same course first, then newest) and
+  nothing else about them (no descriptions, notes, dates). `src/estimate.mjs` `sanitizePast` re-cleans it, `buildUserContent`
+  adds a fenced `<past_work>` block, the system prompt tells the model to judge similarity itself and say so in the
+  rationale, and `past` is part of `cacheMaterial` (`PROMPT_VERSION` v3). The Worker stamps `pastCount`; `fromModel` stores
+  `estimate.usedHistory`, and `applyLearning` then skips that estimate (no double scaling). The title-match scaling stays as the
+  fallback for heuristic estimates and AI estimates made before any history. Settings wording discloses this. Not verified
+  against a real model (no key on the dev machine at the time): ask one real estimate and read the rationale.
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
   today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
   slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can
