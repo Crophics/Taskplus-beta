@@ -85,7 +85,7 @@
   }
 
   function allScreenHtml(ctx) {
-    const { escapeHtml, searchTerm, sortMode, filterCourse, courses, groups } = ctx;
+    const { escapeHtml, searchTerm, sortMode, filterCourse, courses } = ctx;
 
     const courseOptions = ['<option value="">All courses</option>'].concat(courses.map(c => {
       const sel = filterCourse && filterCourse.toLowerCase() === c.name.toLowerCase() ? ' selected' : '';

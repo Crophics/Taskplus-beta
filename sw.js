@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v76'; // bumped: removed Week advice card and All count
+const CACHE_NAME = 'taskplus-cache-v77'; // bumped: lint cleanup after removing the All count
 const urlsToCache = [
   './',
   './index.html',
