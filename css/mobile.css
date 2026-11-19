@@ -92,7 +92,7 @@ body::-webkit-scrollbar{display:none;}
 .tp-t-pulse{animation:tp-pulse 1.8s ease-in-out infinite;}
 .tp-t-title{font-size:15px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .tp-t-meta{font-size:11.5px;color:var(--text-dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.tp-t-pips{display:flex;gap:2px;margin-top:6px;}
+.tp-t-pips{display:flex;gap:2px;margin-top:5px;}
 .tp-t-pip{width:100%;max-width:14px;height:3px;border-radius:2px;background:var(--line);flex:1;}
 .tp-t-pip-filled{background:var(--accent);transition:background .25s ease;}
 .tp-t-action{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;}
@@ -480,7 +480,7 @@ body::-webkit-scrollbar{display:none;}
 /* Claude estimates */
 #tp-app .tp-i-ask{display:block;width:100%;margin:10px 0 0;padding:0 12px;min-height:44px;border-radius:10px;border:1px solid var(--accent);background:var(--accent-wash);color:var(--accent-bright);font-family:inherit;font-size:14px;cursor:pointer;}
 #tp-app .tp-i-ask:disabled{opacity:.6;cursor:default;}
-.tp-t-step{font-size:13px;color:var(--text-muted);margin:2px 0 0 18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tp-t-step{font-size:13px;color:var(--text-muted);margin:3px 0 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tp-i-read{color:var(--accent-bright);margin-top:6px;}
 
 /* What's new feed and bell (Phase 5) */

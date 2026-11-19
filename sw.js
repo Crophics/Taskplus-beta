@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v72'; // bumped: simpler Today summary, more space under the weekday
+const CACHE_NAME = 'taskplus-cache-v73'; // bumped: Today row alignment
 const urlsToCache = [
   './',
   './index.html',
