@@ -428,15 +428,15 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
         (payload.data && payload.data.body) ||
         (payload.notification && payload.notification.body) ||
         "";
+      // iPhone web apps cannot use `new Notification()` (it throws), only the service worker's showNotification,
+      // so use that first. The same tag as sw.js means a second display replaces the first instead of stacking.
+      const options = { body, icon: (payload.data && payload.data.icon) || "./icons/icon-192.png", badge: "./icons/icon-192.png", tag: (payload.data && payload.data.tag) || "taskplus-digest", data: payload.data || {} };
+      const fallback = () => { try { new Notification(title, options); } catch (e) {} };
       try {
-        // Same tag + icon path as sw.js's showNotification. FCM
-        // "notification"-type payloads (what the Console's test tool
-        // sends) can get shown both by the browser's own default handling
-        // AND by this foreground handler when the tab is open. Matching
-        // tags means a second display replaces the first instead of
-        // stacking as two notifications.
-        new Notification(title, { body, icon: (payload.data && payload.data.icon) || "./icons/icon-192.png", tag: (payload.data && payload.data.tag) || "taskplus-digest" });
-      } catch (e) {}
+        if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+          navigator.serviceWorker.ready.then((r) => r.showNotification(title, options)).catch(fallback);
+        } else fallback();
+      } catch (e) { fallback(); }
       document.dispatchEvent(new CustomEvent("tp-fcm-message", { detail: payload }));
     });
 

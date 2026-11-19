@@ -1045,7 +1045,12 @@
     navigator.serviceWorker.addEventListener('message', e=>{ if(e.data && e.data.type === 'tp-notification-click') moodleSyncFromAlert(); });
   }
   // A push while the app is open: the server just synced (it limits calls to one per 30 s), so wait a moment.
-  document.addEventListener('tp-fcm-message', ()=>{ setTimeout(moodleSyncFromAlert, 35000); });
+  document.addEventListener('tp-fcm-message', (e)=>{
+    // The app is open, so the system may not show a banner: say it here too.
+    const d = e && e.detail && e.detail.data;
+    if(d && d.title) showToast(d.body ? d.title + ': ' + d.body : d.title);
+    setTimeout(moodleSyncFromAlert, 35000);
+  });
   function moodleMaybeAutoSync(){
     if(!moodleSignedIn()) return;
     if(forceSyncOnOpen){ forceSyncOnOpen = false; moodleSync({silent:true}); return; }
