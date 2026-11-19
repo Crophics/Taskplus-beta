@@ -184,6 +184,11 @@ for the one-time Cloudflare setup. What matters when touching code:
   group): **if you rename those, update `STEPS` in `tour.js`**. If the preview does not load in 9 s the same steps show as plain cards. The sample
   due dates are relative to today so Today always has a target, a + button and a Get ahead item (Problem set 5 is due in 2 days on purpose).
   Tested: `test/tour.test.js` and jsdom runs of every step's enter/target; never seen in a real browser.
+- **AI is opt-in (2026-11-19).** `tp-llm-on` and `tp-llm-files` are OFF unless the stored value is exactly `'1'` (`app.js`; Settings shows the
+  switches off, the privacy page says so). With it off nothing about an assignment is sent anywhere: estimates come from the rule of thumb, "Ask
+  again" is unavailable, and `requestModelEstimates` returns before any request. Devices that never touched the switch changed from on to off
+  when this shipped. The setting is per device (not synced) on purpose: it is a privacy choice. Anything new that sends data to a third party must
+  sit behind an opt-in switch like these.
 - **Add to Home Screen (2026-11-18).** `TP.needsHomeScreen()` (iPhone/iPad, not standalone) puts an `install` step FIRST in onboarding
   (the Home Screen app has its own storage, so installing after signing in would lose the progress; "I will do it later" sets
   `tp-install-skip`) and a warning line at the top of Settings -> Notifications. Push does not work from a Safari tab on iPhone.

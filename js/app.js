@@ -601,11 +601,11 @@
     try{ const v = JSON.parse(localStorage.getItem(key)); return v && typeof v === 'object' && !Array.isArray(v) ? v : fallback; }catch(e){ return fallback; }
   }
   /* ---- Claude estimates (src/estimate.mjs via /api/estimate) ---- */
-  // Opt-out switch in Settings. On by default: the assignment's title, points and description go to
-  // Anthropic so Claude can estimate it and name the steps. Device-local.
-  let llmOn = localStorage.getItem(LLM_KEY) !== '0';
-  // Separate switch for sending the assignment's attached PDFs (the handout), on by default.
-  let filesOn = localStorage.getItem(LLM_FILES_KEY) !== '0';
+  // Opt-in switch in Settings (OFF by default). When on, the assignment's title, points and description go to the AI
+  // service so it can estimate the time and name the steps. Device-local.
+  let llmOn = localStorage.getItem(LLM_KEY) === '1';
+  // Separate opt-in switch for sending the assignment's attached PDFs (the handout), also off by default.
+  let filesOn = localStorage.getItem(LLM_FILES_KEY) === '1';
   let modelBusy = false;
   let llmUnavailable = false; // the server said it is not set up / not allowed: stop asking this session
   function setLlmOn(on){
