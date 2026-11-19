@@ -85,8 +85,7 @@
   }
 
   function allScreenHtml(ctx) {
-    const { escapeHtml, searchTerm, sortMode, filterCourse, courses, groups, itemsLength } = ctx;
-    const activeCount = groups.reduce((s, g) => s + g.rows.filter(r => !r.it.completed).length, 0);
+    const { escapeHtml, searchTerm, sortMode, filterCourse, courses, groups } = ctx;
 
     const courseOptions = ['<option value="">All courses</option>'].concat(courses.map(c => {
       const sel = filterCourse && filterCourse.toLowerCase() === c.name.toLowerCase() ? ' selected' : '';
@@ -94,7 +93,7 @@
     })).join('');
 
     const header = `<div class="tp-a-header">
-      ${window.TPViews.screenHeaderHtml('All', ctx.hdr, `${activeCount} of ${itemsLength}`)}
+      ${window.TPViews.screenHeaderHtml('All', ctx.hdr)}
       <div class="tp-a-search-wrap">
         ${window.TPIcons.svg('magnify', { className: 'tp-a-search-icon' })}
         <input id="tp-a-search" placeholder="Search title, course, unit..." value="${escapeHtml(searchTerm)}">

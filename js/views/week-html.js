@@ -1,4 +1,4 @@
-/* views/week-html.js — Week screen: stat tiles, paced-load chart, day detail, by-course, advice */
+/* views/week-html.js — Week screen: stat tiles, paced-load chart, day detail, by-course */
 (function (global) {
   // Minutes view (js/plan-logic.js): bar labels read "50m" / "1.5h", the second tile is time left.
   function fmtLoad(n, minutes) {
@@ -90,12 +90,9 @@
     return `<div class="tp-section-heading"><span>By course</span><span class="tp-section-rule"></span></div>${rows}`;
   }
 
-  function adviceHtml(text) {
-    return `<div class="tp-w-advice">${window.TPIcons.svg('lightbulb_on_outline', { className: 'tp-w-advice-icon' })}<div>${text}</div></div>`;
-  }
 
   function weekScreenHtml(ctx) {
-    const { escapeHtml, days, dayLabels, selDay, stats, heaviestLabel, courseColorFor, courseStats, advice, animateChart, minutes } = ctx;
+    const { escapeHtml, days, dayLabels, selDay, stats, heaviestLabel, courseColorFor, courseStats, animateChart, minutes } = ctx;
     const header = window.TPViews.screenHeaderHtml('Week', ctx.hdr);
     // The bar-grow-in animation (css/mobile.css) is scoped under
     // .tp-w-chart-animate so it only plays on animateChart's one true
@@ -106,7 +103,6 @@
       ${chartHtml(days, dayLabels, selDay, courseColorFor, minutes)}
       ${dayDetailHtml(ctx, selDay)}
       ${byCourseHtml(courseStats, escapeHtml)}
-      ${adviceHtml(advice)}
     </div>`;
   }
 

@@ -1085,15 +1085,11 @@
       const stats = window.TPWeekLogic.statTiles(weekCtx);
       const heaviestLabel = window.TPWeekLogic.heaviestDayLabel(days, dayLabels);
       const courseStats = window.TPWeekLogic.byCourseBreakdown(items, courseColorFor);
-      const overdueCount = items.filter(it=>!it.completed && !it.archived && isPlanned(it) && !isLocked(it) && daysBetween(today(), it.due)<0).length;
-      const advice = overdueCount>0
-        ? `${overdueCount} item${overdueCount===1?'':'s'} overdue — clear those first, they're weighing every day's pace down.`
-        : (heaviestLabel==='none' ? 'Nothing paced this week yet. Add a due date to see the load.' : `${heaviestLabel} carries the most load this week — consider pulling some of it forward.`);
       const animateChart = weekChartFirstRender;
       weekChartFirstRender = false;
       screenHtml = V.weekScreenHtml({
         escapeHtml, days, dayLabels, selDay: weekSelDay, stats, heaviestLabel,
-        courseColorFor, courseStats, advice, relativeDueLabel, animateChart,
+        courseColorFor, courseStats, relativeDueLabel, animateChart,
         items, today, daysBetween, TPWeekLogic: window.TPWeekLogic, minutes: minutesCtx,
         hdr: headerCtx(),
       });
@@ -1161,7 +1157,7 @@
   function allCtx(){
     return {
       escapeHtml: window.TPHtml.escapeHtml, hdr: headerCtx(), searchTerm, sortMode: allSortMode, filterCourse: allFilterCourse,
-      courses, groups: allGroups(), itemsLength: items.filter(i=>!i.archived).length,
+      courses, groups: allGroups(),
       isLocked, daysBetween, today, urgencyClass, relativeDueLabel, fmt, unitLabel, capUnit,
       courseColorFor, contrastTextColor,
     };
