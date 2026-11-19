@@ -148,6 +148,25 @@
     if (filesToggle) filesToggle.onclick = () => api.setFilesOn(!api.filesOn);
     const llmToggle = document.getElementById('tp-llm-toggle');
     if (llmToggle) llmToggle.onclick = () => api.setLlmOn(!api.llmOn);
+    /* ---- Edit the plan ---- */
+    const planEdit = document.getElementById('tp-i-plan-edit');
+    if (planEdit) planEdit.onclick = () => api.openPlanEditor();
+    if (document.getElementById('tp-pe-save')) {
+      const draft = () => api.planDraft;
+      const readRows = () => {
+        root.querySelectorAll('.tp-pe-name').forEach((el) => { draft().rows[Number(el.dataset.r)].name = el.value; });
+        root.querySelectorAll('.tp-pe-min').forEach((el) => { draft().rows[Number(el.dataset.r)].minutes = el.value === '' ? 0 : Number(el.value); });
+      };
+      const showTotal = () => {
+        const t = document.getElementById('tp-pe-total');
+        if (t) t.textContent = window.TPPlan.fmtMinutes(window.TPPlan.roundDisplay(draft().rows.reduce((s, r) => s + (Number(r.minutes) || 0), 0)));
+      };
+      root.querySelectorAll('.tp-pe-name, .tp-pe-min').forEach((el) => el.addEventListener('input', () => { readRows(); showTotal(); }));
+      root.querySelectorAll('.tp-pe-del').forEach((b) => b.onclick = () => { readRows(); draft().rows.splice(Number(b.dataset.r), 1); draft().error = ''; api.render(); });
+      document.getElementById('tp-pe-add').onclick = () => { readRows(); draft().rows.push({ name: '', minutes: 30 }); draft().error = ''; api.render(); };
+      document.getElementById('tp-pe-cancel').onclick = () => api.closePlanEditor();
+      document.getElementById('tp-pe-save').onclick = () => { readRows(); api.savePlan(); };
+    }
     const itemReset = document.getElementById('tp-i-reset');
     if (itemReset) itemReset.onclick = () => api.resetEstimate(api.itemDetailId);
     const itemDescToggle = document.getElementById('tp-i-desc-toggle');

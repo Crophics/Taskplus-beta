@@ -60,9 +60,43 @@
     </section>`;
   }
 
+  /** The plan editor: finished parts are locked; the rest can be renamed, retimed, removed, and parts added. */
+  function planEditorHtml(ctx) {
+    const { escapeHtml } = ctx;
+    const d = ctx.planDraft;
+    const max = global.TPEstimate.MAX_PARTS;
+    const rows = d.rows.map((r, i) => {
+      if (i < d.locked) {
+        return `<div class="tp-pe-row tp-pe-locked"><span class="tp-i-part-circle tp-pe-check">${global.TPIcons.svg('check')}</span><span class="tp-pe-fixed">${escapeHtml(r.name)}</span><span class="tp-i-part-min">${escapeHtml(fmt(r.minutes))}</span></div>`;
+      }
+      const only = d.rows.length - d.locked <= 1;
+      return `<div class="tp-pe-row">
+        <input type="text" class="tp-pe-name" data-r="${i}" maxlength="60" value="${escapeHtml(r.name)}" placeholder="Part ${i + 1}" aria-label="Name of part ${i + 1}">
+        <input type="number" class="tp-pe-min" data-r="${i}" inputmode="numeric" min="5" max="600" step="5" value="${Number(r.minutes) || ''}" aria-label="Minutes for part ${i + 1}">
+        <span class="tp-pe-unit">min</span>
+        <button type="button" class="tp-pe-del" data-r="${i}" aria-label="Remove part ${i + 1}"${only ? ' disabled' : ''}>×</button>
+      </div>`;
+    }).join('');
+    const total = d.rows.reduce((s, r) => s + (Number(r.minutes) || 0), 0);
+    return `<div class="tp-section-heading"><span>Edit plan</span><span class="tp-section-rule"></span><span class="tp-section-count" id="tp-pe-count">${d.rows.length} of ${max} parts</span></div>
+      <div class="tp-pe">${rows}</div>
+      <div class="tp-pe-total">Total <span id="tp-pe-total">${escapeHtml(fmt(total))}</span></div>
+      <div class="tp-pe-error" id="tp-pe-error">${escapeHtml(d.error || '')}</div>
+      <div class="tp-pe-actions">
+        <button type="button" class="tp-i-secondary" id="tp-pe-add"${d.rows.length >= max ? ' disabled' : ''}>Add part</button>
+        <button type="button" class="tp-i-secondary" id="tp-pe-cancel">Cancel</button>
+        <button type="button" class="tp-i-primary" id="tp-pe-save">Save plan</button>
+      </div>`;
+  }
+
   function partsHtml(ctx) {
     const { item, idx, escapeHtml } = ctx;
-    if (!(item.total > 1)) return '';
+    if (ctx.planDraft) return planEditorHtml(ctx);
+    const editBtn = ctx.canEditPlan ? `<button type="button" class="tp-pe-edit" id="tp-i-plan-edit">${item.total > 1 ? 'Edit' : 'Split into parts'}</button>` : '';
+    if (!(item.total > 1)) {
+      return ctx.canEditPlan ? `<div class="tp-section-heading"><span>Plan</span><span class="tp-section-rule"></span>${editBtn}</div>
+        <div class="tp-i-hint">One piece of work. Split it into parts to plan it over several days.</div>` : '';
+    }
     const per = P().minutesPerUnit(item);
     let rows = '';
     for (let i = 0; i < item.total; i++) {
@@ -78,7 +112,7 @@
         <span class="tp-i-part-min">~${minutes === null ? '' : escapeHtml(fmt(minutes))}</span>
       </button>`;
     }
-    return `<div class="tp-section-heading"><span>Plan</span><span class="tp-section-rule"></span><span class="tp-section-count">${item.total} ${P().stepsUsable(item) ? 'steps' : 'parts'}</span></div>
+    return `<div class="tp-section-heading"><span>Plan</span><span class="tp-section-rule"></span><span class="tp-section-count">${item.total} ${P().stepsUsable(item) ? 'steps' : 'parts'}</span>${editBtn}</div>
       <div class="tp-i-parts">${rows}</div>
       <div class="tp-i-hint">Tap the next one when you finish it. Tap the last finished one to undo it. Taskplus spreads them over the days before it is due.</div>`;
   }

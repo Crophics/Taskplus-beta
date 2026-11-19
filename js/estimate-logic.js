@@ -195,5 +195,45 @@
     return next;
   }
 
-  global.TPEstimate = { PART_MIN, MAX_PARTS, MIN_MIN, MAX_MIN, countWords, estimateRecord, estimateForItem, inputsKey, scaleSteps, userEstimate, fromModel, stepsUsable, stepName, partsFor, sameEstimate, withEstimate };
+  /* ---- Your own plan: you choose the parts, their names and their minutes ---- */
+  const round5p = (n) => Math.round(n / 5) * 5;
+
+  /** The rows an editor starts from: the named steps, or the minutes spread evenly over the current parts. */
+  function planRows(item) {
+    if (stepsUsable(item)) return item.estimate.steps.map((s) => ({ name: s.name, minutes: s.minutes }));
+    const n = Math.max((item && item.total) || 1, 1);
+    const total = (item && item.estimate && item.estimate.minutes) || PART_MIN * n;
+    const each = Math.max(5, round5p(total / n));
+    return Array.from({ length: n }, (_, i) => ({ name: `Part ${i + 1}`, minutes: each }));
+  }
+
+  /** Cleans edited rows into steps, or says what is wrong: {steps} or {error}. */
+  function checkPlan(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    if (!list.length) return { error: 'A plan needs at least one part.' };
+    if (list.length > MAX_PARTS) return { error: `A plan can have at most ${MAX_PARTS} parts.` };
+    const steps = list.map((r, i) => ({
+      name: String((r && r.name) || '').replace(/\s+/g, ' ').trim().slice(0, 60) || `Part ${i + 1}`,
+      minutes: Math.min(MAX_MIN, Math.max(5, round5p(Number(r && r.minutes) || 0))),
+    }));
+    const total = steps.reduce((s, x) => s + x.minutes, 0);
+    if (total > MAX_MIN) return { error: `The parts add up to more than ${MAX_MIN / 60} hours. Make some shorter.` };
+    return { steps };
+  }
+
+  /** A NEW item carrying your plan: one part per step, your own estimate (the sum), progress kept. */
+  function withPlan(item, steps) {
+    const total = steps.reduce((s, x) => s + x.minutes, 0);
+    const n = steps.length;
+    const next = {
+      ...item,
+      estimate: { minutes: total, low: total, high: total, basis: 'user', confidence: 'high', factors: ['set by you'], steps: steps.map((s) => ({ name: s.name, minutes: s.minutes })) },
+      total: n,
+      unit: n > 1 ? 'part' : (item.source && item.source.kind === 'quiz' ? 'quiz' : 'assignment'),
+    };
+    if (!item.completed && (next.done || 0) >= n) next.done = Math.max(n - 1, 0);
+    return next;
+  }
+
+  global.TPEstimate = { planRows, checkPlan, withPlan, PART_MIN, MAX_PARTS, MIN_MIN, MAX_MIN, countWords, estimateRecord, estimateForItem, inputsKey, scaleSteps, userEstimate, fromModel, stepsUsable, stepName, partsFor, sameEstimate, withEstimate };
 })(typeof window !== 'undefined' ? window : globalThis);

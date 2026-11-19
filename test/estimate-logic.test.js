@@ -266,3 +266,33 @@ test('fromModel records which service made the estimate and ignores anything els
   assert.strictEqual(E.fromModel({ ...modelResult(), provider: '<b>x</b>' }, 'k', 'assign').provider, '');
   assert.strictEqual(E.fromModel(modelResult(), 'k', 'assign').provider, '', 'older saved estimates have none');
 });
+
+/* ---------- editing the plan yourself ---------- */
+const planItem = (over = {}) => ({ id: 'moodle:1', title: 'Essay', due: '2026-12-01', total: 2, unit: 'part', done: 0, today: 0, completed: false,
+  source: { type: 'moodle', kind: 'assign' }, estimate: { minutes: 100, low: 80, high: 120, basis: 'heuristic', steps: [] }, ...over });
+
+test('planRows starts from the named steps, or spreads the minutes over the current parts', () => {
+  assert.deepStrictEqual(E.planRows(planItem()), [{ name: 'Part 1', minutes: 50 }, { name: 'Part 2', minutes: 50 }]);
+  const named = planItem({ estimate: { minutes: 100, steps: [{ name: 'Read', minutes: 40 }, { name: 'Write', minutes: 60 }] } });
+  assert.deepStrictEqual(E.planRows(named), [{ name: 'Read', minutes: 40 }, { name: 'Write', minutes: 60 }]);
+});
+
+test('checkPlan cleans names and minutes and refuses bad plans', () => {
+  assert.deepStrictEqual(E.checkPlan([{ name: '  Draft   intro ', minutes: 33 }, { name: '', minutes: 0 }]).steps, [{ name: 'Draft intro', minutes: 35 }, { name: 'Part 2', minutes: 5 }]);
+  assert.ok(E.checkPlan([]).error);
+  assert.ok(E.checkPlan(Array.from({ length: 9 }, () => ({ name: 'x', minutes: 10 }))).error);
+  assert.ok(E.checkPlan([{ name: 'a', minutes: 400 }, { name: 'b', minutes: 400 }]).error, 'over 10 hours');
+});
+
+test('withPlan sets the parts, their minutes and your own estimate, and keeps progress valid', () => {
+  const it = E.withPlan(planItem({ done: 1 }), [{ name: 'Read', minutes: 30 }, { name: 'Outline', minutes: 20 }, { name: 'Write', minutes: 90 }]);
+  assert.strictEqual(it.total, 3);
+  assert.strictEqual(it.done, 1);
+  assert.strictEqual(it.estimate.basis, 'user');
+  assert.strictEqual(it.estimate.minutes, 140);
+  assert.strictEqual(E.stepsUsable(it), true);
+  const one = E.withPlan(planItem({ done: 1 }), [{ name: 'All', minutes: 60 }]);
+  assert.strictEqual(one.total, 1);
+  assert.strictEqual(one.done, 0, 'progress never exceeds the parts left');
+  assert.strictEqual(one.unit, 'assignment');
+});

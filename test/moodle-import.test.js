@@ -539,3 +539,17 @@ test('modelInput adds past work only when there is some', () => {
   assert.ok(!('past' in M.modelInput(it0, 2, false, [])));
   assert.deepStrictEqual(M.modelInput(it0, 2, false, [{ title: 'J1', minutes: 20, sameCourse: true }]).past, [{ title: 'J1', minutes: 20, sameCourse: true }]);
 });
+
+test('your own plan travels with the estimate and is applied on another device', () => {
+  const steps = [{ name: 'Read', minutes: 30 }, { name: 'Write', minutes: 60 }, { name: 'Check', minutes: 15 }];
+  const map = M.setEstimateEntry({}, 'moodle:7', 105, 9, steps);
+  assert.deepStrictEqual(map['moodle:7'], { m: 105, at: 9, s: steps });
+  assert.ok(!('s' in M.setEstimateEntry({}, 'x', 105, 9, [{ name: '', minutes: 1 }])), 'junk plans are dropped');
+  assert.deepStrictEqual(M.mergeEstimateMap(map, {}, 100)['moodle:7'].s, steps);
+  const it = imported();
+  assert.strictEqual(M.applyEstimates([it], map), true);
+  assert.strictEqual(it.total, 3);
+  assert.deepStrictEqual(it.estimate.steps, steps);
+  assert.strictEqual(it.estimate.minutes, 105);
+  assert.strictEqual(M.applyEstimates([it], map), false, 'already applied');
+});

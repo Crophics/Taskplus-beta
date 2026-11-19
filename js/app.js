@@ -703,8 +703,8 @@
   }
   let estimateMap = readJsonObject(ESTIMATES_KEY, {});
   // Your own estimates of imported items sync through this map (see TPMoodle.setEstimateEntry).
-  function recordEstimate(id, minutes){
-    estimateMap = window.TPMoodle.setEstimateEntry(estimateMap, id, minutes, Date.now());
+  function recordEstimate(id, minutes, steps){
+    estimateMap = window.TPMoodle.setEstimateEntry(estimateMap, id, minutes, Date.now(), steps);
     try{ localStorage.setItem(ESTIMATES_KEY, JSON.stringify(estimateMap)); }catch(e){}
   }
   // Done / progress on imported items syncs as its own small map (they never reach the cloud document).
@@ -753,6 +753,7 @@
     if(itemIndexById(id) < 0) return;
     itemDetailId = id;
     itemDescOpen = false;
+    planDraft = null;
     if(tab !== 'item') itemDetailFrom = tab;
     screenJustSwitched = true;
     tab = 'item';
@@ -761,6 +762,7 @@
     render();
   }
   function closeItem(){
+    planDraft = null;
     tab = itemDetailFrom || 'today';
     savePrefs();
     render();
@@ -784,7 +786,7 @@
     if(i < 0 || !items[i].estimate) return;
     const minutes = items[i].estimate.minutes + delta;
     const mine = window.TPEstimate.userEstimate(minutes, items[i].estimate.steps);
-    if(window.TPMoodle.isImported(items[i])) recordEstimate(items[i].id, mine.minutes);
+    if(window.TPMoodle.isImported(items[i])) recordEstimate(items[i].id, mine.minutes, mine.steps);
     replaceItem(i, window.TPEstimate.withEstimate(items[i], mine));
   }
   function resetEstimate(id){
@@ -792,6 +794,29 @@
     if(i < 0) return;
     if(window.TPMoodle.isImported(items[i])) recordEstimate(items[i].id, null);
     replaceItem(i, window.TPEstimate.withEstimate(items[i], window.TPEstimate.estimateForItem(items[i])));
+  }
+  /* ---- Edit the plan: parts, their names and their minutes (TPEstimate.planRows/checkPlan/withPlan) ---- */
+  let planDraft = null; // {rows: [{name, minutes}], locked: finished parts that cannot change, error}
+  function canEditPlan(it){
+    return !!it && window.TPMoodle.isImported(it) && !it.completed && !!it.estimate && !!it.due && !(it.source && it.source.kind === 'quiz');
+  }
+  function openPlanEditor(){
+    const it = items[itemIndexById(itemDetailId)];
+    if(!canEditPlan(it)) return;
+    planDraft = { rows: window.TPEstimate.planRows(it), locked: Math.min(it.done || 0, Math.max((it.total || 1) - 1, 0)), error: '' };
+    render();
+  }
+  function closePlanEditor(){ planDraft = null; render(); }
+  function savePlan(){
+    const i = itemIndexById(itemDetailId);
+    if(i < 0 || !planDraft) return;
+    const res = window.TPEstimate.checkPlan(planDraft.rows);
+    if(res.error){ planDraft.error = res.error; render(); return; }
+    const next = window.TPEstimate.withPlan(items[i], res.steps);
+    recordEstimate(items[i].id, next.estimate.minutes, next.estimate.steps);
+    planDraft = null;
+    replaceItem(i, next);
+    showToast('Plan saved');
   }
   function itemDetailCtx(){
     const i = itemIndexById(itemDetailId);
@@ -801,6 +826,7 @@
       relativeDueLabel, daysToDue: item.due ? daysBetween(today(), item.due) : null, descOpen: itemDescOpen, canIgnore: canIgnore(item),
       fromLabel: ({ today:'Today', week:'Week', all:'All', courses:'Courses' })[itemDetailFrom] || 'Back',
       llm: { available: llmOn && moodleSignedIn() && !llmUnavailable, busy: modelBusy },
+      canEditPlan: canEditPlan(item), planDraft,
     };
   }
 
@@ -1273,6 +1299,7 @@
       setIgnored, canIgnore, recordCourseDeleted, openItem, closeItem, setItemNotes, adjustEstimate, resetEstimate, askClaude, setLlmOn, setFilesOn,
       get llmOn(){ return llmOn; }, get filesOn(){ return filesOn; },
       get itemDetailId(){ return itemDetailId; },
+      get planDraft(){ return planDraft; }, openPlanEditor, closePlanEditor, savePlan,
       get itemDescOpen(){ return itemDescOpen; }, set itemDescOpen(v){ itemDescOpen = v; },
     };
   }

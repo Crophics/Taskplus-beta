@@ -339,8 +339,17 @@
      and the Worker's per-account cache answers the second ask for free. */
   const ESTIMATE_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 
-  function setEstimateEntry(map, id, minutes, now) {
-    return { ...(map || {}), [id]: { m: minutes == null ? null : Number(minutes), at: now } };
+  function cleanPlan(s) {
+    if (!Array.isArray(s) || !s.length || s.length > 8) return null;
+    const out = s.map((x) => ({ name: String((x && x.name) || '').slice(0, 60), minutes: Number(x && x.minutes) }));
+    return out.every((x) => x.name && x.minutes >= 5 && x.minutes <= 600) ? out : null;
+  }
+
+  function setEstimateEntry(map, id, minutes, now, steps) {
+    const e = { m: minutes == null ? null : Number(minutes), at: now };
+    const plan = minutes == null ? null : cleanPlan(steps);
+    if (plan) e.s = plan; // your own parts (names and minutes) travel with the number
+    return { ...(map || {}), [id]: e };
   }
 
   function mergeEstimateMap(a, b, now) {
@@ -348,7 +357,10 @@
     [a || {}, b || {}].forEach((m) => {
       Object.entries(m).forEach(([id, e]) => {
         if (!e || typeof e.at !== 'number' || now - e.at > ESTIMATE_MAX_AGE_MS) return;
-        if (!out[id] || e.at > out[id].at) out[id] = { m: e.m == null ? null : Number(e.m), at: e.at };
+        if (out[id] && e.at <= out[id].at) return;
+        out[id] = { m: e.m == null ? null : Number(e.m), at: e.at };
+        const plan = e.m == null ? null : cleanPlan(e.s);
+        if (plan) out[id].s = plan;
       });
     });
     return out;
@@ -363,7 +375,14 @@
       const e = map && it && it.id && isImported(it) ? map[it.id] : null;
       if (!e || !it.estimate) return;
       const isUser = it.estimate.basis === 'user';
-      if (e.m != null && Number.isFinite(e.m)) {
+      const plan = e.m != null ? cleanPlan(e.s) : null;
+      if (plan) {
+        const same = isUser && it.total === plan.length && it.estimate.steps && it.estimate.steps.length === plan.length
+          && plan.every((p, i) => p.name === it.estimate.steps[i].name && p.minutes === it.estimate.steps[i].minutes);
+        if (same) return;
+        Object.assign(it, E.withPlan(it, plan));
+        changed = true;
+      } else if (e.m != null && Number.isFinite(e.m)) {
         if (isUser && it.estimate.minutes === E.userEstimate(e.m).minutes) return;
         Object.assign(it, E.withEstimate(it, E.userEstimate(e.m, it.estimate.steps)));
         changed = true;

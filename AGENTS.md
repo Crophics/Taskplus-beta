@@ -119,6 +119,12 @@ for the one-time Cloudflare setup. What matters when touching code:
   `estimate.usedHistory`, and `applyLearning` then skips that estimate (no double scaling). The title-match scaling stays as the
   fallback for heuristic estimates and AI estimates made before any history. Settings wording discloses this. Not verified
   against a real model (no key on the dev machine at the time): ask one real estimate and read the rationale.
+- **You can edit the plan (2026-11-18).** Assignment screen -> Plan -> Edit (or "Split into parts" on a one-part item): rename
+  parts, set each part's minutes, add (max `MAX_PARTS` = 8) or remove parts; total <= 10 h. Only for dated, unfinished, non-quiz
+  imported items. Finished parts are locked; at least one editable part must remain. `planDraft` in `app.js` (typing patches only
+  the total line, never renders; add/remove/save render), pure logic `TPEstimate.planRows/checkPlan/withPlan`. Saving makes a
+  `basis: 'user'` estimate whose `steps` are the parts (`total = steps.length`), and the synced estimate entry carries them
+  (`{m, at, s: [{name, minutes}]}`, `cleanPlan` in `moodle-client.js`) so other devices get the same plan.
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
   today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
   slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can
