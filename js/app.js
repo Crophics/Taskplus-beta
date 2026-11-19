@@ -20,6 +20,7 @@
       ignored: ignoredMap,
       progress: progressMap,
       estimates: estimateMap,
+      actuals: actualMap,
       dayCompleteLog,
       deletedLog,
       prefs: syncPrefs
@@ -32,6 +33,7 @@
   const IGNORED_KEY='tp-ignored';
   const PROGRESS_KEY='tp-imported-progress';
   const ESTIMATES_KEY='tp-imported-estimates';
+  const ACTUALS_KEY='tp-imported-actuals';
   const LAST_ACTIVE_DATE_KEY='tp-last-active-date';
   const DAY_COMPLETE_LOG_KEY='tp-day-complete-log';
   const DELETED_LOG_KEY='tp-deleted-log';
@@ -131,7 +133,8 @@
     ignoredMap = readJsonObject(IGNORED_KEY, {});
     progressMap = readJsonObject(PROGRESS_KEY, {});
     estimateMap = readJsonObject(ESTIMATES_KEY, {});
-    if(applyIgnoredFromMap() | window.TPMoodle.applyProgress(items, progressMap) | window.TPMoodle.applyEstimates(items, estimateMap)) persistItems();
+    actualMap = readJsonObject(ACTUALS_KEY, {});
+    if(applyIgnoredFromMap() | window.TPMoodle.applyProgress(items, progressMap) | window.TPMoodle.applyEstimates(items, estimateMap) | window.TPMoodle.applyActuals(items, actualMap) | window.TPLearn.applyLearning(items)) persistItems();
     try{ dayCompleteLog = JSON.parse(localStorage.getItem(DAY_COMPLETE_LOG_KEY)) || []; }catch(e){ dayCompleteLog = []; }
     try{ deletedLog = JSON.parse(localStorage.getItem(DELETED_LOG_KEY)) || []; }catch(e){ deletedLog = []; }
     let p = {};
@@ -259,6 +262,7 @@
   document.addEventListener('keydown', (e)=>{
     if(e.key === 'Escape'){
       if(connectOpen && !connectBusy){ closeConnectSheet(); render(); return; }
+      if(timeFor!==null){ skipTime(); return; }
       if(menuFor!==null){ menuFor = null; render(); return; }
       if(addOpen){ closeAddSheet(); render(); return; }
     }
@@ -637,6 +641,7 @@
         }
         const out = window.TPMoodle.applyModelResults(items, res.results, { today: t, keys, force, readFiles: filesOn });
         items = out.items;
+        window.TPLearn.applyLearning(items);
         applied += out.stats.applied;
         if(out.stats.limited) limited = true;
         if(out.stats.unavailable) llmUnavailable = true;
@@ -670,6 +675,32 @@
   }
   // Imported items never reach the cloud, so the ignored flag travels as its own small map (item id -> {on, at}).
   let progressMap = readJsonObject(PROGRESS_KEY, {});
+  let actualMap = readJsonObject(ACTUALS_KEY, {});
+  if(window.TPLearn.applyLearning(items)) persistItems();
+  /* ---- "How long did it take?" (js/learning.js, js/views/time-sheet-html.js) ---- */
+  let timeFor = null; // id of the item the sheet is asking about
+  let timeJustOpened = false;
+  function askTime(it){
+    if(!it || !window.TPLearn.canAsk(it)) return;
+    timeFor = it.id;
+    timeJustOpened = true;
+  }
+  function skipTime(){ timeFor = null; render(); }
+  function saveActual(minutes){
+    const it = items.find(x=> x && x.id === timeFor);
+    timeFor = null;
+    if(!it) { render(); return; }
+    const a = window.TPLearn.recordActual(it, minutes, Date.now());
+    if(!a){ render(); return; }
+    if(window.TPMoodle.isImported(it)){
+      actualMap = window.TPMoodle.setActualEntry(actualMap, it.id, a);
+      try{ localStorage.setItem(ACTUALS_KEY, JSON.stringify(actualMap)); }catch(e){}
+    }
+    touchItem(it);
+    window.TPLearn.applyLearning(items); // similar open work is re-estimated from what you just said
+    save();
+    showToast('Saved. Similar work will use it.');
+  }
   let estimateMap = readJsonObject(ESTIMATES_KEY, {});
   // Your own estimates of imported items sync through this map (see TPMoodle.setEstimateEntry).
   function recordEstimate(id, minutes){
@@ -860,6 +891,8 @@
       // Items Moodle just created (e.g. on a second device) have no ignore flag yet: apply the synced list.
       applyIgnoredFromMap();
       window.TPMoodle.applyEstimates(items, estimateMap); // ...nor your own estimates
+      window.TPMoodle.applyActuals(items, actualMap);
+      window.TPLearn.applyLearning(items);
       // A course with no assignments yet still gets its card: every course picked for syncing is listed.
       const names = (res.records||[]).map(r=>r.course).concat((res.courses||[]).filter(c=>c.selected).map(c=>c.code));
       if(window.TPMoodle.ensureCourseNames(courses, names, undefined, deletedCourses)) saveCourses();
@@ -1030,7 +1063,7 @@
   // Touch gestures (js/gestures.js): swipe between tabs, swipe back, pull down to sync with Moodle.
   if(window.TPGestures){
     window.TPGestures.init({
-      state: ()=>({ tab, blocked: !!(addOpen || connectOpen || menuFor != null || userIsTyping()) }),
+      state: ()=>({ tab, blocked: !!(addOpen || connectOpen || menuFor != null || timeFor != null || userIsTyping()) }),
       goTab: (t)=>{ tab = t; screenJustSwitched = true; savePrefs(); render(); if(typeof window.scrollTo === 'function') window.scrollTo(0, 0); },
       // Use the screen's own back button so the gesture and the button can never disagree.
       back: ()=>{
@@ -1139,6 +1172,15 @@
       html += V.quickMenuHtml({ it, i: menuFor, escapeHtml, relativeDueLabel, unit: it.unit || 'units', menuJustOpened, canIgnore: canIgnore(it), color: courseColorFor(it.course), imported: window.TPMoodle.isImported(it), canOpen: !!(it.source && it.source.type === 'moodle' && it.estimate) });
     }
 
+    if(timeFor!=null){
+      const it = items.find(x=> x && x.id === timeFor);
+      if(it){
+        const raw = window.TPLearn.rawEstimate(it);
+        html += V.timeSheetHtml({ it, escapeHtml, color: courseColorFor(it.course), justOpened: timeJustOpened, estimateText: raw ? window.TPPlan.fmtMinutes(window.TPPlan.roundDisplay(raw.minutes)) : '' });
+        timeJustOpened = false;
+      }
+    }
+
     const prevFills = {};
     root.querySelectorAll('[data-fill-key]').forEach(el=>{ prevFills[el.dataset.fillKey] = el.style.width; });
 
@@ -1206,6 +1248,7 @@
       get moreOpen(){ return moreOpen; }, set moreOpen(v){ moreOpen = v; },
       get prereqOpen(){ return prereqOpen; }, set prereqOpen(v){ prereqOpen = v; },
       get menuFor(){ return menuFor; }, set menuFor(v){ menuFor = v; menuJustOpened = (v !== null); },
+      askTime, skipTime, saveActual,
       get sheetJustOpened(){ return sheetJustOpened; }, set sheetJustOpened(v){ sheetJustOpened = v; },
       get menuJustOpened(){ return menuJustOpened; }, set menuJustOpened(v){ menuJustOpened = v; },
       get searchTerm(){ return searchTerm; }, set searchTerm(v){ searchTerm = v; },

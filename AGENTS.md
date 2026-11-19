@@ -103,6 +103,14 @@ for the one-time Cloudflare setup. What matters when touching code:
   `adjustEstimate`/`resetEstimate` in `app.js` (never derived from the items: a device that has not received the map yet
   must not overwrite it), and applied by `TPMoodle.applyEstimates` after cloud data arrives and after each Moodle import.
   AI estimates are not synced; each device asks and the Worker's per-account cache answers the repeat ask.
+- **How long it really took (2026-11-18).** Finishing an item with an estimate opens a quick sheet (`timeFor` in `app.js`,
+  `js/views/time-sheet-html.js`); a chip or custom minutes saves `item.actual = {minutes, est, at}` (est = the ORIGINAL
+  estimate, `TPLearn.rawEstimate`, so ratios never compound). Imported actuals sync as `tp-imported-actuals` -> `actuals`
+  (`TPMoodle.setActualEntry/mergeActualMap/applyActuals`, newest wins). `js/learning.js` (`TPLearn`, pure, tested) scales
+  an open imported item's heuristic/model estimate by the median actual/estimate of >= 2 finished SIMILAR items (same
+  course + kind + title with numbers removed: "Journal #1..#4" yes, an essay no). The original is kept in `estimate.raw`,
+  the reason in `estimate.learned`; it is undone when the data goes away. User estimates and quiz limits are never scaled.
+  `applyLearning(items)` is idempotent and runs on load, after Moodle import/AI results and after cloud data.
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
   today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
   slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can

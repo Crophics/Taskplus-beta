@@ -46,13 +46,15 @@
       : est.basis === 'model'
         ? `<div class="tp-i-est-why">${escapeHtml((est.factors || [])[0] || 'The AI read the assignment description.')} Change it if you know better.</div>${readLineHtml(est, escapeHtml)}`
         : `<div class="tp-i-est-why">Based on: ${escapeHtml((est.factors || []).join(', ') || 'the details from Moodle')}. ${est.basis === 'heuristic' ? 'It is a rule of thumb, so change it if you know better.' : 'Study time is a guess; change it if you know better.'}</div>`;
+    const learned = est.learned && est.basis !== 'user'
+      ? `<div class="tp-i-est-why">Adjusted using ${est.learned.n} similar finished ${escapeHtml(est.learned.label || 'assignments')} (you took about ${Math.round(est.learned.factor * 100)}% of the estimate).</div>` : '';
     const ask = ctx.llm && ctx.llm.available
       ? `<button type="button" class="tp-i-ask" id="tp-i-ask"${ctx.llm.busy ? ' disabled' : ''}>${ctx.llm.busy ? 'Asking…' : (est.basis === 'model' ? 'Ask again' : 'Ask AI to estimate')}</button>`
       : '';
     return `<section class="tp-i-card" id="tp-i-estimate">
       <div class="tp-i-card-label"><span>Time estimate</span><span class="tp-i-basis">${escapeHtml(basisCaption(est))}</span></div>
       <div class="tp-i-est-main">About ${escapeHtml(fmt(est.minutes))}</div>
-      ${range}${why}
+      ${range}${why}${learned}
       <div class="tp-i-stepper">${minus}${plus}</div>
       ${ask}${reset}
     </section>`;

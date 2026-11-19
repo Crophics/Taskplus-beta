@@ -20,6 +20,7 @@
         it.completed = true;
         it.completedAt = api.today();
         if (it.recurring) api.items.push(api.makeRecurringClone(it));
+        api.askTime(it);
       }
       if (fullyCompleted || reachedDailyTarget) {
         const rect = sourceEl.getBoundingClientRect();
@@ -59,6 +60,7 @@
       }
       api.touchItem(it);
       if (completing) {
+        api.askTime(it);
         const workAfter = api.hasTodayWorkRemaining();
         if (workBefore && !workAfter) {
           api.logDayComplete();
@@ -249,6 +251,20 @@
       });
     });
 
+    /* ---- "How long did it take?" sheet ---- */
+    const timeBackdrop = document.getElementById('tp-time-backdrop');
+    if (timeBackdrop) {
+      timeBackdrop.addEventListener('click', (e) => { if (e.target === timeBackdrop) api.skipTime(); });
+      timeBackdrop.querySelectorAll('.tp-time-chip').forEach((b) => b.onclick = () => api.saveActual(Number(b.dataset.minutes)));
+      const timeSave = document.getElementById('tp-time-save');
+      const timeInput = document.getElementById('tp-time-input');
+      if (timeSave && timeInput) timeSave.onclick = () => {
+        const m = Math.round(Number(timeInput.value));
+        if (m > 0) api.saveActual(m); else timeInput.focus();
+      };
+      const timeSkip = document.getElementById('tp-time-skip');
+      if (timeSkip) timeSkip.onclick = () => api.skipTime();
+    }
     /* ---- Quick-action menu ---- */
     const qmenuBackdrop = document.getElementById('tp-qmenu-backdrop');
     if (qmenuBackdrop) qmenuBackdrop.addEventListener('click', (e) => {

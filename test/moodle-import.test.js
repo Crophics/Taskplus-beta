@@ -522,3 +522,14 @@ test('applyEstimates ignores manual items, items with no entry, and junk numbers
   assert.strictEqual(M.applyEstimates([imported()], { 'moodle:7': { m: NaN, at: 1 } }), false);
   assert.strictEqual(M.applyEstimates([imported()], undefined), false);
 });
+
+test('actual-time map: newest wins, junk dropped, and a fresh device receives the time', () => {
+  const a = { x: { m: 20, e: 45, at: 100 } };
+  const b = { x: { m: 30, e: 45, at: 200 }, bad: { m: 0, e: 45, at: 5 }, nope: null };
+  assert.deepStrictEqual(M.mergeActualMap(a, b, 1000), { x: { m: 30, e: 45, at: 200 } });
+  const it = imported({ completed: true });
+  assert.strictEqual(M.applyActuals([it], { 'moodle:7': { m: 25, e: 150, at: 7 } }), true);
+  assert.deepStrictEqual(it.actual, { minutes: 25, est: 150, at: 7 });
+  assert.strictEqual(M.applyActuals([it], { 'moodle:7': { m: 25, e: 150, at: 7 } }), false);
+  assert.deepStrictEqual(M.setActualEntry({}, 'k', { minutes: 9, est: 30, at: 3 }), { k: { m: 9, e: 30, at: 3 } });
+});

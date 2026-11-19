@@ -61,7 +61,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v80'; // bumped: your own estimates sync
+const CACHE_NAME = 'taskplus-cache-v81'; // bumped: record how long it took; estimates learn from it
 const urlsToCache = [
   './',
   './index.html',
@@ -75,6 +75,7 @@ const urlsToCache = [
   './js/courses.js',
   './js/moodle-client.js',
   './js/estimate-logic.js',
+  './js/learning.js',
   './js/plan-logic.js',
   './js/all-logic.js',
   './js/week-logic.js',
@@ -95,6 +96,7 @@ const urlsToCache = [
   './js/views/item-detail-html.js',
   './js/views/changes-html.js',
   './js/views/quick-menu-html.js',
+  './js/views/time-sheet-html.js',
   './js/today-logic.js',
   './js/gestures.js',
   './js/bind-events.js',

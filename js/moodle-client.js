@@ -147,7 +147,8 @@
         const keepClaude = prev.estimate && prev.estimate.basis === 'model' && prev.estimate.key === global.TPEstimate.inputsKey(next);
         if (!keepClaude) {
           const est = global.TPEstimate.estimateForItem(next);
-          if (!global.TPEstimate.sameEstimate(prev.estimate, est)) { next = global.TPEstimate.withEstimate(next, est); changed = true; }
+          const prevEst = prev.estimate && prev.estimate.raw ? { ...prev.estimate, ...prev.estimate.raw } : prev.estimate; // a learned estimate is compared by its original numbers
+          if (!global.TPEstimate.sameEstimate(prevEst, est)) { next = global.TPEstimate.withEstimate(next, est); changed = true; }
         }
       }
       // Moodle completes an item once, when it first reports it submitted. After that the user's own
@@ -371,6 +372,36 @@
     return changed;
   }
 
+  /* ---- How long imported items really took, which syncs ----
+     Same idea as the estimates map: {itemId: {m: minutes, e: the estimate it had, at}}, newest wins. */
+  function setActualEntry(map, id, actual) {
+    return { ...(map || {}), [id]: { m: actual.minutes, e: actual.est, at: actual.at } };
+  }
+
+  function mergeActualMap(a, b, now) {
+    const out = {};
+    [a || {}, b || {}].forEach((m) => {
+      Object.entries(m).forEach(([id, e]) => {
+        if (!e || typeof e.at !== 'number' || now - e.at > ESTIMATE_MAX_AGE_MS || !(e.m > 0) || !(e.e > 0)) return;
+        if (!out[id] || e.at > out[id].at) out[id] = { m: Number(e.m), e: Number(e.e), at: e.at };
+      });
+    });
+    return out;
+  }
+
+  /** Puts a synced actual time on imported items that lack it or have an older one. Mutates; true if changed. */
+  function applyActuals(items, map) {
+    let changed = false;
+    (items || []).forEach((it) => {
+      const e = map && it && it.id && isImported(it) ? map[it.id] : null;
+      if (!e || !(e.m > 0)) return;
+      if (it.actual && it.actual.at >= e.at) return;
+      it.actual = { minutes: e.m, est: e.e, at: e.at };
+      changed = true;
+    });
+    return changed;
+  }
+
   /** Plain-language lines for the Worker's sync warnings (codes like 'state_failed:7'). */
   function explainWarnings(warnings) {
     const list = Array.isArray(warnings) ? warnings : [];
@@ -466,5 +497,5 @@
     }
   }
 
-  global.TPMoodle = { setEstimateEntry, mergeEstimateMap, applyEstimates, localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, progressMap, mergeProgress, applyProgress, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_MS, IMPORT_SHAPE, RETRY_MS, mergeFeed, unreadCount, markFeedSeen, feedLine };
+  global.TPMoodle = { setActualEntry, mergeActualMap, applyActuals, setEstimateEntry, mergeEstimateMap, applyEstimates, localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, progressMap, mergeProgress, applyProgress, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_MS, IMPORT_SHAPE, RETRY_MS, mergeFeed, unreadCount, markFeedSeen, feedLine };
 })(typeof window !== 'undefined' ? window : globalThis);
