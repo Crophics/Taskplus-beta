@@ -66,9 +66,10 @@ test('work done on an earlier day is not counted as today\'s', () => {
 });
 
 test('getting ahead pulls later days down', () => {
-  // 4 parts due in 4 days (1/day). Did 2 today: nothing more today, 2 left over the next 3 days (days 1 and 2).
+  // 4 parts due in 4 days (1/day). Did 2 today: nothing more today. The 2 left have slack over the next 3 days, so they
+  // are planned as late as they can wait (days 2 and 3), not up front.
   const item = it({ total: 4, estimate: { minutes: 200 }, due: addDays(TODAY, 4), done: 2, today: 2 });
-  assert.deepStrictEqual(alloc(item), [{ dayIndex: 1, units: 1 }, { dayIndex: 2, units: 1 }]);
+  assert.deepStrictEqual(alloc(item), [{ dayIndex: 2, units: 1 }, { dayIndex: 3, units: 1 }]);
 });
 
 test('a single-part item is planned for the day before it is due', () => {
@@ -85,11 +86,11 @@ test('overdue or due-today multi-part work is all on today', () => {
   assert.deepStrictEqual(alloc(it({ due: TODAY })), [{ dayIndex: 0, units: 3 }]);
 });
 
-test('work due far out spreads thinly and only the first 7 days are shown', () => {
-  const far = it({ total: 8, estimate: { minutes: 400 }, due: addDays(TODAY, 20) });
-  const a = alloc(far);
-  assert.deepStrictEqual(a.map((x) => x.dayIndex), [0, 1, 2, 3, 4, 5, 6]);
-  assert.ok(a.every((x) => x.units === 1));
+test('work due far out is not planned this week: with slack it waits until it has to be done', () => {
+  // 8 parts, due in 20 days: one a day on the last 8 days, none of them in the 7-day window.
+  assert.deepStrictEqual(alloc(it({ total: 8, estimate: { minutes: 400 }, due: addDays(TODAY, 20) })), []);
+  // 8 parts due in 10 days: the last 8 of the 10 work days; days 2..9, so 5 of them fall in the window
+  assert.deepStrictEqual(alloc(it({ total: 8, estimate: { minutes: 400 }, due: addDays(TODAY, 10) })).map((x) => x.dayIndex), [2, 3, 4, 5, 6]);
 });
 
 test('completed, archived and fully-done items allocate nothing', () => {
@@ -208,7 +209,10 @@ test('planner day-0 units match what today-logic computes, across many scenarios
           item.done = done;
           item.today = loggedToday;
           const panel = global.TPTodayLogic.computeTodayPanel(ctxFor(item));
-          const expectedUnits = panel.multiTargets.length ? panel.multiTargets[0].amt : 0; // remaining today (after what is logged)
+          // Only REQUIRED work is planned on today; Today's "Get ahead" shares (items with slack) are optional and
+          // are planned for later days instead.
+          const requiredHere = panel.requiredPace.length + panel.requiredTight.length > 0;
+          const expectedUnits = requiredHere && panel.multiTargets.length ? panel.multiTargets[0].amt : 0; // remaining today (after what is logged)
           const mine = alloc(item).find((x) => x.dayIndex === 0);
           assert.strictEqual(mine ? mine.units : 0, expectedUnits, `total=${total} dueIn=${dueIn} done=${done} today=${loggedToday}`);
           checked++;
@@ -231,20 +235,20 @@ test('planner agrees with today-logic on single-part items: required exactly whe
   }
 });
 
-test('Today\'s required + get-ahead minutes add up to the planner\'s minutes for today (what Week shows)', () => {
+test('the planner\'s minutes for today (what Week shows) are exactly Today\'s targets; get-ahead work is not planned on today', () => {
   const todayCtx = (items) => ({ items, storageKey: 'k', isLocked: () => false, unlockedToday: () => false, today: () => TODAY, daysBetween });
   const items = [
     it({ id: 'a', total: 2, estimate: { minutes: 100 }, due: addDays(TODAY, 2) }),        // required pace: 1 part today
     it({ id: 'b', total: 1, estimate: { minutes: 35 }, due: addDays(TODAY, 1) }),         // single due tomorrow: required today
-    it({ id: 'c', total: 2, estimate: { minutes: 80 }, due: addDays(TODAY, 5) }),         // slack: get ahead, 1 part today
+    it({ id: 'c', total: 2, estimate: { minutes: 80 }, due: addDays(TODAY, 5) }),         // slack: get ahead (optional today)
     it({ id: 'd', total: 1, estimate: { minutes: 90 }, due: addDays(TODAY, 4) }),         // single, later: not today
   ];
   const panel = global.TPTodayLogic.computeTodayPanel(todayCtx(items));
   const screen = global.TPTodayLogic.computeTodayScreen(panel);
   const s = P.todaySummary(screen.targets, items, screen.getAhead);
   const week = P.computeDays({ items, today: TODAY, daysBetween }).days[0].minutes;
-  assert.strictEqual(Math.round(s.leftMin + s.aheadMin), Math.round(week));
-  assert.strictEqual(Math.round(week), 50 + 35 + 40);
+  assert.strictEqual(Math.round(s.leftMin), Math.round(week));
+  assert.strictEqual(Math.round(week), 50 + 35); // item c (slack, get ahead) adds nothing to today
 });
 
 /* ---------- named steps with their own minutes ---------- */

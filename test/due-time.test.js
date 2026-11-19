@@ -101,7 +101,9 @@ test('the minutes plan puts the same units on each day as Today does', () => {
     const x = item({ total, due: addDays(TODAY, dueIn), dueTime: t });
     panel([x]);
     const mine = P.allocateItem(x, TODAY, daysBetween).find((a) => a.dayIndex === 0);
-    assert.strictEqual(mine ? mine.units : 0, x.dailyTarget.amt, `total=${total} dueIn=${dueIn} ${t}`);
+    // Only required work is planned on today; with slack (fewer parts than work days) today's share is optional.
+    const required = total >= D.workDays(x, dueIn);
+    assert.strictEqual(mine ? mine.units : 0, required ? x.dailyTarget.amt : 0, `total=${total} dueIn=${dueIn} ${t}`);
     const sum = P.allocateItem(x, TODAY, daysBetween).reduce((s, a) => s + a.units, 0);
     assert.strictEqual(sum, total, `all parts placed: total=${total} dueIn=${dueIn} ${t}`);
   }

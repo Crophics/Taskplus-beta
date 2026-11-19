@@ -151,12 +151,23 @@
     // Day weights: a whole day each for today .. the day before it is due, then the due-day morning (a share of a day).
     const weights = new Array(Math.max(dueIn, 1)).fill(1);
     if (workDays > weights.length) weights.push(workDays - weights.length);
-    // Today's share is what Today shows: ceil(units left / work days). The rest spreads over the later days by weight.
-    const share0 = Math.min(startLeft, Math.ceil(startLeft / workDays - 1e-9));
-    push(0, Math.max(share0 - loggedToday, 0));
-    // Whatever is left after today (or after today's extra effort, if you got ahead) spreads over the rest.
-    const later = Math.max(startLeft - Math.max(share0, loggedToday), 0);
-    if (weights.length > 1) spreadWeighted(later, weights.slice(1)).forEach((u, i) => push(i + 1, u));
+    // Today's REQUIRED share is what Today shows under its targets: ceil(units left / work days), but only when there
+    // is no slack (units left >= work days). With slack nothing has to be done today: what Today lists under "Get ahead"
+    // is optional, so it is NOT planned on today; doing it early just means less later.
+    const noSlack = startLeft >= workDays - 1e-9;
+    const requiredToday = noSlack ? Math.min(startLeft, Math.ceil(startLeft / workDays - 1e-9)) : 0;
+    push(0, Math.max(requiredToday - loggedToday, 0));
+    // Whatever is left after today (or after today's extra effort, if you got ahead) goes on the later days.
+    const later = Math.max(startLeft - Math.max(requiredToday, loggedToday), 0);
+    const laterWeights = weights.slice(1);
+    if (later > 0 && laterWeights.length) {
+      if (later < laterWeights.reduce((a, b) => a + b, 0) - 1e-9) {
+        // Fewer units than days: one unit on each of the LAST days, as late as it can wait.
+        for (let k = 0; k < later; k++) push(laterWeights.length - later + k + 1, 1);
+      } else {
+        spreadWeighted(later, laterWeights).forEach((u, i) => push(i + 1, u));
+      }
+    }
     return out;
   }
 

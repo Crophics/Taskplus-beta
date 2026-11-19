@@ -95,6 +95,12 @@ for the one-time Cloudflare setup. What matters when touching code:
   they fall back to the old date-only behaviour, which is also what no-time items get. `dailyTarget` caches
   `dueTime`. Labels show it via `TPDue.label(item, relativeDueLabel)`; use that, not `relativeDueLabel(it.due)`.
   Not done: time-aware overdue (something due 9 AM today still counts as due today after 9 AM).
+- **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
+  today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
+  slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can
+  wait, one per day, so Week's bar for today equals Today's "left today" exactly and doing work early just means less
+  later. A side effect: work due beyond the 7-day window does not appear in the chart until it has to be done.
+  `todaySummary.aheadMin` still exists but is no longer shown. Tests: `test/plan-logic.test.js`, `test/due-time.test.js`.
 - **Estimates and minutes planning (Phase 3).** `js/estimate-logic.js`
   (`TPEstimate`, a rule-of-thumb estimator; its constants are guesses, see the
   header) and `js/plan-logic.js` (`TPPlan`, minutes per day, heavy day) are pure
