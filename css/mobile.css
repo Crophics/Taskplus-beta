@@ -416,7 +416,7 @@ body::-webkit-scrollbar{display:none;}
 /* ---- Time estimates on Today (js/views/today-html.js, js/plan-logic.js) ---- */
 .tp-t-plan{margin:2px 0 14px;}
 .tp-t-plan-main{display:flex;align-items:baseline;gap:6px;}
-.tp-t-plan-left{font-size:15px;font-weight:600;color:var(--text);line-height:1.3;}
+.tp-t-plan-left{font-size:15px;font-weight:400;color:var(--text-muted);line-height:1.3;}
 .tp-t-plan-sub{font-size:15px;color:var(--text-muted);line-height:1.3;}
 .tp-t-plan-track{height:6px;border-radius:3px;background:var(--surface-alt);margin-top:10px;overflow:hidden;}
 .tp-t-plan-fill{height:100%;border-radius:3px;background:var(--accent-bright);transition:width .4s ease;}
