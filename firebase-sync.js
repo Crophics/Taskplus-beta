@@ -229,6 +229,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
       progress: JSON.parse(localStorage.getItem("tp-imported-progress") || "{}"),
       estimates: JSON.parse(localStorage.getItem("tp-imported-estimates") || "{}"),
       actuals: JSON.parse(localStorage.getItem("tp-imported-actuals") || "{}"),
+      aiEstimates: JSON.parse(localStorage.getItem("tp-imported-ai") || "{}"),
+      notes: JSON.parse(localStorage.getItem("tp-imported-notes") || "{}"),
       dayCompleteLog: JSON.parse(localStorage.getItem("tp-day-complete-log") || "[]"),
       deletedLog,
       prefs: syncPrefs,
@@ -245,6 +247,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     if (data.progress) localStorage.setItem("tp-imported-progress", JSON.stringify(data.progress));
     if (data.estimates) localStorage.setItem("tp-imported-estimates", JSON.stringify(data.estimates));
     if (data.actuals) localStorage.setItem("tp-imported-actuals", JSON.stringify(data.actuals));
+    if (data.aiEstimates) localStorage.setItem("tp-imported-ai", JSON.stringify(data.aiEstimates));
+    if (data.notes) localStorage.setItem("tp-imported-notes", JSON.stringify(data.notes));
     if (data.dayCompleteLog) localStorage.setItem("tp-day-complete-log", JSON.stringify(data.dayCompleteLog));
     if (data.deletedLog) localStorage.setItem("tp-deleted-log", JSON.stringify(data.deletedLog));
     if (data.prefs) {
@@ -276,6 +280,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
       ignored: window.TPItemLogic ? window.TPItemLogic.mergeIgnored(local.ignored, remoteData.ignored, Date.now()) : local.ignored,
       estimates: window.TPMoodle ? window.TPMoodle.mergeEstimateMap(local.estimates, remoteData.estimates, Date.now()) : local.estimates,
       actuals: window.TPMoodle ? window.TPMoodle.mergeActualMap(local.actuals, remoteData.actuals, Date.now()) : local.actuals,
+      aiEstimates: window.TPMoodle ? window.TPMoodle.mergeAiMap(local.aiEstimates, remoteData.aiEstimates, Date.now()) : local.aiEstimates,
+      notes: window.TPMoodle ? window.TPMoodle.mergeNoteMap(local.notes, remoteData.notes, Date.now()) : local.notes,
       dayCompleteLog: mergeDayLog(local.dayCompleteLog, remoteData.dayCompleteLog),
       deletedLog,
       prefs: mergePrefs(local.prefs, remoteData.prefs),
@@ -482,7 +488,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
         ...payload,
         items,
         updatedAt,
-      });
+      }, { merge: true }); // merge: a device still on an older version cannot wipe fields it does not know about
     },
   };
 

@@ -125,6 +125,19 @@ for the one-time Cloudflare setup. What matters when touching code:
   the total line, never renders; add/remove/save render), pure logic `TPEstimate.planRows/checkPlan/withPlan`. Saving makes a
   `basis: 'user'` estimate whose `steps` are the parts (`total = steps.length`), and the synced estimate entry carries them
   (`{m, at, s: [{name, minutes}]}`, `cleanPlan` in `moodle-client.js`) so other devices get the same plan.
+- **What syncs (audit 2026-11-18).** The cloud doc (`users/<uid>/taskplus/data`, written with `setDoc(..., {merge:true})` so an
+  older cached version of the app can never wipe fields it does not know) holds: manual `items` (everything on them),
+  `courses`/`courseColors`/`deletedCourses`, `prefs` (minus theme and tab), `dayCompleteLog`, `deletedLog`, and, for IMPORTED
+  items (which stay off the cloud), these side maps, each `{itemId: {..., at}}` merged newest-wins in `firebase-sync.js`:
+  `ignored`, `progress` (done/completed/completedAt plus `td`/`tdd` = parts finished today and the day, so "left today" agrees),
+  `estimates` (your own number/plan), `aiEstimates` (the AI's answer: `TPMoodle.aiRecordOf/setAiEntry/mergeAiMap`; applies only
+  while the assignment text key `k` matches; vs `estimates` the newer `at` wins; answers made before entries existed are seeded
+  from `item.updatedAt` and never over your own estimate), `actuals` (time taken), `notes` (`item.notesAt` is the local time;
+  typing pushes 1.5 s after it pauses). `applySyncedMaps()` in `app.js` applies all of them (load, cloud data, after a Moodle
+  import, after an AI answer). **Rule for any new per-item field on an imported item: add a map, merge, apply, and the three
+  spots in `firebase-sync.js` (`readLocalPayload`, `writeLocalPayload`, `applyRemoteMerge`).** Deliberately per device: theme,
+  open tab, the AI and handout switches (`tp-llm-on`, `tp-llm-files`; privacy choices), the What's-new feed, Moodle connection
+  cache, `modelTry`, push tokens (server side), dev-mode keys. Moodle itself provides title/course/due/description on each device.
 - **Get-ahead work is not planned on today (2026-11-18).** `plan-logic.js` `allocateItem` puts only REQUIRED work on
   today (a multi-part item with units left >= work days, the same `noSlack` test as `today-logic.js`). An item with
   slack has nothing to do today (Today lists it under Get ahead, optional); its units go on the LAST days they can

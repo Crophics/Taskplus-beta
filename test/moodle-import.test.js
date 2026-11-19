@@ -450,7 +450,7 @@ test('progress map: records changes, merges newest-wins, and applies to another 
   const imp = (o) => ({ id: 'moodle:1', source: { type: 'moodle' }, total: 1, done: 0, completed: false, updatedAt: 100, ...o });
   const a = M.progressMap([imp({ completed: true, done: 1, completedAt: '2026-11-18', updatedAt: 200 }), imp({ id: 'moodle:2' }), { id: 'manual', completed: true }], {}, 999);
   assert.deepStrictEqual(Object.keys(a), ['moodle:1']);
-  assert.deepStrictEqual(a['moodle:1'], { c: true, d: 1, ca: '2026-11-18', at: 200 });
+  assert.deepStrictEqual(a['moodle:1'], { c: true, d: 1, ca: '2026-11-18', at: 200, td: 0, tdd: null });
   // unchecking later is a newer record and wins in either merge order
   const b = M.progressMap([imp({ completed: false, done: 0, updatedAt: 300 })], a, 999);
   assert.strictEqual(M.mergeProgress(a, b, 1000)['moodle:1'].c, false);
@@ -552,4 +552,102 @@ test('your own plan travels with the estimate and is applied on another device',
   assert.deepStrictEqual(it.estimate.steps, steps);
   assert.strictEqual(it.estimate.minutes, 105);
   assert.strictEqual(M.applyEstimates([it], map), false, 'already applied');
+});
+
+/* ---------- AI estimates, notes and today's count all sync ---------- */
+
+const aiItem = (over = {}) => {
+  const it = imported({ estimate: { minutes: 45, low: 35, high: 60, basis: 'model', confidence: 'medium', factors: ['First answer'], steps: [], key: 'K1', provider: 'gemini' }, updatedAt: 10, ...over });
+  return it;
+};
+
+test('an AI answer redone on one device reaches the other (the original complaint)', () => {
+  const E = global.TPEstimate;
+  const phone = aiItem();
+  phone.estimate.key = E.inputsKey(phone);
+  const laptop = JSON.parse(JSON.stringify(phone));
+  // phone asks again: a newer, different answer
+  const redone = { ...phone.estimate, minutes: 90, low: 70, high: 110, factors: ['Second answer'], steps: [{ name: 'Read', minutes: 40 }, { name: 'Write', minutes: 50 }], at: 500 };
+  const p2 = E.withEstimate(phone, redone);
+  const map = M.setAiEntry({}, p2.id, p2, 500);
+  assert.strictEqual(map['moodle:7'].m, 90);
+  const items = [laptop];
+  assert.strictEqual(M.applyEstimates(items, {}, map), true);
+  assert.strictEqual(items[0].estimate.minutes, 90);
+  assert.deepStrictEqual(items[0].estimate.steps.map((x) => x.name), ['Read', 'Write']);
+  assert.strictEqual(items[0].estimate.factors[0], 'Second answer');
+  assert.strictEqual(items[0].estimate.basis, 'model');
+  assert.strictEqual(items[0].total, 2, 'parts follow the steps');
+  assert.strictEqual(M.applyEstimates(items, {}, map), false, 'idempotent');
+});
+
+test('AI entries: newest wins, a changed assignment text ignores them, old answers are dropped', () => {
+  const E = global.TPEstimate;
+  const it = aiItem(); it.estimate.key = E.inputsKey(it);
+  const rec = (at, m) => ({ ...M.aiRecordOf(it, at), m });
+  assert.strictEqual(M.mergeAiMap({ x: rec(100, 30) }, { x: rec(200, 60) }, 1000).x.m, 60);
+  assert.deepStrictEqual(M.mergeAiMap({ x: rec(1, 30) }, {}, 1 + 121 * 24 * 3600 * 1000), {});
+  const stale = { 'moodle:7': { ...rec(500, 99), k: 'someone-elses-text' } };
+  const items = [it];
+  assert.strictEqual(M.applyEstimates(items, {}, stale), false);
+  assert.strictEqual(items[0].estimate.minutes, 45);
+});
+
+test('your own estimate and the AI answer: whichever is newer wins, and an unrecorded own estimate stands', () => {
+  const E = global.TPEstimate;
+  const base = () => { const it = aiItem(); it.estimate.key = E.inputsKey(it); return it; };
+  const ai = (at, m) => ({ 'moodle:7': { ...M.aiRecordOf(base(), at), m } });
+  // you set 30 min at t=300, the AI answered at t=200: yours wins
+  let it = base();
+  M.applyEstimates([it], { 'moodle:7': { m: 30, at: 300 } }, ai(200, 90));
+  assert.deepStrictEqual([it.estimate.basis, it.estimate.minutes], ['user', 30]);
+  // the AI was asked again at t=400: the AI wins
+  it = base();
+  M.applyEstimates([it], { 'moodle:7': { m: 30, at: 300 } }, ai(400, 90));
+  assert.deepStrictEqual([it.estimate.basis, it.estimate.minutes], ['model', 90]);
+  // a device whose own estimate was never recorded keeps it
+  it = base(); it.estimate = { ...it.estimate, basis: 'user', minutes: 20, low: 20, high: 20 };
+  assert.strictEqual(M.applyEstimates([it], {}, ai(400, 90)), false);
+  assert.strictEqual(it.estimate.minutes, 20);
+});
+
+test('applyModelResults stamps when the answer was made and lists the ids it applied', () => {
+  const base = M.mergeImported([], [rec()], ctx()).items[0];
+  const out = M.applyModelResults([base], [{ id: base.id, ok: true, estimate: { minutes: 60, low: 45, high: 75, confidence: 'medium', rationale: 'r', steps: [{ name: 'a', minutes: 60 }], provider: 'gemini' } }], { today: '2026-11-18', now: 777 });
+  assert.deepStrictEqual(out.stats.appliedIds, [base.id]);
+  assert.strictEqual(out.items[0].estimate.at, 777);
+});
+
+test('AI answers made before entries existed are seeded with their own time, never over your estimate', () => {
+  const a = aiItem({ id: 'moodle:1', updatedAt: 42 });
+  const b = aiItem({ id: 'moodle:2', updatedAt: 43 });
+  const seeded = M.seedAiMap([a, b], {}, { 'moodle:2': { m: 30, at: 5 } });
+  assert.deepStrictEqual(Object.keys(seeded), ['moodle:1']);
+  assert.strictEqual(seeded['moodle:1'].at, 42);
+});
+
+test('notes on imported items sync, newest wins, and clearing a note syncs too', () => {
+  const m1 = M.setNoteEntry({}, 'moodle:7', 'ask prof about topic', 100);
+  assert.strictEqual(M.mergeNoteMap(m1, M.setNoteEntry({}, 'moodle:7', '', 200), 1000)['moodle:7'].n, '');
+  const it = imported();
+  assert.strictEqual(M.applyNotes([it], m1), true);
+  assert.strictEqual(it.notes, 'ask prof about topic');
+  assert.strictEqual(M.applyNotes([it], m1), false);
+  const mine = imported({ notes: 'newer local', notesAt: 300 });
+  assert.strictEqual(M.applyNotes([mine], m1), false, 'a newer local note is kept');
+  assert.strictEqual(M.setNoteEntry({}, 'k', 'x'.repeat(9000), 1).k.n.length, 5000);
+});
+
+test('what you finished today follows you to another device, but only on the same day', () => {
+  const today = M.localDate(Date.now() / 1000);
+  const a = imported({ total: 4, done: 2, today: 2, updatedAt: 100 });
+  const map = M.progressMap([a], {}, Date.now());
+  assert.deepStrictEqual([map['moodle:7'].td, map['moodle:7'].tdd], [2, today]);
+  const other = imported({ total: 4, done: 0, today: 0, updatedAt: 50 });
+  assert.strictEqual(M.applyProgress([other], map), true);
+  assert.deepStrictEqual([other.done, other.today], [2, 2]);
+  const yesterday = { 'moodle:7': { ...map['moodle:7'], tdd: '2020-01-01' } };
+  const o2 = imported({ total: 4, done: 2, today: 0 });
+  assert.strictEqual(M.applyProgress([o2], yesterday), false, "yesterday's count is not today's");
+  assert.strictEqual(o2.today, 0);
 });

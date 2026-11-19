@@ -21,6 +21,8 @@
       progress: progressMap,
       estimates: estimateMap,
       actuals: actualMap,
+      aiEstimates: aiMap,
+      notes: noteMap,
       dayCompleteLog,
       deletedLog,
       prefs: syncPrefs
@@ -34,6 +36,8 @@
   const PROGRESS_KEY='tp-imported-progress';
   const ESTIMATES_KEY='tp-imported-estimates';
   const ACTUALS_KEY='tp-imported-actuals';
+  const AI_KEY='tp-imported-ai';
+  const NOTES_KEY='tp-imported-notes';
   const LAST_ACTIVE_DATE_KEY='tp-last-active-date';
   const DAY_COMPLETE_LOG_KEY='tp-day-complete-log';
   const DELETED_LOG_KEY='tp-deleted-log';
@@ -134,7 +138,9 @@
     progressMap = readJsonObject(PROGRESS_KEY, {});
     estimateMap = readJsonObject(ESTIMATES_KEY, {});
     actualMap = readJsonObject(ACTUALS_KEY, {});
-    if(applyIgnoredFromMap() | window.TPMoodle.applyProgress(items, progressMap) | window.TPMoodle.applyEstimates(items, estimateMap) | window.TPMoodle.applyActuals(items, actualMap) | window.TPLearn.applyLearning(items)) persistItems();
+    aiMap = readJsonObject(AI_KEY, {});
+    noteMap = readJsonObject(NOTES_KEY, {});
+    if(applySyncedMaps()) persistItems();
     try{ dayCompleteLog = JSON.parse(localStorage.getItem(DAY_COMPLETE_LOG_KEY)) || []; }catch(e){ dayCompleteLog = []; }
     try{ deletedLog = JSON.parse(localStorage.getItem(DELETED_LOG_KEY)) || []; }catch(e){ deletedLog = []; }
     let p = {};
@@ -641,6 +647,7 @@
         }
         const out = window.TPMoodle.applyModelResults(items, res.results, { today: t, keys, force, readFiles: filesOn });
         items = out.items;
+        recordAi(out.stats.appliedIds);
         window.TPLearn.applyLearning(items);
         applied += out.stats.applied;
         if(out.stats.limited) limited = true;
@@ -676,7 +683,26 @@
   // Imported items never reach the cloud, so the ignored flag travels as its own small map (item id -> {on, at}).
   let progressMap = readJsonObject(PROGRESS_KEY, {});
   let actualMap = readJsonObject(ACTUALS_KEY, {});
-  if(window.TPLearn.applyLearning(items)) persistItems();
+  let aiMap = readJsonObject(AI_KEY, {});
+  let noteMap = readJsonObject(NOTES_KEY, {});
+  // Everything about imported items that travels between devices, applied in one place (see "What syncs" in AGENTS.md).
+  function applySyncedMaps(){
+    const M = window.TPMoodle;
+    const r = [applyIgnoredFromMap(), M.applyProgress(items, progressMap), M.applyEstimates(items, estimateMap, aiMap), M.applyActuals(items, actualMap), M.applyNotes(items, noteMap), window.TPLearn.applyLearning(items)];
+    return r.some(Boolean);
+  }
+  // An AI answer made before entries existed gets one now, stamped with when it was made, so an older copy on another device cannot win.
+  function recordAi(ids){
+    const M = window.TPMoodle;
+    let next = aiMap;
+    (ids || []).forEach(id=>{ const it = items.find(x=> x && x.id === id); if(it) next = M.setAiEntry(next, id, it, it.estimate && it.estimate.at); });
+    next = M.seedAiMap(items, next, estimateMap);
+    if(JSON.stringify(next) !== JSON.stringify(aiMap)){
+      aiMap = next;
+      try{ localStorage.setItem(AI_KEY, JSON.stringify(aiMap)); }catch(e){}
+    }
+  }
+
   /* ---- "How long did it take?" (js/learning.js, js/views/time-sheet-html.js) ---- */
   let timeFor = null; // id of the item the sheet is asking about
   let timeJustOpened = false;
@@ -737,6 +763,9 @@
     });
     if(seeded){ try{ localStorage.setItem(IGNORED_KEY, JSON.stringify(ignoredMap)); }catch(e){} }
   })();
+  // Run once everything above exists: records old AI answers and applies what other devices sent.
+  recordAi([]);
+  if(applySyncedMaps()) persistItems();
   function setIgnored(idx, on){
     const it = items[idx];
     if(!it) return;
@@ -768,12 +797,21 @@
     render();
   }
   // Notes are model-only: typing never re-renders (render-loop rule in AGENTS.md).
+  let notesPushTimer = null;
   function setItemNotes(id, value){
     const i = itemIndexById(id);
     if(i < 0) return;
     items[i].notes = value;
+    items[i].notesAt = Date.now();
     touchItem(items[i]);
+    if(window.TPMoodle.isImported(items[i])){
+      noteMap = window.TPMoodle.setNoteEntry(noteMap, id, value, items[i].notesAt);
+      try{ localStorage.setItem(NOTES_KEY, JSON.stringify(noteMap)); }catch(e){}
+    }
     persistItems();
+    // Share it once typing pauses (no render: the field must keep focus).
+    clearTimeout(notesPushTimer);
+    notesPushTimer = setTimeout(syncPush, 1500);
   }
   function replaceItem(i, next){
     items[i] = touchItem(next);
@@ -916,9 +954,7 @@
       items = merged.items;
       // Items Moodle just created (e.g. on a second device) have no ignore flag yet: apply the synced list.
       applyIgnoredFromMap();
-      window.TPMoodle.applyEstimates(items, estimateMap); // ...nor your own estimates
-      window.TPMoodle.applyActuals(items, actualMap);
-      window.TPLearn.applyLearning(items);
+      applySyncedMaps(); // ...nor your own estimates, the AI's answers, times and notes
       // A course with no assignments yet still gets its card: every course picked for syncing is listed.
       const names = (res.records||[]).map(r=>r.course).concat((res.courses||[]).filter(c=>c.selected).map(c=>c.code));
       if(window.TPMoodle.ensureCourseNames(courses, names, undefined, deletedCourses)) saveCourses();

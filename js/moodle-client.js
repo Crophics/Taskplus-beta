@@ -241,7 +241,7 @@
     const E = global.TPEstimate;
     const out = items.map((it) => it);
     const index = new Map(out.map((it, i) => [it && it.id, i]));
-    const stats = { applied: 0, failed: 0, stale: 0, limited: false, unavailable: false };
+    const stats = { applied: 0, failed: 0, stale: 0, limited: false, unavailable: false, appliedIds: [] };
     (results || []).forEach((r) => {
       const i = index.get(r.id);
       if (i === undefined) return;
@@ -250,12 +250,15 @@
       if (ctx.keys && ctx.keys[r.id] !== undefined && ctx.keys[r.id] !== key) { stats.stale++; return; }
       if (r.ok && r.estimate) {
         if (item.estimate && item.estimate.basis === 'user' && !ctx.force) return;
-        const next = E.withEstimate(item, E.fromModel(r.estimate, key, item.source && item.source.kind, { readFiles: ctx.readFiles }));
+        const made = E.fromModel(r.estimate, key, item.source && item.source.kind, { readFiles: ctx.readFiles });
+        made.at = ctx.now || Date.now(); // when this answer was made: the newest one wins on every device
+        const next = E.withEstimate(item, made);
         delete next.modelTry;
         // A handout that could not be fetched just now (a temporary failure) is retried, but not before tomorrow.
         if (r.estimate.files && r.estimate.files.retry) next.modelTry = { key, day: ctx.today };
         out[i] = next;
         stats.applied++;
+        stats.appliedIds.push(r.id);
         return;
       }
       stats.failed++;
@@ -287,10 +290,12 @@
       if (!it || !it.id || !isImported(it)) return;
       const c = !!it.completed;
       const d = Number(it.done) || 0;
+      const td = Number(it.today) || 0; // parts finished today, so "left today" agrees on every device
       const e = out[it.id];
-      if (e && e.c === c && e.d === d) return;
-      if (!e && !c && d === 0) return;
-      out[it.id] = { c, d, ca: it.completedAt || null, at: it.updatedAt || now || Date.now() };
+      if (e && e.c === c && e.d === d && (Number(e.td) || 0) === td) return;
+      if (!e && !c && d === 0 && td === 0) return;
+      const n = now || Date.now();
+      out[it.id] = { c, d, ca: it.completedAt || null, at: it.updatedAt || n, td, tdd: td > 0 ? localDate(n / 1000) : null };
     });
     return out;
   }
@@ -300,7 +305,7 @@
     [a || {}, b || {}].forEach((m) => {
       Object.entries(m).forEach(([id, e]) => {
         if (!e || typeof e.at !== 'number' || now - e.at > PROGRESS_MAX_AGE_MS) return;
-        if (!out[id] || e.at > out[id].at) out[id] = { c: !!e.c, d: Number(e.d) || 0, ca: e.ca || null, at: e.at };
+        if (!out[id] || e.at > out[id].at) out[id] = { c: !!e.c, d: Number(e.d) || 0, ca: e.ca || null, at: e.at, td: Number(e.td) || 0, tdd: e.tdd || null };
       });
     });
     return out;
@@ -315,12 +320,20 @@
     if (!e) return false;
     const total = it.total || 1;
     const d = e.c ? total : Math.min(e.d, total);
-    if (!!it.completed === e.c && (Number(it.done) || 0) === d) return false;
-    it.completed = e.c;
-    it.done = d;
-    it.completedAt = e.c ? (e.ca || it.completedAt || null) : null;
-    it.updatedAt = e.at;
-    return true;
+    let changed = false;
+    if (!(!!it.completed === e.c && (Number(it.done) || 0) === d)) {
+      it.completed = e.c;
+      it.done = d;
+      it.completedAt = e.c ? (e.ca || it.completedAt || null) : null;
+      it.updatedAt = e.at;
+      changed = true;
+    }
+    // What was finished today only counts on the day it was recorded.
+    if (e.tdd && e.tdd === localDate(Date.now() / 1000) && (Number(it.today) || 0) !== (Number(e.td) || 0)) {
+      it.today = Number(e.td) || 0;
+      changed = true;
+    }
+    return changed;
   }
 
   function applyProgress(items, map) {
@@ -366,30 +379,131 @@
     return out;
   }
 
-  /** Sets (or clears) the user's own estimate on imported items from the map. Mutates; true if anything changed. */
-  function applyEstimates(items, map) {
+  /* ---- AI estimates, which sync too ----
+     {itemId: {k: inputsKey, at, m, l, h, c, w, s, p, u, fr, fs, fa}}. Written when an AI answer is applied (so "Ask
+     again" on one device reaches the others), newest wins, and applied only while the assignment text is unchanged
+     (k). A newer entry of your own (estimates map) beats an older AI one and the other way round. */
+  const AI_MAX_AGE_MS = 120 * 24 * 60 * 60 * 1000;
+
+  function aiRecordOf(it, at) {
+    const e = it && it.estimate;
+    if (!e || e.basis !== 'model' || !e.key) return null;
+    return {
+      k: e.key, at: at || e.at || Date.now(), m: e.minutes, l: e.low, h: e.high, c: e.confidence || 'low',
+      w: String((e.factors || [])[0] || '').slice(0, 240), s: (e.steps || []).slice(0, 8).map((x) => ({ name: String(x.name).slice(0, 60), minutes: x.minutes })),
+      p: e.provider || '', u: !!e.usedHistory, fr: (e.filesRead || []).slice(0, 4).map((x) => String(x).slice(0, 80)), fs: (e.filesSkipped || []).slice(0, 4), fa: !!e.filesAsked,
+    };
+  }
+
+  function setAiEntry(map, id, it, at) {
+    const rec = aiRecordOf(it, at);
+    return rec ? { ...(map || {}), [id]: rec } : (map || {});
+  }
+
+  function mergeAiMap(a, b, now) {
+    const out = {};
+    [a || {}, b || {}].forEach((m) => {
+      Object.entries(m).forEach(([id, e]) => {
+        if (!e || typeof e.at !== 'number' || now - e.at > AI_MAX_AGE_MS || !e.k || !(e.m > 0)) return;
+        if (!out[id] || e.at > out[id].at) out[id] = e;
+      });
+    });
+    return out;
+  }
+
+  /** Estimate record of an AI entry (the same shape TPEstimate.fromModel makes), or null. */
+  function estimateFromAi(it, e) {
+    const E = global.TPEstimate;
+    const est = E.fromModel({ minutes: e.m, low: e.l, high: e.h, confidence: e.c, rationale: e.w, steps: e.s, provider: e.p, pastCount: e.u ? 1 : 0,
+      files: { read: e.fr || [], skipped: e.fs || [], retry: false } }, e.k, it.source && it.source.kind, { readFiles: !!e.fa });
+    est.at = e.at;
+    return est;
+  }
+
+  /** Records AI answers made before entries existed, so another device's older copy cannot win. Returns the new map. */
+  function seedAiMap(items, aiMap, estMap) {
+    let out = aiMap || {};
+    (items || []).forEach((it) => {
+      if (!it || !it.id || !isImported(it) || !it.estimate || it.estimate.basis !== 'model' || it.estimate.at) return;
+      if (out[it.id] || (estMap && estMap[it.id]) || !it.updatedAt) return;
+      out = setAiEntry(out, it.id, it, it.updatedAt);
+    });
+    return out;
+  }
+
+  /**
+   * Puts the synced estimates on imported items: your own number/plan (estimates map) or the AI's answer (aiMap),
+   * whichever is newer. Mutates; true if anything changed.
+   */
+  function applyEstimates(items, map, aiMap) {
     const E = global.TPEstimate;
     let changed = false;
     if (!E) return false;
     (items || []).forEach((it) => {
-      const e = map && it && it.id && isImported(it) ? map[it.id] : null;
-      if (!e || !it.estimate) return;
+      if (!it || !it.id || !isImported(it) || !it.estimate) return;
+      const u = map ? map[it.id] : null;
+      const a = aiMap ? aiMap[it.id] : null;
+      const aiOk = a && a.k === E.inputsKey(it);
       const isUser = it.estimate.basis === 'user';
-      const plan = e.m != null ? cleanPlan(e.s) : null;
+      const userWins = u && u.m != null && !(aiOk && a.at > u.at);
+      if (!userWins && aiOk && !(u && u.m != null && u.at >= a.at)) {
+        if (isUser && !u) return; // an estimate of your own that was never recorded stands
+        const cur = it.estimate;
+        const same = cur.basis === 'model' && cur.key === a.k && (cur.at || 0) >= a.at;
+        const alike = cur.basis === 'model' && cur.key === a.k && cur.minutes === a.m && JSON.stringify(cur.steps || []) === JSON.stringify(a.s || []) && cur.factors && cur.factors[0] === (a.w || undefined);
+        if (same || alike) {
+          if (alike && !same) { cur.at = a.at; changed = true; }
+          return;
+        }
+        Object.assign(it, E.withEstimate(it, estimateFromAi(it, a)));
+        changed = true;
+        return;
+      }
+      if (!u) return;
+      const plan = u.m != null ? cleanPlan(u.s) : null;
       if (plan) {
         const same = isUser && it.total === plan.length && it.estimate.steps && it.estimate.steps.length === plan.length
           && plan.every((p, i) => p.name === it.estimate.steps[i].name && p.minutes === it.estimate.steps[i].minutes);
         if (same) return;
         Object.assign(it, E.withPlan(it, plan));
         changed = true;
-      } else if (e.m != null && Number.isFinite(e.m)) {
-        if (isUser && it.estimate.minutes === E.userEstimate(e.m).minutes) return;
-        Object.assign(it, E.withEstimate(it, E.userEstimate(e.m, it.estimate.steps)));
+      } else if (u.m != null && Number.isFinite(u.m)) {
+        if (isUser && it.estimate.minutes === E.userEstimate(u.m).minutes) return;
+        Object.assign(it, E.withEstimate(it, E.userEstimate(u.m, it.estimate.steps)));
         changed = true;
-      } else if (e.m == null && isUser) {
+      } else if (u.m == null && isUser) {
         Object.assign(it, E.withEstimate(it, E.estimateForItem(it)));
         changed = true;
       }
+    });
+    return changed;
+  }
+
+  /* ---- Notes on imported items, which sync ({itemId: {n: text, at}}, newest wins) ---- */
+  const NOTE_MAX = 5000;
+
+  function setNoteEntry(map, id, text, at) {
+    return { ...(map || {}), [id]: { n: String(text == null ? '' : text).slice(0, NOTE_MAX), at } };
+  }
+
+  function mergeNoteMap(a, b, now) {
+    const out = {};
+    [a || {}, b || {}].forEach((m) => {
+      Object.entries(m).forEach(([id, e]) => {
+        if (!e || typeof e.at !== 'number' || typeof e.n !== 'string' || now - e.at > ESTIMATE_MAX_AGE_MS) return;
+        if (!out[id] || e.at > out[id].at) out[id] = { n: e.n.slice(0, NOTE_MAX), at: e.at };
+      });
+    });
+    return out;
+  }
+
+  function applyNotes(items, map) {
+    let changed = false;
+    (items || []).forEach((it) => {
+      const e = map && it && it.id && isImported(it) ? map[it.id] : null;
+      if (!e || e.at <= (it.notesAt || 0)) return;
+      it.notesAt = e.at;
+      if ((it.notes || '') !== e.n) { it.notes = e.n; changed = true; }
     });
     return changed;
   }
@@ -519,5 +633,5 @@
     }
   }
 
-  global.TPMoodle = { setActualEntry, mergeActualMap, applyActuals, setEstimateEntry, mergeEstimateMap, applyEstimates, localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, progressMap, mergeProgress, applyProgress, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_MS, IMPORT_SHAPE, RETRY_MS, mergeFeed, unreadCount, markFeedSeen, feedLine };
+  global.TPMoodle = { setNoteEntry, mergeNoteMap, applyNotes, aiRecordOf, setAiEntry, mergeAiMap, seedAiMap, setActualEntry, mergeActualMap, applyActuals, setEstimateEntry, mergeEstimateMap, applyEstimates, localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, progressMap, mergeProgress, applyProgress, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_MS, IMPORT_SHAPE, RETRY_MS, mergeFeed, unreadCount, markFeedSeen, feedLine };
 })(typeof window !== 'undefined' ? window : globalThis);
