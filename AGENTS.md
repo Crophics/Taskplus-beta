@@ -38,7 +38,7 @@ for the one-time Cloudflare setup. What matters when touching code:
   fails a deploy on a KV binding with no id.
 - **Imported items are a second storage key.** `js/app.js` `loadItems()` /
   `persistItems()` split `items` between `tp-assignments` (manual, synced) and
-  `tp-moodle-items` (imported, device-only). **Never write
+  `tp-moodle-items` (imported; the full items stay off the cloud doc's `items`, but their Moodle details sync as `moodleItems`, below). **Never write
   `localStorage.setItem('tp-assignments', ...)` from app code directly; call
   `persistItems()`**, or imported items leak into the shared Firestore doc.
   `today-logic.js` takes a `persist` callback for the same reason. Imported items
@@ -125,6 +125,14 @@ for the one-time Cloudflare setup. What matters when touching code:
   the total line, never renders; add/remove/save render), pure logic `TPEstimate.planRows/checkPlan/withPlan`. Saving makes a
   `basis: 'user'` estimate whose `steps` are the parts (`total = steps.length`), and the synced estimate entry carries them
   (`{m, at, s: [{name, minutes}]}`, `cleanPlan` in `moodle-client.js`) so other devices get the same plan.
+- **Moodle's own details sync too (2026-11-23, your request).** The cloud doc field `moodleItems` = `{itemId: {b: {title, course, due, dueTime, createdAt, source}, at}}`
+  (`TPMoodle.cloudBaseOf/setCloudEntries/mergeCloudMap/applyCloudItems`, local copy `tp-moodle-cloud`). It lives in its OWN field, never in `items`,
+  so production Taskplus never shows Moodle items. It only FILLS GAPS: on `tp-remote-data` an id this device does not have (and that is not in
+  `deletedLog`) becomes an imported item (same builder as a real import, `buildImportedItem`, no alert events); an item the device already
+  has is left alone, and Moodle's own import still overwrites title/course/due/source. Entries are rewritten only when the details change,
+  carry no notes/estimates (their own maps do that), no file download addresses/tokens, a description capped at 4000 chars, at most 6 files;
+  they age out 45 days after the due date, are dropped when the item is deleted, and the map is capped at 150 entries. `syncPush` refreshes it.
+  Privacy page updated. A device that never imports (not connected) still gets items; its next sign-in to Moodle then takes over.
 - **What syncs (audit 2026-11-18).** The cloud doc (`users/<uid>/taskplus/data`, written with `setDoc(..., {merge:true})` so an
   older cached version of the app can never wipe fields it does not know) holds: manual `items` (everything on them),
   `courses`/`courseColors`/`deletedCourses`, `prefs` (minus theme and tab), `dayCompleteLog`, `deletedLog`, and, for IMPORTED

@@ -68,6 +68,31 @@
   }
 
   /**
+   * A brand-new imported item from the Moodle-owned details (used for a fresh import and for an item that arrives
+   * from your synced account before this device has imported it). Starts with a rule-of-thumb estimate, split into
+   * parts when unfinished, and picks up "done on another device" from the synced progress map.
+   */
+  function buildImportedItem(b, ctx, order) {
+    const { today, now = Date.now() } = ctx;
+    const kind = b.source && b.source.kind;
+    let item = {
+      id: b.id, title: b.title, course: b.course, due: b.due, dueTime: b.dueTime || '',
+      // `unit` is what Today's pill shows for one-sitting work; empty would read "Reading".
+      total: 1, unit: kind === 'quiz' ? 'quiz' : 'assignment', notes: '', done: b.submitted ? 1 : 0, today: 0,
+      completed: !!b.submitted, dependsOn: '', recurring: '', subtasks: [],
+      completedAt: b.submitted ? today : null, createdAt: b.createdAt || today, archived: false,
+      order, updatedAt: now, source: b.source,
+    };
+    // Every imported item starts with a rule-of-thumb time estimate (js/estimate-logic.js).
+    // Unfinished work is split into ~50-minute parts so the daily pacing is in real time.
+    if (global.TPEstimate) item = b.submitted ? { ...item, estimate: global.TPEstimate.estimateForItem(item) } : global.TPEstimate.withEstimate(item, global.TPEstimate.estimateForItem(item));
+    // Done on another device before this one ever imported it: start from that state.
+    const known = ctx.progress && ctx.progress[b.id];
+    if (known && known.c && !item.completed) { item.completed = true; item.done = item.total || 1; item.completedAt = known.ca || today; item.updatedAt = known.at; }
+    return item;
+  }
+
+  /**
    * Merges a sync's records into the item list. Returns a NEW array plus stats
    * and events; the input array and its items are not mutated.
    *
@@ -96,20 +121,7 @@
       if (idx === undefined) {
         const submitted = rec.state === 'submitted';
         if (submitted && due && daysBetween(due, today) > RECENT_SUBMITTED_DAYS) { stats.skippedOld++; return; }
-        let item = {
-          id: rec.id, title: rec.title, course: rec.course, due, dueTime,
-          // `unit` is what Today's pill shows for one-sitting work; empty would read "Reading".
-          total: 1, unit: rec.kind === 'quiz' ? 'quiz' : 'assignment', notes: '', done: submitted ? 1 : 0, today: 0,
-          completed: submitted, dependsOn: '', recurring: '', subtasks: [],
-          completedAt: submitted ? today : null, createdAt: today, archived: false,
-          order: nextOrder++, updatedAt: now, source: sourceOf(rec, null),
-        };
-        // Every imported item starts with a rule-of-thumb time estimate (js/estimate-logic.js).
-        // Unfinished work is split into ~50-minute parts so the daily pacing is in real time.
-        if (global.TPEstimate) item = submitted ? { ...item, estimate: global.TPEstimate.estimateForItem(item) } : global.TPEstimate.withEstimate(item, global.TPEstimate.estimateForItem(item));
-        // Done on another device before this one ever imported it: start from that state.
-        const known = ctx.progress && ctx.progress[rec.id];
-        if (known && known.c && !item.completed) { item.completed = true; item.done = item.total || 1; item.completedAt = known.ca || today; item.updatedAt = known.at; }
+        const item = buildImportedItem({ id: rec.id, title: rec.title, course: rec.course, due, dueTime, source: sourceOf(rec, null), submitted }, { today, now, progress: ctx.progress }, nextOrder++);
         out.push(item);
         byId.set(item.id, out.length - 1);
         stats.added++;
@@ -383,6 +395,83 @@
     return out;
   }
 
+  /* ---- The Moodle-owned details of imported items, which sync too ----
+     {itemId: {b: {title, course, due, dueTime, createdAt, source}, at}} in the cloud doc as `moodleItems`. It only FILLS GAPS:
+     an item this device has not imported yet appears from the cloud copy, so a new device is not empty while it waits for
+     Moodle. Moodle stays the source of truth: the device's own import still overwrites title/course/due/source. Nothing
+     secret goes in (no file download addresses, no tokens), the description is capped, and entries age out. */
+  const CLOUD_KEEP_DAYS = 45;
+  const CLOUD_MAX_ENTRIES = 150;
+  const CLOUD_DESC_MAX = 4000;
+
+  function cloudBaseOf(it) {
+    const s = it.source || {};
+    return {
+      title: it.title, course: it.course, due: it.due || '', dueTime: it.dueTime || '', createdAt: it.createdAt || '',
+      source: {
+        type: 'moodle', cmid: s.cmid, instanceId: s.instanceId, courseId: s.courseId, kind: s.kind, link: s.link,
+        points: s.points == null ? null : s.points, opens: s.opens || null,
+        description: String(s.description || '').slice(0, CLOUD_DESC_MAX),
+        files: (s.files || []).slice(0, 6).map((f) => ({ name: f.name, size: f.size || 0, modified: f.modified || null })),
+        timeLimitMin: s.timeLimitMin == null ? null : s.timeLimitMin, submissionTypes: s.submissionTypes || [],
+        wordLimit: s.wordLimit == null ? null : s.wordLimit, state: s.state == null ? null : s.state,
+      },
+    };
+  }
+
+  function cloudTooOld(due, today) { return !!due && daysBetween(due, today) > CLOUD_KEEP_DAYS; }
+
+  /** Brings the map up to date with the items: an entry is (re)written only when its details changed. Old and deleted ones go. */
+  function setCloudEntries(map, items, today, now, deletedLog) {
+    const out = { ...(map || {}) };
+    const gone = new Set((deletedLog || []).map((t) => t.id));
+    (items || []).forEach((it) => {
+      if (!isImported(it) || !it.id || it.archived || gone.has(it.id) || cloudTooOld(it.due, today)) return;
+      const b = cloudBaseOf(it);
+      if (!out[it.id] || JSON.stringify(out[it.id].b) !== JSON.stringify(b)) out[it.id] = { b, at: now };
+    });
+    Object.keys(out).forEach((id) => { if (gone.has(id) || cloudTooOld(out[id].b && out[id].b.due, today)) delete out[id]; });
+    const ids = Object.keys(out);
+    if (ids.length > CLOUD_MAX_ENTRIES) {
+      ids.sort((x, y) => String((out[x].b && out[x].b.due) || '9999').localeCompare(String((out[y].b && out[y].b.due) || '9999')));
+      ids.slice(0, ids.length - CLOUD_MAX_ENTRIES).forEach((id) => delete out[id]);
+    }
+    return out;
+  }
+
+  const validCloudEntry = (e) => !!(e && typeof e.at === 'number' && e.b && typeof e.b.title === 'string' && e.b.source && e.b.source.type === 'moodle');
+
+  /** Both maps together, the newer entry per item winning. */
+  function mergeCloudMap(a, b) {
+    const out = {};
+    [a || {}, b || {}].forEach((m) => {
+      Object.entries(m).forEach(([id, e]) => {
+        if (!validCloudEntry(e)) return;
+        if (out[id] && e.at <= out[id].at) return;
+        out[id] = e;
+      });
+    });
+    return out;
+  }
+
+  /** Adds items that are in the synced account but not on this device yet. Returns a NEW list; no events or alerts. */
+  function applyCloudItems(items, map, ctx) {
+    const { today, deletedLog = [], now = Date.now() } = ctx;
+    const out = items.map((it) => it);
+    const have = new Set(out.map((it) => it && it.id));
+    const gone = new Set((deletedLog || []).map((t) => t.id));
+    let order = out.reduce((m, it) => Math.max(m, it && it.order != null ? it.order : -1), -1) + 1;
+    let added = 0;
+    Object.entries(map || {}).forEach(([id, e]) => {
+      if (have.has(id) || gone.has(id) || !validCloudEntry(e) || cloudTooOld(e.b.due, today)) return;
+      const submitted = e.b.source.state === 'submitted';
+      if (submitted && e.b.due && daysBetween(e.b.due, today) > RECENT_SUBMITTED_DAYS) return;
+      out.push(buildImportedItem({ id, title: e.b.title, course: e.b.course, due: e.b.due, dueTime: e.b.dueTime, createdAt: e.b.createdAt, source: e.b.source, submitted }, { today, now, progress: ctx.progress }, order++));
+      added++;
+    });
+    return { items: out, added };
+  }
+
   /* ---- AI estimates, which sync too ----
      {itemId: {k: inputsKey, at, m, l, h, c, w, s, p, u, fr, fs, fa}}. Written when an AI answer is applied (so "Ask
      again" on one device reaches the others), newest wins, and applied only while the assignment text is unchanged
@@ -654,5 +743,5 @@
     }
   }
 
-  global.TPMoodle = { setNoteEntry, mergeNoteMap, applyNotes, aiRecordOf, setAiEntry, mergeAiMap, seedAiMap, setActualEntry, mergeActualMap, applyActuals, setEstimateEntry, mergeEstimateMap, applyEstimates, localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, progressMap, mergeProgress, applyProgress, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_MS, IMPORT_SHAPE, RETRY_MS, mergeFeed, unreadCount, markFeedSeen, feedLine };
+  global.TPMoodle = { cloudBaseOf, setCloudEntries, mergeCloudMap, applyCloudItems, setNoteEntry, mergeNoteMap, applyNotes, aiRecordOf, setAiEntry, mergeAiMap, seedAiMap, setActualEntry, mergeActualMap, applyActuals, setEstimateEntry, mergeEstimateMap, applyEstimates, localDate, isImported, mergeImported, needsModel, modelInput, applyModelResults, ensureCourses, ensureCourseNames, shouldAutoSync, progressMap, mergeProgress, applyProgress, summarize, explainWarnings, MoodleClientError, api, AUTO_SYNC_MIN_MS, IMPORT_SHAPE, RETRY_MS, mergeFeed, unreadCount, markFeedSeen, feedLine };
 })(typeof window !== 'undefined' ? window : globalThis);

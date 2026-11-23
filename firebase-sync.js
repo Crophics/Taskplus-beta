@@ -231,6 +231,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
       actuals: JSON.parse(localStorage.getItem("tp-imported-actuals") || "{}"),
       aiEstimates: JSON.parse(localStorage.getItem("tp-imported-ai") || "{}"),
       notes: JSON.parse(localStorage.getItem("tp-imported-notes") || "{}"),
+      moodleItems: JSON.parse(localStorage.getItem("tp-moodle-cloud") || "{}"),
       dayCompleteLog: JSON.parse(localStorage.getItem("tp-day-complete-log") || "[]"),
       deletedLog,
       prefs: syncPrefs,
@@ -249,6 +250,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     if (data.actuals) localStorage.setItem("tp-imported-actuals", JSON.stringify(data.actuals));
     if (data.aiEstimates) localStorage.setItem("tp-imported-ai", JSON.stringify(data.aiEstimates));
     if (data.notes) localStorage.setItem("tp-imported-notes", JSON.stringify(data.notes));
+    if (data.moodleItems) localStorage.setItem("tp-moodle-cloud", JSON.stringify(data.moodleItems));
     if (data.dayCompleteLog) localStorage.setItem("tp-day-complete-log", JSON.stringify(data.dayCompleteLog));
     if (data.deletedLog) localStorage.setItem("tp-deleted-log", JSON.stringify(data.deletedLog));
     if (data.prefs) {
@@ -282,6 +284,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
       actuals: window.TPMoodle ? window.TPMoodle.mergeActualMap(local.actuals, remoteData.actuals, Date.now()) : local.actuals,
       aiEstimates: window.TPMoodle ? window.TPMoodle.mergeAiMap(local.aiEstimates, remoteData.aiEstimates, Date.now()) : local.aiEstimates,
       notes: window.TPMoodle ? window.TPMoodle.mergeNoteMap(local.notes, remoteData.notes, Date.now()) : local.notes,
+      moodleItems: window.TPMoodle ? window.TPMoodle.mergeCloudMap(local.moodleItems, remoteData.moodleItems) : local.moodleItems,
       dayCompleteLog: mergeDayLog(local.dayCompleteLog, remoteData.dayCompleteLog),
       deletedLog,
       prefs: mergePrefs(local.prefs, remoteData.prefs),

@@ -10,6 +10,13 @@
   function syncPush(){
     refreshProgressMap();
     if(!window.tpSync) return;
+    {
+      const nextCloud = window.TPMoodle.setCloudEntries(cloudMap, items, today(), Date.now(), deletedLog);
+      if(JSON.stringify(nextCloud) !== JSON.stringify(cloudMap)){
+        cloudMap = nextCloud;
+        try{ localStorage.setItem(CLOUD_KEY, JSON.stringify(cloudMap)); }catch(e){}
+      }
+    }
     let prefsNow = {};
     try{ prefsNow = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); }catch(e){}
     const { theme: _theme, tab: _tab, ...syncPrefs } = prefsNow;
@@ -24,6 +31,7 @@
       actuals: actualMap,
       aiEstimates: aiMap,
       notes: noteMap,
+      moodleItems: cloudMap,
       dayCompleteLog,
       deletedLog,
       prefs: syncPrefs
@@ -39,6 +47,7 @@
   const ACTUALS_KEY='tp-imported-actuals';
   const AI_KEY='tp-imported-ai';
   const NOTES_KEY='tp-imported-notes';
+  const CLOUD_KEY='tp-moodle-cloud'; // the Moodle-owned details of imported items, synced as `moodleItems` (TPMoodle.setCloudEntries)
   const LAST_ACTIVE_DATE_KEY='tp-last-active-date';
   const DAY_COMPLETE_LOG_KEY='tp-day-complete-log';
   const DELETED_LOG_KEY='tp-deleted-log';
@@ -141,6 +150,16 @@
     actualMap = readJsonObject(ACTUALS_KEY, {});
     aiMap = readJsonObject(AI_KEY, {});
     noteMap = readJsonObject(NOTES_KEY, {});
+    cloudMap = readJsonObject(CLOUD_KEY, {});
+    // Assignments your account has that this device has not imported yet appear now (Moodle still wins on the next sync).
+    {
+      const filled = window.TPMoodle.applyCloudItems(items, cloudMap, { today: today(), deletedLog: readJsonArray(DELETED_LOG_KEY), progress: progressMap });
+      if(filled.added){
+        items = filled.items;
+        if(window.TPMoodle.ensureCourseNames(courses, items.map(it=>it.course), undefined, deletedCourses)){ try{ localStorage.setItem(COURSES_KEY, JSON.stringify(courses)); }catch(e){} }
+        persistItems();
+      }
+    }
     if(applySyncedMaps()) persistItems();
     try{ dayCompleteLog = JSON.parse(localStorage.getItem(DAY_COMPLETE_LOG_KEY)) || []; }catch(e){ dayCompleteLog = []; }
     try{ deletedLog = JSON.parse(localStorage.getItem(DELETED_LOG_KEY)) || []; }catch(e){ deletedLog = []; }
@@ -703,6 +722,7 @@
   let actualMap = readJsonObject(ACTUALS_KEY, {});
   let aiMap = readJsonObject(AI_KEY, {});
   let noteMap = readJsonObject(NOTES_KEY, {});
+  let cloudMap = readJsonObject(CLOUD_KEY, {});
   // Everything about imported items that travels between devices, applied in one place (see "What syncs" in AGENTS.md).
   function applySyncedMaps(){
     const M = window.TPMoodle;
