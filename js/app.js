@@ -1111,8 +1111,11 @@
     if(d && d.title) showToast(d.body ? d.title + ': ' + d.body : d.title);
     setTimeout(moodleSyncFromAlert, 35000);
   });
+  // The account's own data (progress, estimates, notes, the Moodle details) comes first: until firebase-sync.js has merged
+  // it (tp-cloud-ready), the automatic Moodle sync waits, so it never imports over, or pushes ahead of, what the cloud holds.
+  let cloudPending = false;
   function moodleMaybeAutoSync(){
-    if(!moodleSignedIn()) return;
+    if(!moodleSignedIn() || cloudPending) return;
     if(forceSyncOnOpen){ forceSyncOnOpen = false; moodleSync({silent:true}); return; }
     if(window.TPMoodle.shouldAutoSync(moodleState, Date.now())) moodleSync({silent:true});
     else requestModelEstimates().catch(()=>{}); // nothing to sync yet, but older items may still need Claude's estimate
@@ -1199,7 +1202,12 @@
     loadAlerts();
     moodleMaybeAutoSync();
   }
+  document.addEventListener('tp-cloud-ready', function(){
+    cloudPending = false;
+    moodleMaybeAutoSync();
+  });
   document.addEventListener('tp-auth-changed', function(e){
+    cloudPending = !!(e.detail && e.detail.user);
     if(e.detail && e.detail.user){
       // Signed in during first run (or an account that already exists on a fresh device): on to Moodle.
       // 'Sign in' on the welcome screen waits here: moodleBoot() decides between 'already connected' and 'connect Moodle'.

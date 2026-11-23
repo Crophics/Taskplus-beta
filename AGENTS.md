@@ -133,6 +133,10 @@ for the one-time Cloudflare setup. What matters when touching code:
   carry no notes/estimates (their own maps do that), no file download addresses/tokens, a description capped at 4000 chars, at most 6 files;
   they age out 45 days after the due date, are dropped when the item is deleted, and the map is capped at 150 entries. `syncPush` refreshes it.
   Privacy page updated. A device that never imports (not connected) still gets items; its next sign-in to Moodle then takes over.
+- **The account's data comes before Moodle (2026-11-23).** `firebase-sync.js` keeps `initialSyncDone` (false from sign-in until the first getDoc + merge +
+  push has finished or failed) and dispatches `tp-cloud-ready`; `push()` does nothing before that (a device pushing its still-empty maps first would
+  overwrite the account's progress/estimates/notes), and `app.js` `moodleMaybeAutoSync` waits for it (`cloudPending`, set on `tp-auth-changed`).
+  Manual "Sync now" is never held back. Jsdom-checked (sign in -> nothing; cloud ready -> the Moodle sync runs).
 - **What syncs (audit 2026-11-18).** The cloud doc (`users/<uid>/taskplus/data`, written with `setDoc(..., {merge:true})` so an
   older cached version of the app can never wipe fields it does not know) holds: manual `items` (everything on them),
   `courses`/`courseColors`/`deletedCourses`, `prefs` (minus theme and tab), `dayCompleteLog`, `deletedLog`, and, for IMPORTED

@@ -84,7 +84,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v110'; // bumped: existing Moodle items enter the cloud map at startup
+const CACHE_NAME = 'taskplus-cache-v111'; // bumped: the account's data merges before the Moodle sync runs
 const urlsToCache = [
   './',
   './index.html',

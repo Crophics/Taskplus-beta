@@ -23,6 +23,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
   let unsubFcmSnapshot = null;
   let applyingRemote = false;
   let lastPushedAt = null;
+  let initialSyncDone = true; // false from sign-in until the first merge with the cloud copy has finished
   // Firestore's fcm.lastDigestDate, mirrored locally so the browser
   // notification (notify.js) and the FCM push (functions/index.js) can
   // coordinate: whichever fires first for the day stamps this date, so
@@ -489,7 +490,9 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     markDigestSentToday,
     hasVapidKey: () => !!FCM_VAPID_KEY,
     push: async (payload) => {
-      if (!currentUser || applyingRemote) return;
+      // Not before the first merge with the cloud copy has settled: a device that pushed its still-empty maps first
+      // would overwrite the account's progress, estimates and notes. The first merge pushes everything local itself.
+      if (!currentUser || applyingRemote || !initialSyncDone) return;
       const items = (payload.items || []).map((it) => ensureItemMeta(it));
       const updatedAt = Date.now();
       lastPushedAt = updatedAt;
@@ -512,8 +515,10 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
       unsubFcmSnapshot = null;
     }
     remoteDigestDate = null;
+    initialSyncDone = !user;
     document.dispatchEvent(new CustomEvent("tp-auth-changed", { detail: { user } }));
     if (!user) {
+      document.dispatchEvent(new CustomEvent("tp-cloud-ready", {}));
       // No account signed in, so there's no remote digest to wait for —
       // the caller's initial checkAndNotify() (see app.js) can proceed
       // immediately with remoteDigestDate staying null.
@@ -561,6 +566,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     });
 
     const ref = doc(db, "users", user.uid, "taskplus", "data");
+    try {
     const snap = await getDoc(ref);
     if (snap.exists()) {
       applyRemoteMerge(snap.data());
@@ -572,6 +578,11 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
       await setDoc(ref, { ...local, updatedAt });
     } else {
       await setDoc(ref, { ...readLocalPayload(), updatedAt: Date.now() });
+    }
+    } finally {
+      // The account's data is merged (or could not be reached): only now may Moodle sync and pushes go ahead (see app.js).
+      initialSyncDone = true;
+      document.dispatchEvent(new CustomEvent("tp-cloud-ready", {}));
     }
 
     unsubSnapshot = onSnapshot(ref, (docSnap) => {
