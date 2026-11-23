@@ -63,3 +63,53 @@ test('manual items count for learning from finished work', () => {
   const done = (n) => manual({ id: 'd' + n, title: 'Journal #' + n, completed: true, estimate: { minutes: 30, basis: 'heuristic' }, actual: { minutes: 15, est: 30, at: 1 } });
   assert.ok(L.pastWork(manual(), [done(1), done(2)]).length === 2);
 });
+
+/* ---- converting items made before the new Add sheet ---- */
+const legacy = (over = {}) => ({
+  id: 'l1', title: 'Read chapters', course: 'PHIL 2202', due: dayStr(6), total: 10, unit: 'pages', done: 0, today: 0,
+  completed: false, archived: false, notes: 'keep me', subtasks: [{ text: 'a', done: false }], dependsOn: '', recurring: '', ...over,
+});
+
+test('an untouched old item becomes a new-style one with an estimate and parts', () => {
+  const next = E.convertLegacy(legacy());
+  assert.ok(E.isEstimable(next));
+  assert.strictEqual(next.source.type, 'manual');
+  assert.ok(next.estimate && next.estimate.minutes > 0);
+  assert.notStrictEqual(next.unit, 'pages'); // the unit is replaced by parts
+  assert.strictEqual(next.notes, 'keep me');
+  assert.strictEqual(next.subtasks.length, 1);
+  assert.strictEqual(next.id, 'l1');
+});
+
+test('an old item with progress keeps its amount, so what you logged still means the same', () => {
+  const next = E.convertLegacy(legacy({ done: 4 }));
+  assert.strictEqual(next.total, 10);
+  assert.strictEqual(next.unit, 'pages');
+  assert.strictEqual(next.done, 4);
+  assert.ok(next.estimate.minutes > 0);
+});
+
+test('your own minutes survive the conversion', () => {
+  const next = E.convertLegacy(legacy({ estimate: E.userEstimate(240) }));
+  assert.strictEqual(next.estimate.basis, 'user');
+  assert.strictEqual(next.estimate.minutes, 240);
+});
+
+test('a description from the interim sheet moves onto source', () => {
+  const next = E.convertLegacy(legacy({ description: 'Chapters 1-3' }));
+  assert.strictEqual(next.source.description, 'Chapters 1-3');
+  assert.ok(!('description' in next));
+});
+
+test('finished, archived, undated, imported and already converted items are left alone', () => {
+  assert.strictEqual(E.convertLegacy(legacy({ completed: true })), null);
+  assert.strictEqual(E.convertLegacy(legacy({ archived: true })), null);
+  assert.strictEqual(E.convertLegacy(legacy({ due: '' })), null);
+  assert.strictEqual(E.convertLegacy(manual()), null);
+  assert.strictEqual(E.convertLegacy({ ...legacy(), source: { type: 'moodle' } }), null);
+});
+
+test('converting twice changes nothing the second time', () => {
+  const once = E.convertLegacy(legacy());
+  assert.strictEqual(E.convertLegacy(once), null);
+});

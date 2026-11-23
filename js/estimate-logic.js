@@ -205,6 +205,31 @@
   }
 
   /**
+   * An unfinished, dated item from before the new Add sheet: no `source`, an amount + unit instead of an estimate.
+   * (Production Taskplus also makes items like this, so they can keep arriving.)
+   */
+  function isLegacyManual(item) {
+    return !!(item && !item.source && !item.completed && !item.archived && item.title && item.due);
+  }
+
+  /**
+   * The same item in the new model, or null when it does not need converting: it gets `source.type 'manual'`, its own
+   * minutes if you set them (else a rule-of-thumb estimate from the title), and, when it has no progress yet, parts
+   * like any other estimable work (the amount and unit are replaced). With progress the parts count stays, so what you
+   * logged still means the same. Notes, subtasks, repeat and dependency stay on the item.
+   */
+  function convertLegacy(item) {
+    if (!isLegacyManual(item)) return null;
+    const base = { ...item, source: { type: 'manual', kind: 'assign', description: item.description || '' } };
+    delete base.description;
+    const cur = item.estimate;
+    const est = cur && cur.basis === 'user' ? cur : estimateForItem(base);
+    const next = withEstimate(base, est);
+    if (next.total !== item.total || next.unit !== item.unit) delete next.dailyTarget; // its per-day target was for the old amount
+    return next;
+  }
+
+  /**
    * Returns a NEW item carrying `est`. An imported item that has no progress yet is
    * re-split into parts for the new estimate; one with progress keeps its parts
    * (the minutes per part just change), so logged progress is never reinterpreted.
@@ -267,5 +292,5 @@
     return next;
   }
 
-  global.TPEstimate = { isEstimable, capSteps, maxParts, planRows, checkPlan, withPlan, PART_MIN, MAX_PARTS, MIN_MIN, MAX_MIN, countWords, estimateRecord, estimateForItem, inputsKey, scaleSteps, userEstimate, fromModel, stepsUsable, stepName, partsFor, sameEstimate, withEstimate };
+  global.TPEstimate = { isLegacyManual, convertLegacy, isEstimable, capSteps, maxParts, planRows, checkPlan, withPlan, PART_MIN, MAX_PARTS, MIN_MIN, MAX_MIN, countWords, estimateRecord, estimateForItem, inputsKey, scaleSteps, userEstimate, fromModel, stepsUsable, stepName, partsFor, sameEstimate, withEstimate };
 })(typeof window !== 'undefined' ? window : globalThis);

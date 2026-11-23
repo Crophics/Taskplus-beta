@@ -228,8 +228,10 @@ for the one-time Cloudflare setup. What matters when touching code:
   estimate (`TPEstimate.isEstimable(it)` = source.type moodle OR manual; use it, not `isImported`, for anything about estimates, parts,
   learning, the AI and the item screen). They are NOT imported (`TPMoodle.isImported` is false): they still sync as whole items through
   `items`, so no side maps are needed. Editing description/title re-estimates (your own minutes win; a blank field goes back to
-  automatic); the AI is asked after save when the opt-in switch is on. Older items without `source` keep their amount/unit/repeat/
-  dependency and the old handling. Dev mode trigger = title "dev mode" + a 101-minute estimate. Verified with jsdom (add, edit, detail).
+  automatic); the AI is asked after save when the opt-in switch is on. Older items without `source` are CONVERTED on load and after cloud data (2026-11-23, `TPEstimate.convertLegacy`, idempotent; production Taskplus keeps
+  making items like that, so they keep arriving): `source.type 'manual'`, your own minutes if set else a rule-of-thumb estimate from the title, and parts
+  when there is no progress yet (the amount/unit are replaced); with progress the amount stays so logged units keep their meaning. Finished, archived and undated
+  items are left alone; notes, subtasks, repeat and dependency stay on the item. Dev mode trigger = title "dev mode" + a 101-minute estimate. Verified with jsdom (add, edit, detail).
 - **Estimates and minutes planning (Phase 3).** `js/estimate-logic.js`
   (`TPEstimate`, a rule-of-thumb estimator; its constants are guesses, see the
   header) and `js/plan-logic.js` (`TPPlan`, minutes per day, heavy day) are pure

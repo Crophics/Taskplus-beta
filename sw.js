@@ -84,7 +84,7 @@ self.addEventListener('notificationclick', (event) => {
 
 /* ---- App shell cache (offline support) ---- */
 
-const CACHE_NAME = 'taskplus-cache-v111'; // bumped: the account's data merges before the Moodle sync runs
+const CACHE_NAME = 'taskplus-cache-v112'; // bumped: old manual items convert to the new model
 const urlsToCache = [
   './',
   './index.html',

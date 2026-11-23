@@ -90,6 +90,17 @@
     it.updatedAt = Date.now();
     return it;
   }
+  // Manual items from before the new Add sheet (an amount and a unit) become new-style ones: an estimate and parts.
+  // Idempotent, so items that arrive later from another device or from production Taskplus are converted too.
+  function convertLegacyItems(list){
+    let changed = false;
+    for(let i = 0; i < list.length; i++){
+      const next = window.TPEstimate.convertLegacy(list[i]);
+      if(next){ list[i] = touchItem(next); changed = true; }
+    }
+    return changed;
+  }
+  if(convertLegacyItems(items)) persistItems();
   let idsMigrated = false;
   items.forEach(it=>{
     if(!it.id){ it.id = newItemId(); idsMigrated = true; }
@@ -160,6 +171,7 @@
         persistItems();
       }
     }
+    if(convertLegacyItems(items)) persistItems();
     if(applySyncedMaps()) persistItems();
     try{ dayCompleteLog = JSON.parse(localStorage.getItem(DAY_COMPLETE_LOG_KEY)) || []; }catch(e){ dayCompleteLog = []; }
     try{ deletedLog = JSON.parse(localStorage.getItem(DELETED_LOG_KEY)) || []; }catch(e){ deletedLog = []; }
