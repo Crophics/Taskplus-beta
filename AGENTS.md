@@ -195,8 +195,10 @@ for the one-time Cloudflare setup. What matters when touching code:
   Privacy page and the AI setting now say plainly that the free Gemini tier lets Google use what is sent to improve its products
   (it is the unpaid tier's terms; paid tier is treated differently, and linking a billing account makes all use "paid").
 - **Onboarding and Settings layout (2026-11-18).** `js/views/onboarding-html.js` + the `ob*` functions in `app.js` (state `onboard`, `null` = off):
-  invite code (only when the server has `INVITE_CODES`; `POST /api/invite/check`, public, answers required/valid/invalid/used and consumes nothing)
-  -> Google sign-in -> connect Moodle (reuses the connect sheet) -> a 6-page tour. It starts only on a device with no items, no connection and no
+  a welcome screen when the server requires codes ("I have an invite code" -> code step -> sign-in, or "Sign in to my account" for someone already
+  activated, e.g. on a new device: after sign-in `moodleBoot` finishes onboarding straight away, no tour, if the account is connected, else goes to the
+  Moodle step, whose connect sheet asks for a code if the server wants one; `onboard.returning`; `POST /api/invite/check` is public, answers
+  required/valid/invalid/used and consumes nothing) -> Google sign-in -> connect Moodle (reuses the connect sheet) -> a 6-page tour. It starts only on a device with no items, no connection and no
   sign-in and no `tp-onboarded` flag; anyone with data is marked onboarded silently. Progress is kept in `tp-ob-step` (a reload resumes), the
   tab bar and gestures are off while it shows, signing in or an already-connected account skips ahead (`tp-auth-changed`, `moodleBoot`). Sign-in
   and Moodle can be skipped; the code cannot. Settings -> About -> "Show again" replays only the tour (`replayIntro`). Settings now reads Account,

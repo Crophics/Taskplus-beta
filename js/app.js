@@ -1158,9 +1158,13 @@
       moodleState = status.connected ? { ...status, ...ownImportState() } : { connected: false };
       saveMoodleState();
     }catch(e){
+      if(onboard && onboard.returning && onboard.step === 'welcome') obGo('moodle'); // could not check: carry on to Moodle
       return; // not configured, offline, or signed out: keep the cached state
     }
-    if(onboard && !onboard.replay && onboard.step === 'moodle' && moodleState.connected){ onboard.page = 0; obGo('tour'); } // already connected (another device): nothing to set up
+    if(onboard && !onboard.replay && ['welcome','signin','moodle'].includes(onboard.step)){
+      if(moodleState.connected) obFinish(); // an account that is already activated (another device): nothing to set up, no tour
+      else if(onboard.returning) obGo('moodle'); // signed in with an account that is not connected yet
+    }
     if(tab === 'settings' && !userIsTyping()) render();
     loadFeed().then(()=>{ if(tab === 'today' && !userIsTyping()) render(); });
     loadAlerts();
@@ -1169,7 +1173,8 @@
   document.addEventListener('tp-auth-changed', function(e){
     if(e.detail && e.detail.user){
       // Signed in during first run (or an account that already exists on a fresh device): on to Moodle.
-      if(onboard && !onboard.replay && (onboard.step === 'checking' || onboard.step === 'install' || onboard.step === 'invite' || onboard.step === 'signin')){ onboard.busy = false; obGo('moodle'); }
+      // 'Sign in' on the welcome screen waits here: moodleBoot() decides between 'already connected' and 'connect Moodle'.
+      if(onboard && !onboard.replay && !(onboard.returning && onboard.step === 'welcome') && (onboard.step === 'checking' || onboard.step === 'install' || onboard.step === 'welcome' || onboard.step === 'invite' || onboard.step === 'signin')){ onboard.busy = false; obGo('moodle'); }
       moodleBoot();
     }
     else if(tab === 'settings' && !userIsTyping()) render();
@@ -1198,7 +1203,7 @@
     });
   }
 
-  /* ---- First run: invite code -> Google -> Moodle -> a short tour. Also the replayable intro (Settings). ---- */
+  /* ---- First run: [welcome: redeem a code OR sign in] -> code -> Google -> Moodle -> a short tour; an already-activated account skips to the app. Also the replayable intro (Settings). ---- */
   const OB_DONE_KEY = 'tp-onboarded';
   const OB_STEP_KEY = 'tp-ob-step';
   function obSave(){
@@ -1221,14 +1226,14 @@
     let saved = null;
     try{ saved = JSON.parse(localStorage.getItem(OB_STEP_KEY) || 'null'); }catch(e){ saved = null; }
     const install = !!(window.TP && window.TP.needsHomeScreen && window.TP.needsHomeScreen()) && !localStorage.getItem('tp-install-skip');
-    onboard = { step: 'checking', page: 0, error: '', busy: false, required: false, invite: '', replay: false, install };
-    if(saved && ['install','invite','signin','moodle','tour'].includes(saved.step)){
+    onboard = { step: 'checking', page: 0, error: '', busy: false, required: false, invite: '', replay: false, install, returning: false };
+    if(saved && ['install','welcome','invite','signin','moodle','tour'].includes(saved.step)){
       onboard.step = saved.step; onboard.required = !!saved.required; onboard.page = Number(saved.page) || 0;
     } else {
       window.TPMoodle.api.inviteCheck('').then(r=>{
         if(!onboard || onboard.step !== 'checking') return;
         onboard.required = !!r.required;
-        obGo(onboard.install ? 'install' : onboard.required ? 'invite' : 'signin');
+        obGo(onboard.install ? 'install' : onboard.required ? 'welcome' : 'signin');
       });
     }
   }
@@ -1250,11 +1255,11 @@
     render();
   }
   async function obSignIn(){
-    if(moodleSignedIn()){ obGo('moodle'); return; }
+    if(moodleSignedIn()){ if(onboard.returning) moodleBoot(); else obGo('moodle'); return; }
     if(!window.tpSync || !window.tpSync.signIn){ onboard.error = 'Sign-in is not available right now. You can skip and sign in later in Settings.'; render(); return; }
     onboard.busy = true; onboard.error = ''; render();
     try{ await window.tpSync.signIn(); }
-    catch(e){ if(onboard){ onboard.busy = false; onboard.error = 'Sign-in did not finish. Try again, or skip for now.'; render(); } }
+    catch(e){ if(onboard){ onboard.busy = false; onboard.error = onboard.step === 'welcome' ? 'Sign-in did not finish. Try again.' : 'Sign-in did not finish. Try again, or skip for now.'; render(); } }
   }
   function obFinish(){
     const wasReplay = !!(onboard && onboard.replay);
@@ -1276,8 +1281,11 @@
     else if(name === 'later'){
       try{ localStorage.setItem('tp-install-skip', '1'); }catch(e){ /* ignore */ }
       onboard.install = false;
-      obGo(onboard.required ? 'invite' : 'signin');
+      obGo(onboard.required ? 'welcome' : 'signin');
     }
+    else if(name === 'havecode') obGo('invite');
+    else if(name === 'back') obGo('welcome');
+    else if(name === 'existing'){ onboard.returning = true; obSignIn(); }
     else if(name === 'skip'){ obGo('tour'); }
     else if(name === 'finish') obFinish();
   }

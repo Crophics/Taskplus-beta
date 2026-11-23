@@ -17,12 +17,20 @@
           <li>Open <strong>Taskplus</strong> from your Home Screen and set up there.</li>
         </ol>
         <button type="button" class="tp-ob-link" data-ob="later">I will do it later, continue here</button>`;
-    } else if (ob.step === 'invite') {
+    } else if (ob.step === 'welcome') {
+      // Invite-only: a new person redeems a code; someone who already activated an account just signs in (new device).
       body = `<h1 class="tp-ob-title">Welcome to Taskplus</h1>
-        <p class="tp-ob-text">Taskplus is invite-only for now. Enter the code you were given.</p>
+        <p class="tp-ob-text">Taskplus is invite-only for now. New here? Redeem your invite code. Already have an account, for example on another device? Sign in.</p>
+        ${err}
+        <button type="button" class="tp-ob-primary" data-ob="havecode"${dis}>I have an invite code</button>
+        <button type="button" class="tp-ob-secondary" data-ob="existing"${dis}>${busy ? 'Signing in…' : 'Sign in to my account'}</button>`;
+    } else if (ob.step === 'invite') {
+      body = `<h1 class="tp-ob-title">Redeem your invite code</h1>
+        <p class="tp-ob-text">Enter the code you were given. You will sign in next.</p>
         <input class="tp-ob-input" id="tp-ob-invite" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="Invite code" value="${escapeHtml(ob.invite || '')}"${dis}>
         ${err}
-        <button type="button" class="tp-ob-primary" data-ob="next"${dis}>${busy ? 'Checking…' : 'Continue'}</button>`;
+        <button type="button" class="tp-ob-primary" data-ob="next"${dis}>${busy ? 'Checking…' : 'Continue'}</button>
+        <button type="button" class="tp-ob-link" data-ob="back"${dis}>Back</button>`;
     } else if (ob.step === 'signin') {
       body = `<h1 class="tp-ob-title">${ob.required ? 'Code accepted. ' : ''}Sign in</h1>
         <p class="tp-ob-text">Sign in with Google so your assignments, notes and settings follow you to every device, and so Taskplus can check Moodle for you.</p>
