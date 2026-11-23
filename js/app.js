@@ -723,6 +723,15 @@
   let aiMap = readJsonObject(AI_KEY, {});
   let noteMap = readJsonObject(NOTES_KEY, {});
   let cloudMap = readJsonObject(CLOUD_KEY, {});
+  // Assignments already on this device before the cloud copy existed: put them in the map now (no push), so the very
+  // first sign-in/save carries them instead of waiting for the next change or Moodle sync.
+  {
+    const first = window.TPMoodle.setCloudEntries(cloudMap, items, today(), Date.now(), deletedLog);
+    if(JSON.stringify(first) !== JSON.stringify(cloudMap)){
+      cloudMap = first;
+      try{ localStorage.setItem(CLOUD_KEY, JSON.stringify(cloudMap)); }catch(e){}
+    }
+  }
   // Everything about imported items that travels between devices, applied in one place (see "What syncs" in AGENTS.md).
   function applySyncedMaps(){
     const M = window.TPMoodle;
